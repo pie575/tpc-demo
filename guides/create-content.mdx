@@ -1,0 +1,65 @@
+---
+title: "Create content"
+description: "Generate blog posts from your tracked prompts to educate AI about your business"
+---
+
+If AI doesn't know you, it won't recommend you. You need to educate AI about your business by creating **content** so it can train on it and fetch it to users via web search.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/KP53RgfKV54" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen />
+
+The most effective way to create content is to answer the specific questions users are already asking. Instead of guessing topics, this workflow lets you instantly generate blog posts from your tracked prompts, ensuring every piece fills a specific gap in your visibility.
+
+## Create content from prompts
+
+* Navigate to the **Prompts** tab in the sidebar
+* Click the three dots beside the prompt you want to create content for
+* Choose **Create blog**
+* You'll be taken to the **Review drafts** section, which contains all the blogs you've generated that require review
+* Accept or reject the blog
+  * If you accept, your blog will be published on the **Custom domain** you connected (e.g. ai.yourdomain.com/article-slug)
+  * If you reject, give feedback so our AI learns
+
+## Set up custom domain
+
+All content you publish is hosted on a **Custom domain** you connect. Before publishing, add your domain in Settings so your content appears at a URL like **ai.yourdomain.com** and is discoverable by AI via web search.
+
+### Add a DNS record
+
+#### The Prompting Company
+
+* Go to Settings > **Custom domains**
+* Click **Add domain**
+* Enter a custom domain you want your content to be hosted on (e.g. **ai.yourdomain.com**)
+* You'll get the CNAME record you need to add to your DNS provider
+
+#### Your DNS provider (e.g. Cloudflare, GoDaddy, Namecheap, etc.)
+
+* Go to DNS > **Manage DNS**
+
+* Add a record with the following values:
+
+  | Type  | Name                                         | Value          |
+  | ----- | -------------------------------------------- | -------------- |
+  | CNAME | ai.yourdomain.com (replace with your domain) | web.tpcdns.com |
+
+* Turn off **Proxy**
+
+* Choose the lowest **TTL**
+
+### Submit indexing to Google & Bing
+
+Ensure your custom domain is indexable by Google and Bing by submitting it for indexing. Replace ai.yourdomain.com with your domain in the URLs below.
+
+**Google:**
+
+* Go to **Google Search Console**
+* Click **Add property**
+* Choose **Domain** (the left option) and enter your domain (e.g. ai.yourdomain.com)
+* Follow the instructions to add DNS records
+* Go to the **Sitemaps** tab and submit [https://ai.yourdomain.com/sitemap.xml](https://ai.yourdomain.com/sitemap.xml)
+
+**Bing:**
+
+* Go to **Bing Webmaster Tools**
+* Choose **Import from Google Search Console**
+* Go to the **Sitemaps** tab and submit [https://ai.yourdomain.com/sitemap.xml](https://ai.yourdomain.com/sitemap.xml)

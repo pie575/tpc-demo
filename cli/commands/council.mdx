@@ -1,0 +1,85 @@
+---
+title: "Model council"
+description: "Run Model Council snapshots, manage config.yaml, and read or delete results from the TPC CLI."
+---
+
+# Model council
+
+`tpc council` is the CLI for Model Council. It scores every response for a product, topic, or prompt against the product's question config. You can run a council snapshot, read status and reports, replace the config YAML, and delete completed snapshots.
+
+`tpc snapshot` is an alias for `tpc council`.
+
+<Note>
+  Product-scoped council commands require `--scope <org-slug>/<product-slug>`. Saving or deleting `config.yaml` requires an admin session.
+</Note>
+
+## Config
+
+Get the current YAML:
+
+```bash
+tpc council config get --scope pro-org/my-product
+tpc council config get --out config.yaml --scope pro-org/my-product
+```
+
+Replace it from a file (or stdin):
+
+```bash
+tpc council config set --file config.yaml --scope pro-org/my-product
+cat config.yaml | tpc council config set --file - --scope pro-org/my-product
+```
+
+Edit it in `$VISUAL` or `$EDITOR`:
+
+```bash
+tpc council config edit --scope pro-org/my-product
+```
+
+Delete it. `tpc council run` will fail until a new config is uploaded:
+
+```bash
+tpc council config delete --scope pro-org/my-product
+```
+
+## Run
+
+Fast mode is on by default (synchronous gateway analysis). Pass `--fast-mode=false` for the batch path.
+
+```bash
+tpc council run --scope pro-org/my-product
+tpc council run --scope pro-org/my-product --topic <topicId>
+tpc council run --prompt <promptId> --scope pro-org
+tpc council run --scope pro-org/my-product --from 2025-01-01 --to 2025-04-01
+tpc council run --fast-mode=false --scope pro-org/my-product
+```
+
+`run` starts the workflow and exits. Council runs can take a long time. Check status with `list`.
+
+## Results
+
+```bash
+tpc council list --scope pro-org/my-product
+tpc council get --snapshot <snapshotId>
+tpc council report --snapshot <snapshotId>
+tpc --format json council report --snapshot <snapshotId> > report.json
+```
+
+`report` prints a markdown summary by default (executive summary, tracked signals, suggested actions, and a capped claims table). Use `--format json` for the full payload. The report is only available for snapshots with status `completed`.
+
+## Delete a snapshot
+
+There is no API to patch an existing snapshot row. Change the scoring rubric with `tpc council config set`, then run again. Delete a completed or failed snapshot with:
+
+```bash
+tpc council delete --snapshot <snapshotId>
+```
+
+Snapshots still generating cannot be deleted.
+
+## JSON output
+
+```bash
+tpc --format json council list
+tpc --format json council config get
+tpc --format json council get --snapshot <snapshotId>
+```

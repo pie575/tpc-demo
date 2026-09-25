@@ -1,0 +1,77 @@
+---
+title: "Prompts"
+description: "List, create, and review prompts and prompt suggestions from the TPC CLI."
+---
+
+# Prompts
+
+Manage tracked prompts, topic clusters, and generated prompt suggestions for a product. Pass `--scope <product-slug>/<org-slug>` to select the product.
+
+```bash
+tpc --scope my-product/pro-org prompts list
+tpc --scope my-product/pro-org prompts topics list
+tpc --scope my-product/pro-org prompts suggestions list
+```
+
+## Suggestions
+
+Suggestions are generated candidates. Approving one creates a tracked prompt and starts conversation queries against the selected answer engines.
+
+```
+generate  →  list / update  →  approve or reject
+```
+
+### List suggestions
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions list
+tpc --scope my-product/pro-org prompts suggestions list --topic-id <topic-id>
+tpc --scope my-product/pro-org prompts suggestions list --view <view-id>
+tpc --scope my-product/pro-org prompts suggestions list --format json
+```
+
+Omitting `--view` returns the unscoped product library.
+
+### Generate suggestions
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions generate
+tpc --scope my-product/pro-org prompts suggestions generate --topic-id <topic-id>
+tpc --scope my-product/pro-org prompts suggestions generate --language es
+```
+
+Generation replaces the current suggestion library for the selected product or topic. The product must have context available.
+
+### Update a suggestion
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions update <id> --message "Updated text"
+tpc --scope my-product/pro-org prompts suggestions update <id> --engine chatgpt --engine gemini
+tpc --scope my-product/pro-org prompts suggestions update <id> --persona-id <persona-id>
+```
+
+At least one of `--message`, `--engine`, or `--persona-id` is required. These values are used when the suggestion is approved.
+
+### Approve suggestions
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions approve <id> --yes
+tpc --scope my-product/pro-org prompts suggestions approve <id> <id> --engine chatgpt --yes
+```
+
+Approval creates tracked prompts and conversation queries immediately. Adding prompts may change future Share of Voice results. Product-level Share of Voice weights a prompt by how many engines it runs on. Confirm with `--yes`, or type `yes` at the prompt.
+
+### Reject suggestions
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions reject <id>
+tpc --scope my-product/pro-org prompts suggestions reject <id> --feedback "off topic"
+```
+
+## Tracked prompts
+
+```bash
+tpc --scope my-product/pro-org prompts list
+tpc --scope my-product/pro-org prompts create --message "What is the best pricing tool?"
+tpc --scope my-product/pro-org prompts topics list
+```

@@ -1,0 +1,58 @@
+---
+title: "Runs & iterations"
+description: "What happens during a single agent attempt, what it records, and how runs batch into iterations"
+---
+
+A **run** is a single attempt: one environment executing one task in a fresh sandbox. An **iteration** is one batch of runs within an experiment — every attached task executed against every attached environment.
+
+## The lifecycle of a run
+
+Each run moves through these statuses:
+
+```text
+queued → creating_sandbox → running → evaluating → analyzing → completed
+                                                              ↘ failed
+```
+
+1. **creating\_sandbox** — a fresh sandbox is provisioned and initialized with the task's files, commands, and secrets
+2. **running** — the agent harness executes the instruction (agent execution is capped at 60 minutes; a full run, including evaluation and analysis, can take up to \~70 minutes)
+3. **evaluating** — each goal's criteria are checked against the sandbox and transcript, producing a score and pass/fail verdict
+4. **analyzing** — signals are extracted and the transcript is analyzed for friction points
+5. **completed** — results are final; the sandbox is archived and destroyed
+
+Failed infrastructure steps are retried automatically; a run is only marked `failed` after retries are exhausted.
+
+## What each run records
+
+* **Score and verdict** — overall 0–100 score and whether the run passed its goals
+* **Transcript** — the unified timeline of agent messages, thinking, tool calls, and results
+* **Goal results** — per-goal, per-criterion scores with evaluation details
+* **Sandbox archive** — a snapshot of the agent's home directory after the run, downloadable for inspection
+* **Usage** — tokens, estimated cost, and duration
+* **Snapshots** — the exact task definition and environment config used, frozen at run time
+
+Because runs snapshot their task and environment configuration at execution time, historical results always reflect the exact setup that produced them — editing a task later never rewrites old results.
+
+## Iterations
+
+Runs inside an experiment are grouped into numbered iterations. Iterations are immutable: the signal config and aggregated results are frozen when the iteration runs, so you can compare iteration 5 to iteration 1 and trust that each reflects its moment in time.
+
+See [Experiments](/guides/coding-agent-optimization/experiments) for how iterations are triggered and how their results are generated.
+
+## Inspecting runs from the CLI
+
+```bash
+# Find runs
+tpc sim run list --task-id task_abc --status failed
+
+# Inspect one run
+tpc sim run get run_123        # score, verdict, usage, snapshots
+tpc sim run logs run_123       # the execution log timeline
+tpc sim run actions run_123    # normalized agent actions
+
+# Deeper analysis of a run or a task's history
+tpc sim analysis get --run-id run_123
+tpc sim analysis get --task-id task_abc
+```
+
+Use `--format json` on any of these to feed results into scripts or CI.

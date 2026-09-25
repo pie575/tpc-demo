@@ -1,0 +1,66 @@
+---
+title: "Scopes"
+description: "Review the TPC API scope catalog and minimum-scope examples."
+---
+
+# Scopes
+
+Scopes define what an API key or OAuth bearer token can do. Session callers skip scope checks because the dashboard uses route-level organization and product authorization instead.
+
+Use the smallest scope set that can complete the workflow.
+
+## Catalog
+
+| Scope               | Description                                                                      |
+| ------------------- | -------------------------------------------------------------------------------- |
+| `content:read`      | Read site pages, markdown content, and llms.txt files                            |
+| `content:write`     | Create, update, and delete site pages and content                                |
+| `prompts:read`      | Read prompts, topics, prompt suggestions, and prompt analysis results            |
+| `prompts:write`     | Create, update, archive prompts and generate, edit, or review prompt suggestions |
+| `simulations:read`  | Read agent-simulation tasks, runs, environments, and analytics                   |
+| `simulations:write` | Create and trigger simulation runs                                               |
+| `logs:read`         | Read AI-traffic logs and request-level audit events                              |
+| `analytics:read`    | Read analytics aggregates, including rankings, mentions, sources, and SOV        |
+| `analytics:write`   | Write events to analytics                                                        |
+| `products:read`     | Read product metadata and competitor data                                        |
+| `products:write`    | Update product settings and competitor lists                                     |
+
+<Note>
+  This catalog is copied from `apps/client/src/lib/api/scopes.ts`. Update both
+  places whenever scopes are added, renamed, or removed.
+</Note>
+
+## Minimum scope examples
+
+| Task                                    | Minimum scopes                          |
+| --------------------------------------- | --------------------------------------- |
+| Read-only dashboard integration         | `content:read`                          |
+| Content sync pipeline that writes pages | `content:read`, `content:write`         |
+| Analytics export job                    | `analytics:read`                        |
+| Prompt reporting job                    | `prompts:read`                          |
+| Simulation runner                       | `simulations:read`, `simulations:write` |
+| Support or compliance audit export      | `logs:read`                             |
+
+## Denied requests
+
+If a token-style caller lacks a required scope, TPC returns `403`:
+
+```json
+{
+  "ok": false,
+  "code": "FORBIDDEN",
+  "message": "insufficient_scope",
+  "details": {
+    "requiredScopes": ["content:write"],
+    "missingScopes": ["content:write"]
+  }
+}
+```
+
+Create a new key or rotate the existing integration key from:
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+Do not add write scopes to a key used only for dashboards or reporting.

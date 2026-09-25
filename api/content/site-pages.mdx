@@ -1,0 +1,137 @@
+---
+title: "Site pages"
+description: "Use the TPC Site Pages API to list, create, update, and delete product pages."
+---
+
+# Site pages
+
+<Warning>
+  The `/api/v1/site/pages` endpoints are deprecated and will be removed in a future version. Use the unified content lifecycle API instead: `GET/POST /api/v1/content`, `GET/PUT/DELETE /api/v1/content/{id}`, plus `POST /api/v1/content/generate` and the review endpoints (`/api/v1/content/{draftId}/review`, `/revision`, `/publish`, `/revert`). See the API reference for schemas. Created pages land in the review queue and publish only after approval.
+</Warning>
+
+Site pages are product-scoped content records with a path, title, status, optional body content, metadata, and domain attachments. Use them when your source of truth is a CMS, documentation site, or Markdown folder.
+
+## List pages
+
+You need `content:read`.
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=$TPC_PRODUCT_ID&page=1&pageSize=25" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+Filter by search, status, path, and content presence:
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=$TPC_PRODUCT_ID&query=pricing&status=published&pathPrefix=docs/&hasContent=true" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+## Create pages
+
+You need `content:write`.
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-create-docs-install" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "slug": "docs/install",
+        "title": "Install",
+        "content": "# Install\n\nInstall instructions."
+      }
+    ]
+  }'
+```
+
+You can create up to 25 pages per request.
+
+## Update pages
+
+Pass only the fields you want to change:
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X PATCH \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-update-page-123" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "id": "page_123",
+        "title": "Install The Prompting Company",
+        "status": "published"
+      }
+    ]
+  }'
+```
+
+## Delete pages
+
+Deletes are soft deletes. Deleted pages are removed from normal list results but remain available to internal retention and audit systems.
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X DELETE \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-delete-page-123" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pageIds": ["page_123"]
+  }'
+```
+
+You can delete up to 50 pages per request.
+
+## Worked example: sync Markdown files
+
+```ts
+import { readFile, readdir } from "node:fs/promises";
+import { join, relative } from "node:path";
+
+async function syncMarkdownFolder(root: string, productId: string, apiKey: string) {
+  const names = await readdir(root);
+  const pages = [];
+
+  for (const name of names) {
+    if (!name.endsWith(".md")) continue;
+
+    const path = join(root, name);
+    const content = await readFile(path, "utf8");
+    const slug = relative(root, path).replace(/\.md$/, "");
+
+    pages.push({
+      slug,
+      title: slug.replace(/-/g, " "),
+      content,
+    });
+  }
+
+  const results = [];
+
+  for (let index = 0; index < pages.length; index += 25) {
+    const batch = pages.slice(index, index + 25);
+    const response = await fetch("https://app.promptingco.com/api/v1/site/pages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "Idempotency-Key": `markdown-sync-${index}-${Date.now()}`,
+      },
+      body: JSON.stringify({ productId, pages: batch }),
+    });
+
+    results.push(await response.json());
+  }
+
+  return results;
+}
+```

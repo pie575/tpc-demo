@@ -1,0 +1,63 @@
+---
+title: "Introduction"
+description: "Access your agentic markdown documentation data with our powerful TypeScript SDK"
+---
+
+# The TypeScript SDK
+
+The official TypeScript SDK for accessing agentic markdown documentation data from The Prompting Company platform. Build powerful applications that leverage your organization's documentation with full type safety and excellent developer experience.
+
+## Getting Started
+
+Get up and running with the SDK in just a few minutes.
+
+<Card title="Start with the SDK" icon="rocket" href="/ts-sdk/installation" horizontal>
+  Install the SDK and configure your development environment.
+</Card>
+
+## Key Features
+
+Everything you need to integrate your documentation data.
+
+<Columns cols={2}>
+  <Card title="TypeScript SDK" icon="code" href="/ts-sdk/introduction">
+    Full TypeScript support with complete type safety and autocompletion.
+  </Card>
+
+  <Card title="Easy Installation" icon="download" href="/ts-sdk/installation">
+    Install with npm, yarn, or pnpm and configure in minutes.
+  </Card>
+
+  <Card title="Quick Start Guide" icon="play" href="/ts-sdk/quickstart">
+    Build your first integration with step-by-step instructions.
+  </Card>
+
+  <Card title="Advanced Usage" icon="settings" href="/ts-sdk/advanced-usage">
+    Learn advanced patterns, caching, and optimization techniques.
+  </Card>
+</Columns>
+
+## Simple Integration
+
+Access your documentation data with just a few lines of code:
+
+```typescript
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: "your-product-slug",
+  organizationSlug: "your-organization-slug",
+});
+
+const doc = await client.document.getByPath("en-us/contact");
+
+if (doc.ok) {
+  console.log(doc.data?.content);
+}
+```
+
+## Next Steps
+
+<Card title="View the Complete Guide" icon="book-open" href="/ts-sdk/introduction" horizontal>
+  Learn about all SDK features and capabilities.
+</Card>

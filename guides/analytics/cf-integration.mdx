@@ -1,0 +1,92 @@
+---
+title: "Integration with Cloudflare"
+description: "Track page visits at the edge by deploying a Cloudflare Worker that forwards page_visit events to The Prompting Company"
+---
+
+The Cloudflare Worker collector tracks page visits **at the edge**,
+before requests reach your origin. The worker sits in front of your existing site,
+transparently proxies every matching request, and forwards page visit events to The Prompting Company — without
+changing your origin server or adding any client-side JavaScript.
+
+This guide will walk through how to set up the Cloudflare Worker with your deployment.
+
+## How it works
+
+The worker attaches to one or more routes and acts as a pass-through proxy:
+
+1. A visitor requests a page that matches a configured route (for example, `example.com/*`).
+2. The worker forwards the original request to your origin and returns the response immediately.
+3. In parallel, the worker sends a page visit event to The Prompting Company. This happens in the background, so it never delays the response to the visitor.
+
+## Before you start
+
+You will need:
+
+* A **Cloudflare account** with the domain you want to track added as a zone.
+* A **TPC API key** with the `analytics:write` scope. You can create an API key with the `analytics:write` scope going to your Organization Settings, then selecting API Keys. Note that creating an API key requires an account with the Enterprise Plan.
+* The `cf-collector` folder from the [samples repository](https://github.com/promptingcompany/samples/)
+
+## Step 1: Install dependencies
+
+From the `cf-collector` directory, install the dependencies:
+
+```bash
+npm ci
+```
+
+## Step 2: Set your API key
+
+The API key is stored as an encrypted [Wrangler secret](https://developers.cloudflare.com/workers/configuration/secrets/), not in the config file. Set it by running:
+
+```bash
+npx wrangler secret put TPC_API_KEY
+```
+
+Paste your key when prompted.
+
+<Warning>
+  Never commit your API key or place it in `wrangler.jsonc`. Always store it as a secret.
+</Warning>
+
+## Step 3: Configure your routes
+
+Edit the `routes` array in `wrangler.jsonc` to match the pages you want to track. Set the `pattern` to your domain and the `zone_name` to the matching Cloudflare zone:
+
+```jsonc wrangler.jsonc
+{
+  "routes": [
+    {
+      "pattern": "example.com/*",
+      "zone_name": "example.com"
+    }
+  ]
+}
+```
+
+You can add more entries to the array to track additional domains or path patterns.
+
+## Step 4: Deploy
+
+To deploy the worker to Cloudflare, run:
+
+```bash
+npm run wrangler:deploy
+```
+
+Once deployed, Cloudflare routes all traffic matching your patterns through the worker, and page visits should begin appearing in your analytics page.
+
+## Troubleshooting
+
+### Events are not appearing
+
+* Confirm the request URL matches a `pattern` in your `routes` array, including the correct `zone_name`.
+* Make sure the `TPC_API_KEY` secret is set for the environment you deployed to (`npx wrangler secret list`).
+* Verify the worker is deployed and bound to the route in the Cloudflare dashboard under **Workers & Pages**.
+
+### Inspect live logs
+
+Stream logs from the deployed worker to see event delivery and any errors in real time:
+
+```bash
+npm run tail
+```

@@ -1,0 +1,66 @@
+---
+title: "Connect Webflow"
+description: "Publish TPC drafts to a Webflow CMS collection using a site API token"
+---
+
+The Prompting Company publishes to a Webflow CMS collection using a site-scoped API token.
+
+## Before you start
+
+* Workspace admin on the Webflow site.
+* A CMS collection created for the content type you want to publish (e.g. Blog Posts).
+
+## Generate an API token
+
+1. In Webflow Designer, click the **Webflow** logo (top-left) and open **Site Settings**.
+2. Go to the **Apps & integrations** tab.
+3. Scroll to **API access** and click **Generate API token**.
+4. Grant **CMS read/write** scope for the site that owns your collection.
+5. Copy the token.
+
+## Get your collection ID
+
+1. In Designer, open the **CMS** panel.
+2. Click the collection you want to publish to.
+3. Click the **⚙ Settings** icon.
+4. Copy the **Collection ID** at the bottom.
+
+<Warning>
+  Use the Collection ID, not the slug. They look similar but the ID is a longer alphanumeric string.
+</Warning>
+
+## Match your collection field slugs
+
+TPC defaults to these field slugs:
+
+* `name`
+* `slug`
+* `body`
+* `summary`
+
+If you renamed fields in Webflow, paste the exact **slug** (not the visible label). Image fields are optional.
+
+## Connect in TPC
+
+1. Open **Settings → Integrations** in your TPC product workspace.
+2. Select **Webflow**.
+3. Enter the API token, collection ID, and any custom field slugs.
+4. Click **Save**, then **Test connection**.
+
+## Troubleshooting
+
+### 401 Unauthorized
+
+Token is missing CMS write scope, or the token was generated for a different site. Regenerate on the correct site with **CMS read/write** enabled.
+
+### 400 "unknown field"
+
+A field slug in TPC does not exist on the collection. Confirm field slugs in Webflow Designer → CMS → Collection settings → Fields.
+
+### Draft published but not visible in the CMS panel
+
+Refresh Designer. Webflow's Designer caches the collection list — the item appears after a refresh.
+
+## Related links
+
+* [Webflow API token documentation](https://developers.webflow.com/data/reference/authentication)

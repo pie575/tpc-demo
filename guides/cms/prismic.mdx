@@ -1,0 +1,55 @@
+---
+title: "Connect Prismic"
+description: "Publish TPC drafts to a Prismic repository using a permanent access token"
+---
+
+The Prompting Company writes documents to your Prismic repository using a write-scoped permanent access token.
+
+## Before you start
+
+* Owner or Administrator role on the Prismic repository.
+* Your custom types deployed to the repository.
+
+## Find your repository name
+
+Your Prismic repository name is the subdomain of your Prismic URL. For `myblog.prismic.io`, the repository name is `myblog`.
+
+## Generate a permanent access token
+
+1. Open your Prismic repository.
+2. Go to **Settings → API & Security**.
+3. Scroll to **Permanent access tokens**.
+4. Click **Create new** and grant **Write** access.
+5. Copy the token immediately. Prismic shows it only once.
+
+## Connect in TPC
+
+1. Open **Settings → Integrations** in your TPC product workspace.
+2. Select **Prismic**.
+3. Enter:
+   * **Repository name** — the subdomain (e.g. `myblog`)
+   * **Access token** — the token you copied
+   * **Custom type** — the API ID of the custom type you want to write to
+4. Click **Save**, then **Test connection**.
+
+<Note>
+  If your repository is public and you only need read access, you can leave **Access token** blank — but TPC requires write access to publish drafts.
+</Note>
+
+## Troubleshooting
+
+### 401 Unauthorized
+
+The token is read-only. Regenerate with **Write** access.
+
+### 400 "unknown type"
+
+The **Custom type** value does not match a deployed API ID. Check **Custom Types** in the Prismic dashboard — the API ID appears next to the display name.
+
+### Fields save empty
+
+Prismic slice-based content requires the field paths to match your custom type schema. Confirm the field API IDs and rich-text structure.
+
+## Related links
+
+* [Prismic access token documentation](https://prismic.io/docs/access-token)

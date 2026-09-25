@@ -1,0 +1,71 @@
+---
+title: "Idempotency"
+description: "Use Idempotency-Key for safe TPC API retries."
+---
+
+# Idempotency
+
+Use `Idempotency-Key` on non-GET write requests when a network timeout could leave you unsure whether the request succeeded.
+
+## When to use it
+
+Send an idempotency key for create, update, and delete jobs that your system may retry automatically:
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: content-sync-2026-04-30-pricing" \
+  --data '{"productId":"product_123","pages":[{"slug":"pricing","title":"Pricing"}]}'
+```
+
+## Replay behavior
+
+TPC stores successful JSON responses for 24 hours.
+
+| Same key | Same route and method | Same body                 | Result                                                        |
+| -------- | --------------------- | ------------------------- | ------------------------------------------------------------- |
+| Yes      | Yes                   | Yes                       | Cached response is replayed with `x-idempotent-replay: true`. |
+| Yes      | Yes                   | No                        | API returns `409 CONFLICT`.                                   |
+| Yes      | Yes                   | Request still in progress | API returns `409 CONFLICT`.                                   |
+| Yes      | No                    | Any body                  | Treated as a separate operation.                              |
+
+Keys are scoped to the organization, route, method, and request body hash.
+
+## Retry example
+
+```ts
+async function createPageWithRetry(productId: string, apiKey: string) {
+  const body = {
+    productId,
+    pages: [
+      {
+        slug: "docs/retry-safe-page",
+        title: "Retry-safe page",
+        content: "# Retry-safe page",
+      },
+    ],
+  };
+
+  const key = `site-page-create-${productId}-retry-safe-page`;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch("https://app.promptingco.com/api/v1/site/pages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "Idempotency-Key": key,
+        },
+        body: JSON.stringify(body),
+      });
+
+      return await response.json();
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+  }
+}
+```

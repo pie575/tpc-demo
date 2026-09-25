@@ -1,0 +1,26 @@
+---
+title: "Organizations"
+description: "List organizations and pass --scope on TPC CLI commands."
+---
+
+# Organizations
+
+List organizations available to your account:
+
+```bash
+tpc org list
+```
+
+The CLI does not save an active organization or product. Pass `--scope` on every org- or product-scoped command:
+
+```bash
+tpc product list --scope prompting-co
+tpc sim experiment list --scope cloudflare-dev/browser-run
+tpc analytics sov --scope nvidia-com/nvidia-dgx-spark --last 30d
+```
+
+Format is `<org-slug>/<product-slug>`, the same order as dashboard URLs (`https://app.promptingco.com/<org-slug>/p/<product-slug>/...`). You can paste that URL as `--scope`. Org-only commands may omit the product: `--scope <org-slug>`.
+
+The older `<product-slug>/<org-slug>` order still works for a transition period and prints a warning.
+
+`--scope` is a persistent flag, so it works before or after the subcommand — `tpc --scope pro-org/my-product content list` and `tpc content list --scope pro-org/my-product` are equivalent. Commands that disable Cobra flag parsing (`tpc alpha …`) still accept `--scope` before the subcommand.

@@ -1,0 +1,123 @@
+---
+title: "Analytics"
+description: "Read share of voice, sentiment, traffic, and citations from the TPC CLI, or build a custom query with explore."
+---
+
+# Analytics
+
+Read analytics for the active product from the terminal. Analytics commands are read-only and require a token or API key with the `analytics:read` scope.
+
+<Note>
+  Analytics commands require `--scope <org-slug>/<product-slug>`.
+</Note>
+
+```bash
+# Product share of voice over the last 30 days
+tpc analytics sov --scope pro-org/my-product
+
+# Industry ranking (competitor share of voice)
+tpc analytics sov --scope pro-org/my-product --by competitor
+
+# Per-prompt sentiment with week-over-week change
+tpc analytics sentiment --scope pro-org/my-product --wow
+
+# AI traffic grouped by page
+tpc analytics traffic --scope pro-org/my-product --by page
+
+# Cited sources leaderboard
+tpc analytics citations --scope pro-org/my-product --last 30d --top 25
+```
+
+## Share of voice
+
+`tpc analytics sov` returns one value for the selected date range. It counts
+completed runs that mention the product, divides by all completed runs in the
+same scope and range, and then multiplies by 100. The default range includes
+today and the preceding 29 calendar days.
+
+```bash
+# One accumulated value for an explicit range
+tpc analytics sov --scope pro-org/my-product --from 2026-04-01 --to 2026-04-30
+
+# Rolling 30-day snapshots for charting
+tpc analytics sov --scope pro-org/my-product --timeseries --last 90d
+
+# Seven-day rolling snapshots over the last 30 snapshot dates
+tpc analytics sov --scope pro-org/my-product --timeseries --rolling-window 7 --last 30d
+
+# Four-week rolling snapshots grouped into Monday-starting weekly buckets
+tpc analytics sov --scope pro-org/my-product --timeseries --granularity week --rolling-window 4 --last 90d
+
+# Ranked breakdowns use the time-series analytics endpoint
+tpc analytics sov --scope pro-org/my-product --by competitor --last 30d
+
+# Competitor ranking within one topic
+tpc analytics sov --scope pro-org/my-product --by competitor --topic <topicId>
+```
+
+`--timeseries`, `--by`, `--prompt`, and `--topic` return rolling snapshots. In
+those modes, `--from`, `--to`, and `--last` select snapshot dates. For a
+product or `--by engine` request, `--granularity day|week|month` selects the UTC
+calendar bucket and `--rolling-window 1..30` controls how many buckets are
+included in each point. They default to `day` and `30`. Adjacent snapshots
+overlap, so do not sum their `mentions` or `runs` values.
+
+## Explore: build your own analytics query
+
+`tpc analytics explore` is the flexible query surface behind the fixed commands above. Pick one metric, group it by at most one value with `--by`, then scope it with filters and a date window. It calls the `POST /api/v1/analytics/explore` endpoint, so anything you can do here you can also do from the API or the `exploreAnalytics` MCP tool.
+
+| Metric      | Group by (`--by`)                                       | Filters                                                                                                                  |
+| ----------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `sov`       | `date`, `prompt`, `topic`, `engine`, `competitor`       | `--view`, `--prompt`, `--topic`, `--engine`, `--region`                                                                  |
+| `citations` | `source`, `category`, `type`, `author`, `model`, `date` | `--view`, `--topic`, `--region`, `--category`, `--content-type`, `--model`, `--author`, `--query`, `--product-mentioned` |
+| `traffic`   | `date`, `page`, `model`, `category`                     | `--traffic-type`, `--provider`, `--category`                                                                             |
+| `sentiment` | `prompt`                                                | `--view`, `--prompt`, `--topic`                                                                                          |
+
+```bash
+# Latest product share-of-voice snapshot
+tpc analytics explore --scope pro-org/my-product --metric sov
+
+# Seven-day rolling share-of-voice series
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --rolling-window 7 --last 30d
+
+# Four-week rolling share-of-voice series
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --granularity week --rolling-window 4 --last 90d
+
+# Four-week rolling share of voice grouped by answer engine
+tpc analytics explore --scope pro-org/my-product --metric sov --by engine --granularity week --rolling-window 4 --last 90d
+
+# Industry ranking: every competitor's share of voice, ranked
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --last 30d
+
+# Industry ranking within one topic (category ranking)
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --topic <topicId>
+
+# Share-of-voice time series for one prompt
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --prompt <promptId>
+
+# Citations grouped by source category over the last 90 days
+tpc analytics explore --scope pro-org/my-product --metric citations --by category --last 90d
+
+# Top cited sources sorted by unique conversations
+tpc analytics explore --scope pro-org/my-product --metric citations --by source --sort-by mentions --top 25
+
+# Weekly AI traffic buckets
+tpc analytics explore --scope pro-org/my-product --metric traffic --by date --granularity week
+
+# Human traffic by page
+tpc analytics explore --scope pro-org/my-product --metric traffic --by page --traffic-type human
+
+# Sentiment per prompt with week-over-week comparison
+tpc analytics explore --scope pro-org/my-product --metric sentiment --compare wow
+```
+
+Date windows default to the last 30 days. Use `--last 7d|30d|90d`, or `--from` and `--to` together to select a range. The flexible `explore` SoV query retains snapshot semantics: omitting `--by` returns only the latest available rolling snapshot, while `--by date` returns one overlapping rolling snapshot per date. `--granularity day|week|month` selects the UTC bucket and `--rolling-window 1..30` controls how many buckets each SOV snapshot contains; they default to `day` and `30`. Custom settings work for product, date, and engine SOV series. SoV `mentions` and `runs` from `explore` are not start-to-end totals, so you must not sum them across dated rows. Use the fixed `tpc analytics sov` command when you need one accumulated date-range value.
+
+The response is a generic table: the API returns column metadata alongside flat rows, so every metric renders the same way. Add `--json` to get the machine-readable response for scripting:
+
+```bash
+# Top three competitors as JSON rows
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --top 3 --json | jq '.rows'
+```
+
+Filters that do not apply to the chosen metric are rejected with the supported list, so agents and scripts get a correcting error instead of silently wrong data. See `tpc analytics explore --help` for the full flag reference.

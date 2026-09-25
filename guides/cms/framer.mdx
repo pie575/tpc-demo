@@ -1,0 +1,63 @@
+---
+title: "Connect Framer"
+description: "Publish TPC drafts to a Framer CMS collection using a Framer API key"
+---
+
+The Prompting Company writes to a Framer CMS collection via the Framer API.
+
+<Note>
+  Framer CMS API access requires a **Framer Pro plan or higher**.
+</Note>
+
+## Before you start
+
+* Admin access to the Framer project.
+* A CMS collection created inside the project.
+
+## Generate an API key
+
+1. In Framer, open your project.
+2. Click the project name (top-left) and open **Settings**.
+3. Open the **API** tab.
+4. Click **Generate API key**.
+5. Grant **CMS write** scope.
+6. Copy the key. Framer shows it only once.
+
+## Copy your project URL and collection ID
+
+* **Project URL** is the `framer.com` URL of the project.
+* **Collection ID** is shown when you select a CMS collection in the Framer editor — copy it from the URL or the collection settings panel.
+
+## Match field names
+
+Default fields are:
+
+* `title`
+* `body`
+
+If you renamed fields in your collection, paste the exact field slug (not the visible label).
+
+## Connect in TPC
+
+1. Open **Settings → Integrations** in your TPC product workspace.
+2. Select **Framer**.
+3. Enter API key, project URL, collection ID, and any custom field slugs.
+4. Click **Save**, then **Test connection**.
+
+## Troubleshooting
+
+### 401 Unauthorized
+
+The plan does not include CMS API access, or the token was revoked. Confirm you are on Pro or higher and regenerate the key.
+
+### 404 collection not found
+
+The collection ID does not belong to the project URL you entered. Double-check both in Framer.
+
+### Fields save empty
+
+Field slugs are case-sensitive and must match the collection schema exactly.
+
+## Related links
+
+* [Framer developer documentation](https://www.framer.com/developers/)

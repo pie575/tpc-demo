@@ -1,0 +1,136 @@
+---
+title: "Signals"
+description: "Extract custom metrics from runs with a YAML signal config"
+---
+
+Signals turn raw run transcripts into metrics. You define them once in a YAML config attached to an experiment; every run extracts its own values, and every iteration aggregates them into comparable numbers — no code required.
+
+Signals are distinct from [goals](/guides/coding-agent-optimization/tasks#goals-and-criteria): a goal is the pass/fail verdict for a single run, while a signal is a measurement aggregated across every run in an iteration. Goals answer "did this run succeed?"; signals answer "how do the environments differ?"
+
+## Signal types and scopes
+
+A signal produces one value per run, typed as:
+
+* **boolean** — "did the agent fabricate an API?"
+* **number** — "how many tokens did the run use?"
+* **category** — "which install method did the agent choose?" (requires `category_enums`)
+
+Signals are extracted at one of two **scopes**:
+
+* `run` — one observation per run (the default)
+* `message` — an observation per matching message, then **folded** into a single per-run value (`sum`, `count`, `average`, `min`, `max`, or `histogram`). Message-scoped signals require a `target_role` (`assistant`, `user`, or `tool`) and a `fold`.
+
+## Extraction methods
+
+| Method    | How it works                                                                                                                                     | Constraints                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `pattern` | Regex over message content                                                                                                                       | `message` scope only; boolean (via `patterns`) or number (via `needle`) |
+| `stats`   | Built-in run metrics: `duration`, `token_in`, `token_out`, `token_total`, `cost`, `tool_calls`, `turns`, `steps`, `status`, `termination_reason` | `run` scope only                                                        |
+| `llm`     | A judge model evaluates content against your prompt                                                                                              | boolean or category; requires `model` and `prompt`                      |
+
+Run-scoped `pattern` and `llm` signals also declare a `source` — which part of the transcript to read: `codeText`, `assistantText`, `userText`, `thinkingText`, `toolCalls`, `toolResults`, `finalAnswer`, or `any`.
+
+## Aggregates
+
+Aggregates fold per-run signal values into iteration-level metrics: `count`, `count_where`, `rate`, `sum`, `avg`, `min`, `max`, `median`, `mode`, `count_by_category`, `avg_by_category`, and `distribution`. Each aggregate references a signal by id and gets a display label. `rate` returns a fraction from 0 to 1 (truthy runs ÷ total runs), not a percentage.
+
+## Example config
+
+```yaml
+version: 1
+
+signals:
+  # Message-scoped pattern: count hallucinated endpoints per run
+  - id: fabricated-endpoint
+    name: "Fabricated API endpoint"
+    type: boolean
+    scope: message
+    target_role: assistant
+    extract:
+      method: pattern
+      patterns:
+        - name: legacy-v2-api
+          regex: "api\\.acme\\.com/v2/"
+    fold:
+      fn: count
+
+  # Run-scoped stat: total tokens
+  - id: total-tokens
+    name: "Total tokens"
+    type: number
+    scope: run
+    extract:
+      method: stats
+      stat: token_total
+
+  # Run-scoped LLM judge: did the agent give up?
+  - id: agent-gave-up
+    name: "Agent abandoned the task"
+    type: boolean
+    scope: run
+    extract:
+      method: llm
+      source: finalAnswer
+      model: deepseek/deepseek-v4-flash-0731
+      prompt: >
+        Did the agent abandon the task or deliver a workaround instead of
+        completing the instruction? Answer true if it gave up.
+
+aggregates:
+  - id: fabrication-rate
+    signal_id: fabricated-endpoint
+    fn: rate
+    label: "Share of runs with fabricated endpoints"
+  - id: avg-tokens
+    signal_id: total-tokens
+    fn: avg
+    label: "Average tokens per run"
+  - id: give-up-rate
+    signal_id: agent-gave-up
+    fn: rate
+    label: "Share of runs where the agent gave up"
+```
+
+Signal and aggregate ids must be kebab-case and unique. The config is validated on upload — mismatched scopes, missing folds, or aggregates referencing unknown signals are rejected with specific errors.
+
+For `llm` extraction, `model` is a gateway model id. The default small judge is `deepseek/deepseek-v4-flash-0731`. Stored configs that still name Claude Haiku 4.5 are rewritten to that id at resolve time.
+
+## Working with signal configs from the CLI
+
+Validate locally before uploading — validation runs entirely client-side and needs no authentication:
+
+```bash
+tpc sim experiment validate-signal-config signals.yaml
+```
+
+The command exits `0` if the config is valid and `1` with specific errors if not, so it works as a CI check or pre-commit hook.
+
+Attach the config when creating the experiment, or update it later:
+
+```bash
+tpc sim experiment create --name "Docs friction" \
+  --task-ids task_abc --env-ids env_123 \
+  --signal-config signals.yaml
+
+tpc sim experiment update exp_789 --signal-config signals.yaml
+tpc sim experiment update exp_789 --clear-signal-config
+```
+
+After an iteration completes, read the extracted values:
+
+```bash
+# Iteration-level aggregates plus per-run values
+tpc sim experiment signals exp_789
+
+# A specific iteration (defaults to the latest)
+tpc sim experiment signals exp_789 --iteration 1
+
+# Machine-readable, for dashboards or regression checks
+tpc --format json sim experiment signals exp_789
+```
+
+## Versioning
+
+The signal config is stored on the experiment with a content hash. Each iteration freezes the config it ran with, so changing the config later never rewrites historical aggregates — the next iteration simply uses the new version.
+
+Every extracted value also keeps **evidence**: the transcript event it came from and a short snippet, so you can audit why a signal fired.

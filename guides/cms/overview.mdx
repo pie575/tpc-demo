@@ -1,0 +1,30 @@
+---
+title: "CMS integrations"
+description: "Connect The Prompting Company to your CMS to publish generated content as drafts"
+---
+
+The Prompting Company publishes generated content directly into your CMS as drafts. You connect a CMS once per product, and every subsequent publish action writes to that destination.
+
+## Supported CMS
+
+* [WordPress](/guides/cms/wordpress) — self-hosted or WordPress.com Business+ via TPC connector plugin
+* [Sanity](/guides/cms/sanity) — dataset writes via project-scoped API token
+* [Webflow](/guides/cms/webflow) — CMS collection writes via site API token
+* [Ghost](/guides/cms/ghost) — Admin API custom integration
+* [Framer](/guides/cms/framer) — CMS collection writes via Framer API key (Pro plan or higher)
+* [Prismic](/guides/cms/prismic) — repository writes via permanent access token
+* [Custom endpoint](/guides/cms/custom) — POST JSON to your own server with a bearer token
+
+## Where to connect
+
+Every CMS is configured per-product from **Settings → Integrations** inside your product workspace. Each connector accepts credentials, validates them on save, and exposes a **Test connection** button.
+
+<Note>
+  TPC always publishes as drafts. Nothing goes live until you approve it inside your CMS.
+</Note>
+
+## Before you start
+
+* You must be an admin on the target CMS site — API token generation usually requires it.
+* Prepare a dedicated integration user or token labelled `TPC publisher` so you can revoke it independently.
+* If your CMS supports scoped tokens (Sanity, Webflow, Ghost), grant the minimum scope required to create drafts.

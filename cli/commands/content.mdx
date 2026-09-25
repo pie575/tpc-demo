@@ -1,0 +1,204 @@
+---
+title: "Content"
+description: "Create, generate, review, publish, and manage content from the TPC CLI."
+---
+
+# Content
+
+Manage the full content lifecycle for a product from the terminal: create or generate drafts, work the review queue (approve, reject, revise), publish approved drafts, and edit live pages. Pass `--scope <org-slug>/<product-slug>` to select the product. Every JSON response includes the resolved scope.
+
+<Note>
+  `tpc content` replaces the removed `tpc site page` command group. Publishing is gated on review: `create` and `generate` land drafts in the review queue, and `publish` fails with a conflict until the draft is approved. The old ungated `site page update --status published` path no longer exists.
+</Note>
+
+## The lifecycle
+
+```
+create / generate  →  review (approve / reject / revise)  →  publish
+```
+
+The review queue is a list filter: `tpc content list --status pending-review`.
+
+## List content
+
+List published pages (default):
+
+```bash
+tpc --scope pro-org/my-product content list
+```
+
+Filter the published list (search, path prefix, pagination, sort):
+
+```bash
+tpc --scope pro-org/my-product content list \
+  --query pricing \
+  --path-prefix blog/ \
+  --page 2 --page-size 10 \
+  --order-by createdAt --order-dir asc
+```
+
+List the review queue and other lifecycle states:
+
+```bash
+tpc --scope pro-org/my-product content list --status pending-review
+tpc --scope pro-org/my-product content list --status generating
+tpc --scope pro-org/my-product content list --status rejected   # includes rejection feedback
+tpc --scope pro-org/my-product content list --status failed
+tpc --scope pro-org/my-product content list --status approved
+```
+
+`--prompt <prompt-id>` works with every status, including `published` — published pages keep the prompt they were generated from, so you can answer "which prompts have no content yet?":
+
+```bash
+# every published page generated from one prompt
+tpc --scope pro-org/my-product content list --prompt prompt_123
+
+# the same prompt's drafts still in review
+tpc --scope pro-org/my-product content list --status pending-review --prompt prompt_123
+```
+
+Published items include a `promptId` field (`null` for manually created pages)
+and an allowlisted metadata envelope containing the normalized generated content
+type:
+
+```json
+{
+  "metadata": {
+    "contentType": "decision-guide"
+  }
+}
+```
+
+`metadata.contentType` is available consistently for published pages and review
+drafts. It is `null` for manual pages and content platforms that do not map to a
+selectable generation type. Internal generation metadata is not exposed.
+
+## Get one item
+
+`get` accepts a draft id or a published document id; the response says which kind answered.
+
+```bash
+tpc --scope pro-org/my-product content get adraft_123
+tpc --scope pro-org/my-product content get adoc_123
+```
+
+Both variants include the same normalized `metadata.contentType` field in JSON
+output. Text output prints it as `Content type: <value>` when present.
+
+## Create content
+
+Created pages land in the review queue as `pending_review` drafts — they publish only after approval.
+
+```bash
+tpc --scope pro-org/my-product content create \
+  --slug blog/hello-world \
+  --title "Hello" \
+  --content "# Hello"
+```
+
+Create from a local markdown file:
+
+```bash
+tpc --scope pro-org/my-product content create \
+  --slug docs/install \
+  --title "Install" \
+  --content-file ./install.md
+```
+
+## Generate content
+
+Start the content-generation agent for one or more prompts (Pro plan). Generated drafts land in the review queue.
+
+```bash
+tpc --scope pro-org/my-product content generate --prompt prompt_123
+tpc --scope pro-org/my-product content generate \
+  --prompt prompt_123 --prompt prompt_456 \
+  --type recommended \
+  --watch
+```
+
+`--watch` polls each draft every 5 seconds until generation completes or fails.
+
+Cancel a draft that is still generating (or stuck there after the worker died). This marks it `cancelled` and removes it from the generating queue. A server-side reaper also moves drafts that stay in `generating` for more than six hours to `failed`.
+
+```bash
+tpc --scope pro-org/my-product content cancel adraft_123
+tpc --scope pro-org/my-product content list --status failed
+```
+
+## Review the queue
+
+Approve one or more drafts (approval queues publishing for publishable content):
+
+```bash
+tpc --scope pro-org/my-product content approve adraft_123
+tpc --scope pro-org/my-product content approve adraft_123 adraft_456
+```
+
+Reject with a reason (stored as reviewer feedback, shown in `list --status rejected`):
+
+```bash
+tpc --scope pro-org/my-product content reject adraft_123 --reason "Wrong sources cited"
+```
+
+Revise a draft — submit an edited replacement, or send feedback for an agent re-run (Pro plan). Both return the draft to the review queue and clear a prior rejection:
+
+```bash
+tpc --scope pro-org/my-product content revise adraft_123 --content-file ./revised.md
+tpc --scope pro-org/my-product content revise adraft_123 --feedback "Tighten the intro and cite the pricing page"
+```
+
+## Publish and revert
+
+`publish` queues publishing for an approved draft and fails with a conflict when the draft is unapproved:
+
+```bash
+tpc --scope pro-org/my-product content publish adraft_123
+```
+
+`revert` unpublishes the live page and returns the draft to the review queue:
+
+```bash
+tpc --scope pro-org/my-product content revert adraft_123
+```
+
+## Update a live page
+
+Only the flags you pass are changed. There is no `--status` flag — publishing goes through approve/publish.
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 --title "Updated title"
+tpc --scope pro-org/my-product content update adoc_123 --content-file ./page.md
+```
+
+Pass an empty string to clear an optional field:
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 --redirect-url ""
+```
+
+Manage domain attachments:
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 \
+  --attach-domain-id domain_123 \
+  --canonical-domain-id domain_123
+```
+
+## Delete content
+
+Soft-deletes a live page (with its linked draft and tracked URL) or deletes an unpublished draft, including drafts still in `generating`:
+
+```bash
+tpc --scope pro-org/my-product content delete adoc_123
+tpc --scope pro-org/my-product content delete adoc_123 adraft_456
+tpc --scope pro-org/my-product content delete adraft_stuck_generating
+```
+
+`delete` is valid on `status: generating`. Use `cancel` when you want to stop generation without hard-deleting the row.
+
+Every command also supports `--format json` for scripting:
+
+```bash
+tpc --scope pro-org/my-product content list --status pending-review --format json
+```

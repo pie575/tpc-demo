@@ -1,0 +1,139 @@
+---
+title: "Tasks"
+description: "Define what agents should accomplish and how success is measured"
+---
+
+A task tells the agent what to accomplish and tells the platform how to score the attempt. Both halves live on the task itself, so every environment that runs it is measured the same way.
+
+## Anatomy of a task
+
+| Part              | Purpose                                                                         |
+| ----------------- | ------------------------------------------------------------------------------- |
+| **Instruction**   | The prompt the agent receives — what to build, install, or accomplish           |
+| **Goals**         | Success criteria, each with weighted scoring and a passing threshold            |
+| **Init files**    | Files placed in the sandbox before the run: zip uploads or git repositories     |
+| **Init commands** | Shell commands run during sandbox setup (installing dependencies, seeding data) |
+| **Secrets**       | Named credentials exposed to the run as environment variables                   |
+
+## Writing instructions
+
+Write instructions the way a real user would brief an agent — not the way you wish they would. The goal is to measure your product's agent experience, so avoid embedding hints the average user wouldn't provide:
+
+* **Good:** "Set up error tracking for this Express app using Acme."
+* **Too helpful:** "Install `@acme/sdk@2.1`, then call `acme.init()` with the DSN from the dashboard."
+
+## Goals and criteria
+
+Each goal contains one or more **criteria**. A criterion has an evaluation type, a weight, and a max score. Goals are scored by `weighted_average`, `binary`, or `percentage`, against a passing threshold from 0–100.
+
+Criteria are evaluated by one of:
+
+| Evaluation           | What it checks                                            |
+| -------------------- | --------------------------------------------------------- |
+| `comparison`         | A run metric against a threshold (duration, tokens, cost) |
+| `file_exists`        | A file is present in the sandbox after the run            |
+| `file_content_match` | File contents match a pattern                             |
+| `json_schema`        | Output validates against a JSON Schema                    |
+| `bash_command`       | A shell command exits 0 in the post-run sandbox           |
+| `python_script`      | A custom Python check passes                              |
+| `script_judge`       | Your own verification script (exit 0 = pass)              |
+| `llm_judge`          | An LLM judges the transcript against a rubric             |
+
+Prefer deterministic checks (`file_exists`, `bash_command`, `script_judge`) where possible — they're cheaper and more reproducible. Reserve `llm_judge` for genuinely subjective criteria like "did the agent follow the documented approach?"
+
+## Sandbox setup
+
+Init files and commands prepare the sandbox before the agent starts:
+
+* **Zip upload** — extract an archive into the sandbox (default target: the agent's home directory)
+* **Git clone** — clone a repository at a specific ref; private repos authenticate via a secret reference
+* **Init commands** — run shell commands in order, each with a working directory and timeout
+
+The two compose, and the rule of thumb is simple: **init files put bytes in place** (a starter repo, fixtures, a docs bundle), while **init commands execute setup** (install dependencies, build, seed data). Use them together to start the agent from a realistic state, like a half-finished app that needs your product integrated — and keep this setup out of the instruction so you measure the task, not the plumbing.
+
+## Secrets
+
+Secrets are encrypted credentials scoped to your organization (or to a single environment). Reference them by name in a task and they're injected as environment variables during the run — API keys never appear in the task definition or transcripts.
+
+Secrets are managed on environments — see [Environments](/guides/coding-agent-optimization/environments#secrets-from-the-cli) for the CLI workflow.
+
+## Working with tasks from the CLI
+
+Tasks are created from a JSON file. Run `tpc sim spec` to print the full contract; a minimal `task.json` looks like:
+
+```json
+{
+  "name": "Checkout regression",
+  "description": "Validate checkout flow",
+  "category": "coding",
+  "prompt": "Open the app, add an item to cart, and complete checkout successfully.",
+  "goals": [
+    {
+      "name": "Checkout succeeds",
+      "description": "The agent should add an item to the cart, proceed through the checkout flow, and reach a confirmation page without errors.",
+      "evaluationType": "llm_judge",
+      "model": "claude-sonnet-4-6",
+      "passingThreshold": 70,
+      "scoringMethod": "weighted_average"
+    }
+  ]
+}
+```
+
+`category` is one of `coding`, `research`, `documentation`, or `analysis`. Don't include a `product` field — the CLI injects the product from `--scope <org-slug>/<product-slug>`.
+
+```bash
+# Create the task
+tpc sim task create --file task.json --scope pro-org/my-product
+
+# Browse and inspect tasks
+tpc sim task list --search checkout --scope pro-org/my-product
+
+# Task detail — goals, init commands, init file names, linked environments
+tpc sim task get task_123 --scope pro-org/my-product
+
+# Update metadata, or replace goals/definition from a file
+tpc sim task update task_123 --name "Checkout regression v2" --scope pro-org/my-product
+tpc sim task update task_123 --file task.json --scope pro-org/my-product
+
+# Queue runs across the task's linked, enabled environments
+tpc sim task run task_123 --scope pro-org/my-product
+
+# ...or only on specific ones (comma-separate or repeat the flag)
+tpc sim task run task_123 --environment-id env_a,env_b --scope pro-org/my-product
+
+# Delete a task (soft delete; run history is kept)
+tpc sim task delete task_123 --scope pro-org/my-product
+```
+
+## Run a task from a directory
+
+A task and the agent that attempts it can live together in a small, portable directory:
+
+```text
+checkout-regression/
+├── task.json         # metadata + goals (no prompt — see below)
+├── instruction.md    # the prompt the agent receives
+└── environment.json  # the agent config under test (optional)
+```
+
+An `environment.json` declares the agent config:
+
+```json
+{
+  "name": "Claude Code + Sonnet",
+  "agentConfig": {
+    "harness": "claude",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  }
+}
+```
+
+```bash
+tpc sim run ./checkout-regression
+```
+
+One command reconciles the directory with your product and queues runs: it reuses a matching task and environment, updates them if the files changed, and creates them if they're new — so running it again never makes duplicates. Omit `environment.json` (or pass `--environment-id`) to run against environments that already exist.
+
+`tpc sim task export <task-id>` writes a directory in exactly this shape — including `environment.json` when the task has a single linked environment — so you can pull a task down, edit it, and run it anywhere.

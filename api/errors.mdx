@@ -1,0 +1,93 @@
+---
+title: "Errors"
+description: "Handle The Prompting Company API result envelopes, error codes, and request IDs."
+---
+
+# Errors
+
+The Prompting Company's JSON endpoints return an `ApiResult<T>` envelope for both success and failure.
+
+## Result shape
+
+```ts
+type ApiSuccess<T> = {
+  ok: true;
+  data: T;
+};
+
+type ApiError = {
+  ok: false;
+  code: ApiErrorCode;
+  message: string;
+  details?: unknown;
+};
+
+type ApiResult<T> = ApiSuccess<T> | ApiError;
+```
+
+Check `ok` before reading `data`:
+
+```ts
+const result = await response.json();
+
+if (!result.ok) {
+  console.error(result.code, result.message, result.details);
+  return;
+}
+
+console.log(result.data);
+```
+
+## Error codes
+
+| Code                     | Default status |
+| ------------------------ | -------------- |
+| `BAD_REQUEST`            | 400            |
+| `UNAUTHORIZED`           | 401            |
+| `PAYMENT_REQUIRED`       | 402            |
+| `FORBIDDEN`              | 403            |
+| `NOT_FOUND`              | 404            |
+| `METHOD_NOT_ALLOWED`     | 405            |
+| `NOT_ACCEPTABLE`         | 406            |
+| `REQUEST_TIMEOUT`        | 408            |
+| `CONFLICT`               | 409            |
+| `GONE`                   | 410            |
+| `PAYLOAD_TOO_LARGE`      | 413            |
+| `UNSUPPORTED_MEDIA_TYPE` | 415            |
+| `UNPROCESSABLE_ENTITY`   | 422            |
+| `TOO_MANY_REQUESTS`      | 429            |
+| `INTERNAL`               | 500            |
+| `NOT_IMPLEMENTED`        | 501            |
+| `BAD_GATEWAY`            | 502            |
+| `SERVICE_UNAVAILABLE`    | 503            |
+| `GATEWAY_TIMEOUT`        | 504            |
+| `VALIDATION_ERROR`       | 422            |
+| `BUSINESS_LOGIC_ERROR`   | 422            |
+| `EXTERNAL_SERVICE_ERROR` | 502            |
+| `RATE_LIMITED`           | 429            |
+| `MAINTENANCE_MODE`       | 503            |
+| `LIVE_INDEX_NOT_FOUND`   | 404            |
+| `SCOPE_INVALID`          | 422            |
+
+## Common messages
+
+| Message                   | Meaning                                                    |
+| ------------------------- | ---------------------------------------------------------- |
+| `authentication required` | No valid session, bearer token, or API key was found.      |
+| `invalid api key`         | The `x-api-key` value could not be verified.               |
+| `public_api_only`         | An API key attempted to call an internal route.            |
+| `auth_method_not_allowed` | The endpoint does not accept the credential type you used. |
+| `insufficient_scope`      | Your bearer token or API key is missing a required scope.  |
+| `rate_limited`            | You exceeded the current rate limit bucket.                |
+
+## Request IDs
+
+Every wrapper response includes:
+
+```text
+x-request-id: 6efaa25e-3ef6-4a34-91c1-7ff3e0fd4cc8
+```
+
+You may also send your own `x-request-id` if it uses letters, numbers, `_`, `.`, `-`, or `:` and is at most 128 characters. TPC replaces unsafe values with a fresh ID.
+
+Share the request ID with support when you need help tracing a failed request.

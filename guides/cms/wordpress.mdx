@@ -1,0 +1,67 @@
+---
+title: "Connect WordPress"
+description: "Publish TPC drafts to WordPress using the TPC connector plugin"
+---
+
+The Prompting Company publishes drafts to WordPress via a small connector plugin that exposes a token-authenticated endpoint. This works for self-hosted WordPress and WordPress.com Business or higher (plans that allow custom plugins).
+
+## Before you start
+
+* Admin access to your WordPress site.
+* Ability to upload and activate plugins.
+
+## Install the connector
+
+1. Download the connector plugin:
+
+```text
+https://r2-assets.promptingco.com/tpc-wordpress-connector.php.zip
+```
+
+2. In WordPress admin, go to **Plugins → Add New → Upload Plugin**.
+3. Upload `tpc-wordpress-connector.php.zip` and click **Install Now**.
+4. Click **Activate**. A new menu item **Settings → TPC Connector** appears.
+
+## Generate a connector token
+
+1. Open **Settings → TPC Connector**.
+2. Click **Generate Token**.
+3. Copy the token immediately. The token is shown only once.
+
+<Warning>
+  If you lose the token, generate a new one — the old token stops working as soon as a new one is generated.
+</Warning>
+
+## Connect in TPC
+
+1. In your TPC product workspace, open **Settings → Integrations**.
+2. Select **WordPress**.
+3. Enter:
+   * **Site URL** — your WordPress site root, e.g. `https://blog.example.com`
+   * **Connector token** — the token you copied above
+4. Click **Save** and then **Test connection**.
+
+## Meta title and description
+
+Each published post carries the document's meta title and meta description from TPC. The connector writes them to the active SEO plugin so they appear in that plugin's post settings and in the rendered page:
+
+* Yoast SEO
+* Rank Math
+* All in One SEO
+* SEOPress
+
+If none of these plugins is active, the connector sets the `<title>` and `<meta name="description">` tags on the post page itself. Connector version 0.4.0 or later is required; older versions ignore these fields.
+
+## Troubleshooting
+
+### Test connection fails with 401
+
+The token in TPC does not match the token in WordPress. Regenerate the token in **Settings → TPC Connector** and paste the new value into TPC.
+
+### Test connection fails with 404
+
+The plugin is not activated, or the site URL is wrong. Confirm the plugin appears in **Plugins → Installed Plugins** as active, and that the site URL has no trailing path.
+
+### Draft appears but images are broken
+
+WordPress uploads require the connector to reach your media library. Check that the WordPress site is publicly reachable — TPC uploads images by URL, not by binary transfer.

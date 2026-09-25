@@ -1,0 +1,223 @@
+---
+title: "MCP server"
+description: "Install The Prompting Company MCP server in Claude, Codex, Cursor, VS Code, and other MCP clients"
+---
+
+The Prompting Company hosts a remote MCP server at:
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+This server uses Streamable HTTP and OAuth 2.1. In clients that support remote MCP natively, you usually only need the server URL. The client will handle dynamic client registration and open the browser for authentication automatically.
+
+<Note>
+  You do not need to manually create or paste an OAuth client ID or client secret in normal MCP client setup. Native remote MCP clients register themselves during the OAuth flow.
+</Note>
+
+<Note>
+  The hosted OAuth callback allowlist currently supports Claude, ChatGPT, and
+  MCPJam. Other hosted clients should use a local loopback callback or a stdio
+  bridge such as `mcp-remote` unless their callback has been reviewed and added.
+</Note>
+
+## Server details
+
+* **MCP transport URL**: `https://app.promptingco.com/api/mcp`
+* **Protected resource metadata**: `https://app.promptingco.com/.well-known/oauth-protected-resource/api/mcp`
+* **Authorization server metadata**: `https://app.promptingco.com/.well-known/oauth-authorization-server/api/auth`
+
+## Before you start
+
+Make sure the client you are using can reach `https://app.promptingco.com` over the public internet.
+
+During authentication:
+
+1. Your MCP client opens the browser.
+2. You sign in to The Prompting Company if needed.
+3. You approve the consent screen.
+4. The browser returns control back to the MCP client.
+
+## Claude
+
+### Claude.ai / Claude Desktop
+
+1. Open **Settings** -> **Connectors**.
+2. Add a custom MCP server.
+3. Enter this server URL:
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+4. Start the connection flow.
+5. Complete sign-in and approval in the browser.
+6. Return to Claude once the browser finishes redirecting.
+
+<Warning>
+  Claude connects from Anthropic-managed infrastructure. If you are testing a non-production environment, the MCP endpoint must be publicly reachable and the OAuth metadata must advertise the same public hostname the client is using.
+</Warning>
+
+## Claude Code
+
+Run:
+
+```bash
+claude mcp add --transport http tpc https://app.promptingco.com/api/mcp
+```
+
+Then, inside Claude Code, run:
+
+```text
+/mcp
+```
+
+Claude Code will start the OAuth flow in your browser.
+
+## Codex
+
+Run:
+
+```bash
+codex mcp add tpc --url https://app.promptingco.com/api/mcp
+```
+
+If this is your first remote MCP server in Codex, enable the RMCP client in `~/.codex/config.toml`:
+
+```toml
+[features]
+experimental_use_rmcp_client = true
+```
+
+Then log in:
+
+```bash
+codex mcp login tpc
+```
+
+You can also configure it directly in `~/.codex/config.toml`:
+
+```toml
+[features]
+experimental_use_rmcp_client = true
+
+[mcp_servers.tpc]
+url = "https://app.promptingco.com/api/mcp"
+```
+
+## Cursor
+
+If Cursor supports remote MCP URLs directly in your version, use:
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+If you need a stdio bridge instead, configure:
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+## Visual Studio Code
+
+Use the stdio bridge with `mcp-remote`:
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+You can also add it through the Command Palette:
+
+1. Run **MCP: Add Server**
+2. Choose **Command (stdio)**
+3. Enter:
+
+```text
+npx -y mcp-remote https://app.promptingco.com/api/mcp
+```
+
+4. Name it `tpc`
+5. Start the server from **MCP: List Servers**
+
+## Windsurf
+
+Add this to your MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+## Zed
+
+Add this to your settings:
+
+```json
+{
+  "context_servers": {
+    "tpc": {
+      "source": "custom",
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"],
+      "env": {}
+    }
+  }
+}
+```
+
+## Other clients
+
+For clients that do not support remote MCP with OAuth natively, use:
+
+* **Command**: `npx`
+* **Arguments**: `-y mcp-remote https://app.promptingco.com/api/mcp`
+
+## Troubleshooting
+
+### Browser auth succeeds but the client does not connect
+
+* Close the MCP client and reopen it.
+* Remove the existing MCP connection and add it again.
+* Make sure the server URL is exactly `https://app.promptingco.com/api/mcp`.
+
+### Consent screen gets stuck
+
+* Complete the approval in a normal browser window instead of an embedded browser if your client gives you the option.
+* Retry with a fresh connection attempt so you get a fresh signed OAuth URL.
+* If you are testing through a proxy or tunnel, make sure OAuth metadata and the MCP transport both use the same public hostname.
+
+### Client cannot discover the server
+
+Verify these URLs load successfully:
+
+```text
+https://app.promptingco.com/api/mcp
+https://app.promptingco.com/.well-known/oauth-protected-resource/api/mcp
+https://app.promptingco.com/.well-known/oauth-authorization-server/api/auth
+```
+
+Expected behavior:
+
+* `/api/mcp` returns `401` when you are not authenticated yet
+* both well-known endpoints return `200`

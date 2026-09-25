@@ -1,0 +1,108 @@
+---
+title: "Environments"
+description: "Configure which agents attempt your tasks and the sandboxes they run in"
+---
+
+An environment pairs an agent configuration with sandbox resources. It answers two questions: *which agent attempts the task*, and *what machine does it get*?
+
+Because environments are the variable in an experiment, you'll typically create one per configuration you want to compare — "Claude Code + latest Sonnet" vs "Codex + latest GPT", for example — and run them against the same tasks.
+
+## Agent configuration
+
+| Setting                      | Options                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| **Harness**                  | `claude` (Claude Code), `codex` (Codex CLI), `opencode` (OpenCode)        |
+| **Model**                    | Any model supported by the chosen harness — validated when the run starts |
+| **Temperature / max tokens** | Optional sampling overrides                                               |
+| **Sandbox mode**             | `read-only`, `workspace-write`, or `danger-full-access`                   |
+
+The harness runs headless inside the sandbox, exactly as a developer would run it in their own terminal. Its session logs are captured and parsed into a unified transcript regardless of which harness produced them, so runs are comparable across harnesses.
+
+## Sandbox resources
+
+Every run gets a fresh, isolated Linux sandbox:
+
+* **CPU**: 1–4 cores
+* **Memory**: 1–8 GB
+* **Disk**: 1–10 GB
+* **GPU** (optional): T4, L4, A10G, A100, or H100
+
+Runs without a GPU execute on the default sandbox provider; requesting a GPU automatically routes the run to GPU-backed infrastructure. The sandbox is created at run start, initialized with the task's files, commands, and secrets, archived after the run, and destroyed.
+
+## Scheduling
+
+Environments can run on a recurring schedule (every 7 or 14 days). Scheduled runs execute the environment's tasks automatically, which is the easiest way to monitor agent experience continuously — a docs change that breaks agent onboarding shows up in the next scheduled run instead of the next manual experiment.
+
+## Choosing what to compare
+
+Common comparison setups:
+
+* **Model sweep** — same harness, different models, to see which models handle your product well
+* **Harness sweep** — same model family across Claude Code, Codex, and OpenCode, to find harness-specific friction
+* **Before/after** — identical environments run as separate iterations around a docs or API change
+
+## Working with environments from the CLI
+
+The simplest way to create an environment is to declare it in an `environment.json` beside a task and run the directory — see [Run a task from a directory](/guides/coding-agent-optimization/tasks#run-a-task-from-a-directory). `tpc sim run` creates the environment, links it, and queues runs in one command.
+
+To manage environments directly, the agent configuration is passed as inline JSON or a `@file` (JSON or TOML):
+
+```json
+{
+  "harness": "claude",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "sandboxResources": {
+    "cpu": 2,
+    "memory": 4,
+    "disk": 10
+  }
+}
+```
+
+```bash
+# Create an environment from the config file, linking tasks at creation
+tpc sim env create --name "Claude Code + Sonnet" \
+  --agent-config @agent-config.json \
+  --task-ids task_123,task_456
+
+# Or pass the config inline
+tpc sim env create --name "Codex sweep" \
+  --agent-config '{"harness":"codex","provider":"openai","model":"gpt-5"}'
+
+# Browse environments (filters combine)
+tpc sim env list --search claude --enabled true
+
+# Inspect one environment — agent config, init commands, init file names, linked tasks
+tpc sim env get env_123
+
+# Link or unlink tasks later
+tpc sim env task attach env_123 task_789
+tpc sim env task detach env_123 task_789
+
+# Update settings — flags combine in one call (--schedule: 7d or 14d; none clears)
+tpc sim env update env_123 --name "Shared Claude Sonnet" --schedule 7d
+tpc sim env update env_123 --enabled false
+
+# Delete (detach all tasks first)
+tpc sim env delete env_123
+```
+
+To request a GPU sandbox, add it to `sandboxResources` — for example `"gpu": "A100", "gpuCount": 1`.
+
+## Secrets from the CLI
+
+Secrets are set per environment and injected as environment variables at run time. Values are never printed back by the CLI.
+
+```bash
+# Set a secret from a literal value, or safely from your local shell
+tpc sim env secret set env_123 --name FEATURE_FLAG --value enabled
+tpc sim env secret set env_123 --name ACME_API_KEY --from-env ACME_API_KEY
+
+# Bulk-import from a .env file (or stdin with --env-file -)
+tpc sim env secret import env_123 --env-file .env.simulation
+
+# List metadata and clean up
+tpc sim env secret list env_123
+tpc sim env secret delete env_123 --name ACME_API_KEY
+```

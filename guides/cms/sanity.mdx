@@ -1,0 +1,60 @@
+---
+title: "Connect Sanity"
+description: "Publish TPC drafts to Sanity using a project-scoped API token"
+---
+
+The Prompting Company writes documents to your Sanity dataset using a project-scoped API token with Editor or Maintainer permissions.
+
+## Before you start
+
+* Admin or Developer role on the target Sanity project.
+* Your document schema deployed to the dataset you plan to write to.
+
+## Generate an API token
+
+1. Go to [sanity.io/manage](https://sanity.io/manage) and open your project.
+2. Open the **API** tab, then **Tokens**.
+3. Click **Add API token**.
+4. Name it `TPC publisher` and pick **Editor** or **Maintainer**.
+5. Copy the token. Sanity shows it only once.
+
+## Find your project ID and dataset
+
+* **Project ID** is shown at the top of the project page in `sanity.io/manage`.
+* **Dataset** is usually `production`. Match the exact dataset name.
+* **API version** defaults to `v2025-03-01`. Bump only if you need a newer feature.
+
+## Match your schema fields
+
+TPC writes to a single document type. Defaults:
+
+* **Document type** — `post`
+* **Fields** — `title`, `content`, `slug`, `excerpt`
+* **Image fields** — `thumbnail`, `hero` (optional)
+
+If your schema uses different names, paste the exact field names in the integration form. Image fields are optional — leave them blank if your schema has no image references.
+
+## Connect in TPC
+
+1. Open **Settings → Integrations** in your TPC product workspace.
+2. Select **Sanity**.
+3. Fill in project ID, dataset, API version, document type, field names, and the API token.
+4. Click **Save**, then **Test connection**.
+
+## Troubleshooting
+
+### 401 Unauthorized
+
+Token is missing write permission. Regenerate with **Editor** or **Maintainer** scope.
+
+### 404 or "unknown type"
+
+The **Document type** in TPC does not exist in the deployed schema. Deploy the schema or update the type name to match.
+
+### Fields save as `null`
+
+Field names are case-sensitive and must match the schema key exactly, not the display label.
+
+## Related links
+
+* [Sanity API token documentation](https://www.sanity.io/docs/http-auth)

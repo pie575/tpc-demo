@@ -1,0 +1,495 @@
+---
+title: "Advanced usage"
+description: "Advanced patterns and techniques for using The Prompting Company TypeScript SDK"
+---
+
+# Advanced usage
+
+Learn advanced patterns, error handling, and optimization techniques for The Prompting Company TypeScript SDK.
+
+## Error Handling
+
+The SDK returns a structured response with an `ok` property to indicate success or failure. Always check this property before accessing data:
+
+```typescript
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: "your-product",
+  organizationSlug: "your-org",
+});
+
+async function getDocumentSafely(path: string) {
+  try {
+    const result = await client.document.getByPath(path);
+    
+    if (!result.ok) {
+      // Handle API errors
+      console.error('API Error:', result.error);
+      throw new Error(`Failed to fetch document: ${result.error?.message || 'Unknown error'}`);
+    }
+    
+    return result.data;
+  } catch (error) {
+    // Handle network errors, SDK errors, etc.
+    console.error('SDK Error:', error);
+    throw error;
+  }
+}
+```
+
+## Client Configuration
+
+### Environment-Based Configuration
+
+Create different configurations for different environments:
+
+```typescript
+// lib/sdk-config.ts
+import tpc from "@promptingcompany/sdk";
+
+interface SDKConfig {
+  productSlug: string;
+  organizationSlug: string;
+}
+
+function getSDKConfig(): SDKConfig {
+  return {
+    productSlug: process.env.TPC_PRODUCT_SLUG!,
+    organizationSlug: process.env.TPC_ORG_SLUG!,
+  };
+}
+
+export const client = new tpc(getSDKConfig());
+```
+
+### Multiple Client Instances
+
+If you need to access multiple products or organizations:
+
+```typescript
+// lib/multi-client.ts
+import tpc from "@promptingcompany/sdk";
+
+export const clients = {
+  mainProduct: new tpc({
+    productSlug: "main-product",
+    organizationSlug: "your-org",
+  }),
+  
+  docsProduct: new tpc({
+    productSlug: "documentation",
+    organizationSlug: "your-org",
+  }),
+  
+  partnerOrg: new tpc({
+    productSlug: "shared-docs",
+    organizationSlug: "partner-org",
+  }),
+};
+
+// Usage
+const mainDoc = await clients.mainProduct.document.getByPath("guide/intro");
+const partnerdoc = await clients.partnerOrg.document.getByPath("api/reference");
+```
+
+## Caching Strategies
+
+### Simple In-Memory Cache
+
+Implement caching to reduce API calls:
+
+```typescript
+// lib/cached-client.ts
+import tpc from "@promptingcompany/sdk";
+
+class CachedSDKClient {
+  private client: tpc;
+  private cache = new Map<string, any>();
+  private ttl = 5 * 60 * 1000; // 5 minutes
+
+  constructor(config: { productSlug: string; organizationSlug: string }) {
+    this.client = new tpc(config);
+  }
+
+  async getDocumentByPath(path: string, useCache = true) {
+    const cacheKey = `doc:${path}`;
+    
+    if (useCache && this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey);
+      if (Date.now() - cached.timestamp < this.ttl) {
+        return cached.data;
+      }
+    }
+
+    const result = await this.client.document.getByPath(path);
+    
+    if (result.ok && useCache) {
+      this.cache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+      });
+    }
+    
+    return result;
+  }
+
+  clearCache() {
+    this.cache.clear();
+  }
+}
+
+export const cachedClient = new CachedSDKClient({
+  productSlug: process.env.PROMPTING_COMPANY_PRODUCT_SLUG!,
+  organizationSlug: process.env.PROMPTING_COMPANY_ORG_SLUG!,
+});
+```
+
+### Next.js App Router with Caching
+
+Use Next.js's built-in caching with `unstable_cache`:
+
+```typescript
+// lib/cached-documents.ts
+import { unstable_cache } from 'next/cache';
+import { client } from './prompting-company';
+
+export const getCachedDocument = unstable_cache(
+  async (path: string) => {
+    const result = await client.document.getByPath(path);
+    
+    if (!result.ok) {
+      throw new Error(`Failed to fetch document: ${path}`);
+    }
+    
+    return result.data;
+  },
+  ['document-by-path'],
+  {
+    revalidate: 300, // 5 minutes
+    tags: ['documents'],
+  }
+);
+
+// Usage in Server Components
+export default async function DocumentPage({ params }: { params: { path: string } }) {
+  const document = await getCachedDocument(params.path);
+  
+  return (
+    <div>
+      <h1>Document: {params.path}</h1>
+      <div>{document.content}</div>
+    </div>
+  );
+}
+```
+
+## Batch Operations
+
+If you need to fetch multiple documents efficiently:
+
+```typescript
+// lib/batch-operations.ts
+import { client } from './prompting-company';
+
+export async function getMultipleDocuments(paths: string[]) {
+  const results = await Promise.allSettled(
+    paths.map(path => client.document.getByPath(path))
+  );
+
+  return results.map((result, index) => ({
+    path: paths[index],
+    success: result.status === 'fulfilled' && result.value.ok,
+    data: result.status === 'fulfilled' && result.value.ok ? result.value.data : null,
+    error: result.status === 'rejected' 
+      ? result.reason 
+      : result.status === 'fulfilled' && !result.value.ok 
+        ? result.value.error 
+        : null,
+  }));
+}
+
+// Usage
+const documents = await getMultipleDocuments([
+  'en-us/contact',
+  'en-us/about',
+  'en-us/pricing',
+]);
+
+documents.forEach(({ path, success, data, error }) => {
+  if (success && data) {
+    console.log(`✅ ${path}: ${data.content.substring(0, 50)}...`);
+  } else {
+    console.error(`❌ ${path}: ${error}`);
+  }
+});
+```
+
+## React Hooks
+
+Create custom hooks for common patterns:
+
+```typescript
+// hooks/use-document.ts
+import { useState, useEffect } from 'react';
+import { client } from '@/lib/prompting-company';
+
+interface UseDocumentResult {
+  document: any | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export function useDocument(path: string): UseDocumentResult {
+  const [document, setDocument] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDocument = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await client.document.getByPath(path);
+      
+      if (result.ok) {
+        setDocument(result.data);
+      } else {
+        setError('Failed to fetch document');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (path) {
+      fetchDocument();
+    }
+  }, [path]);
+
+  return {
+    document,
+    loading,
+    error,
+    refetch: fetchDocument,
+  };
+}
+
+// Usage in components
+export function DocumentViewer({ path }: { path: string }) {
+  const { document, loading, error, refetch } = useDocument(path);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!document) return <div>Document not found</div>;
+
+  return (
+    <div>
+      <button onClick={refetch}>Refresh</button>
+      <div>{document.content}</div>
+    </div>
+  );
+}
+```
+
+## TypeScript Utilities
+
+Create utility types for better type safety:
+
+```typescript
+// types/sdk.ts
+import tpc from "@promptingcompany/sdk";
+
+// Extract the client type
+export type TPCClient = InstanceType<typeof tpc>;
+
+// Create a utility type for API responses
+export type APIResponse<T> = {
+  ok: true;
+  data: T;
+} | {
+  ok: false;
+  error: {
+    message: string;
+    code?: string;
+  };
+};
+
+// Document type (adjust based on actual SDK response)
+export interface Document {
+  content: string;
+  path: string;
+  title?: string;
+  lastModified?: string;
+  metadata?: Record<string, any>;
+}
+
+// Helper function with proper typing
+export async function safeAPICall<T>(
+  apiCall: () => Promise<APIResponse<T>>
+): Promise<T> {
+  const result = await apiCall();
+  
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+  
+  return result.data;
+}
+
+// Usage
+const document = await safeAPICall(() => 
+  client.document.getByPath("en-us/contact")
+);
+```
+
+## Development and Debugging
+
+### Debug Mode
+
+Add debug logging during development:
+
+```typescript
+// lib/debug-client.ts
+import tpc from "@promptingcompany/sdk";
+
+class DebugSDKClient {
+  private client: tpc;
+  private debug: boolean;
+
+  constructor(config: { productSlug: string; organizationSlug: string }, debug = false) {
+    this.client = new tpc(config);
+    this.debug = debug || process.env.NODE_ENV === 'development';
+  }
+
+  async getDocumentByPath(path: string) {
+    if (this.debug) {
+      console.log(`[SDK] Fetching document: ${path}`);
+      console.time(`[SDK] ${path}`);
+    }
+
+    try {
+      const result = await this.client.document.getByPath(path);
+      
+      if (this.debug) {
+        console.timeEnd(`[SDK] ${path}`);
+        console.log(`[SDK] Result for ${path}:`, result.ok ? 'SUCCESS' : 'ERROR');
+        if (!result.ok) {
+          console.error(`[SDK] Error:`, result.error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      if (this.debug) {
+        console.timeEnd(`[SDK] ${path}`);
+        console.error(`[SDK] Exception for ${path}:`, error);
+      }
+      throw error;
+    }
+  }
+}
+
+export const debugClient = new DebugSDKClient({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+});
+```
+
+## Performance Optimization
+
+### Parallel Document Loading
+
+Load multiple documents in parallel for better performance:
+
+```typescript
+// components/multi-document-viewer.tsx
+import { useState, useEffect } from 'react';
+import { getMultipleDocuments } from '@/lib/batch-operations';
+
+interface MultiDocumentViewerProps {
+  paths: string[];
+}
+
+export function MultiDocumentViewer({ paths }: MultiDocumentViewerProps) {
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDocuments() {
+      setLoading(true);
+      const results = await getMultipleDocuments(paths);
+      setDocuments(results);
+      setLoading(false);
+    }
+
+    loadDocuments();
+  }, [paths]);
+
+  if (loading) {
+    return <div>Loading {paths.length} documents...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {documents.map(({ path, success, data, error }) => (
+        <div key={path} className="border rounded-lg p-4">
+          <h3 className="font-semibold mb-2">{path}</h3>
+          {success && data ? (
+            <div className="prose">
+              {data.content.substring(0, 200)}...
+            </div>
+          ) : (
+            <div className="text-red-600">
+              Error: {error}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Best Practices
+
+1. **Always check the `ok` property** before accessing response data
+2. **Use TypeScript** for better development experience and error catching
+3. **Implement caching** for frequently accessed documents
+4. **Handle errors gracefully** with user-friendly error messages
+5. **Use environment variables** for configuration
+6. **Consider rate limiting** if making many API calls
+7. **Implement retry logic** for network failures
+8. **Use batch operations** when possible to reduce API calls
+
+## Troubleshooting
+
+### Common Issues
+
+**Document not found errors:**
+
+* Verify the document path exists in your organization
+* Check that your product slug is correct
+* Ensure your API key has access to the document
+
+**Network timeouts:**
+
+* Implement retry logic with exponential backoff
+* Consider using shorter timeouts for better UX
+* Add loading states to improve perceived performance
+
+**Memory issues with large documents:**
+
+* Implement pagination if available
+* Use streaming responses if supported
+* Consider lazy loading for large document collections
+
+**TypeScript errors:**
+
+* Ensure you're using the latest SDK version
+* Check that your TypeScript configuration is compatible
+* Use proper type guards when checking response objects

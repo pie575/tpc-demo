@@ -1,0 +1,57 @@
+---
+title: "Connect Ghost"
+description: "Publish TPC drafts to Ghost using a Custom Integration Admin API key"
+---
+
+The Prompting Company publishes to Ghost using a Custom Integration's Admin API key.
+
+## Before you start
+
+* Owner or Administrator role on the Ghost site.
+* Ghost 4.0 or later.
+
+## Create a custom integration
+
+1. In your Ghost admin panel, click the gear icon (**Settings**).
+2. Open **Integrations**.
+3. Scroll to **Custom integrations** and click **Add custom integration**.
+4. Name it `TPC publisher` and click **Create**.
+
+## Copy the admin API key
+
+On the integration page, copy the **Admin API Key**. It looks like:
+
+```text
+xxxxxxxxxxxxxxxxxxxxxxxx:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+```
+
+<Warning>
+  Copy the **Admin API Key**, not the Content API Key. TPC needs write access, and only the admin key can create drafts.
+</Warning>
+
+## Connect in TPC
+
+1. Open **Settings → Integrations** in your TPC product workspace.
+2. Select **Ghost**.
+3. Enter:
+   * **Site URL** — your Ghost blog root, e.g. `https://blog.example.com`
+   * **Admin API key** — the key you copied
+4. Click **Save**, then **Test connection**.
+
+## Troubleshooting
+
+### 401 Unauthorized
+
+Wrong key type — Content API keys are read-only. Regenerate a custom integration and copy the Admin API Key.
+
+### 403 Forbidden
+
+The Ghost site restricts custom integrations. Confirm your role is Owner or Administrator.
+
+### Draft appears but images are missing
+
+Ghost fetches images by URL. If TPC-hosted image URLs are blocked by your Ghost network policy, the draft still saves but images render as broken.
+
+## Related links
+
+* [Ghost Admin API documentation](https://ghost.org/docs/admin-api/)

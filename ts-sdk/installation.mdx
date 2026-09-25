@@ -1,0 +1,175 @@
+---
+title: "Installation"
+description: "Install and configure The Prompting Company TypeScript SDK in your project"
+---
+
+# Installation
+
+Get up and running with The Prompting Company TypeScript SDK in your Next.js or Node.js project.
+
+## Prerequisites
+
+Before installing the SDK, ensure you have:
+
+* **Node.js** version 18.0 or higher
+* **npm**, **yarn**, or **pnpm** package manager
+* A **Next.js** project (recommended) or Node.js application
+
+## Install the SDK
+
+Choose your preferred package manager:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install @promptingcompany/sdk
+    ```
+  </Tab>
+
+  <Tab title="yarn">
+    ```bash
+    yarn add @promptingcompany/sdk
+    ```
+  </Tab>
+
+  <Tab title="pnpm">
+    ```bash
+    pnpm add @promptingcompany/sdk
+    ```
+  </Tab>
+</Tabs>
+
+## Environment Setup
+
+Create a `.env.local` file in your project root and add your configuration:
+
+```bash
+# The Prompting Company Configuration
+TPC_API_KEY=your_api_key_here  # Automatically read by the SDK
+TPC_ORG_SLUG=your_organization_slug
+TPC_PRODUCT_SLUG=your_product_slug
+```
+
+<Note>
+  The SDK automatically reads the `TPC_API_KEY` environment variable, so you don't need to pass it explicitly in your code configuration.
+</Note>
+
+### Getting Your API Key
+
+You'll need to create an organization-scoped API key from The Prompting Company
+dashboard:
+
+1. **Open your organization**: Sign in to
+   [The Prompting Company](https://app.promptingco.com) and select the
+   organization workspace for your integration.
+2. **Go to API Keys Settings**: Visit
+   `https://app.promptingco.com/{orgSlug}/settings/api-keys`, replacing
+   `{orgSlug}` with your organization slug.
+3. **Create New Key**: Click "New API key", name the key, and grant the minimum
+   scopes your integration needs.
+4. **Copy the Key**: Save the generated API key securely. It will only be shown
+   once.
+
+### Finding Your Organization and Product Slugs
+
+Your organization slug is part of the organization URL:
+`https://app.promptingco.com/{orgSlug}`. Product slugs are available from the
+product URL after opening a product in that organization.
+
+<Warning>
+  Never commit API keys to version control. Always use environment variables and add `.env.local` to your `.gitignore` file.
+</Warning>
+
+## TypeScript Configuration
+
+If you're using TypeScript, the SDK includes built-in type definitions. No additional configuration is required, but you can enhance your experience by adding these compiler options to your `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  }
+}
+```
+
+## Verify Installation
+
+Create a simple test file to verify your installation:
+
+```typescript
+// test-sdk.ts
+import tpc from '@promptingcompany/sdk';
+
+const client = new tpc({
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+});
+
+console.log('SDK installed successfully!');
+```
+
+Run the test:
+
+```bash
+npx tsx test-sdk.ts
+```
+
+If you see "SDK installed successfully!" without errors, you're ready to proceed.
+
+## Next.js Configuration
+
+For Next.js applications, you may want to configure the SDK in a utility file:
+
+```typescript
+// lib/prompting-company.ts
+import tpc from '@promptingcompany/sdk';
+
+if (!process.env.TPC_API_KEY) {
+  throw new Error('TPC_API_KEY is required');
+}
+
+if (!process.env.TPC_ORG_SLUG) {
+  throw new Error('TPC_ORG_SLUG is required');
+}
+
+if (!process.env.TPC_PRODUCT_SLUG) {
+  throw new Error('TPC_PRODUCT_SLUG is required');
+}
+
+export const client = new tpc({
+  organizationSlug: process.env.TPC_ORG_SLUG,
+  productSlug: process.env.TPC_PRODUCT_SLUG,
+  // TPC_API_KEY is automatically read by the SDK
+});
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Module not found error:**
+
+* Ensure you've installed the package correctly
+* Restart your development server after installation
+
+**Environment variable errors:**
+
+* Verify your `.env.local` file is in the project root
+* Check that variable names match exactly
+* Restart your development server after changing environment variables
+
+**TypeScript errors:**
+
+* Make sure you're using TypeScript 4.5 or higher
+* Verify your `tsconfig.json` includes the necessary compiler options
+
+## Next Steps
+
+Now that you have the SDK installed, let's build your first integration:
+
+<Card title="Quick Start Guide" icon="play" href="/ts-sdk/quickstart" horizontal>
+  Build your first integration and start accessing your documentation data.
+</Card>

@@ -1,0 +1,80 @@
+---
+title: "Knowledge"
+description: "List, read, and write generated knowledge files from the TPC CLI."
+---
+
+# Knowledge
+
+Read and write generated knowledge files for a product from the terminal. Pass `--scope <org-slug>/<product-slug>` to select the product. `tpc kb` is an alias for `tpc knowledge`.
+
+This first slice covers files only: list, get, and put. Proposals, retrieval, ingest, and graph commands are not available yet.
+
+<Note>
+  Knowledge commands require [OAuth login](/cli/authentication) (`tpc auth login`). API keys are rejected with an "OAuth login required" error.
+</Note>
+
+## List files
+
+Text output is an indented Unix-style tree. JSON output is the API's flat file list.
+
+```bash
+tpc --scope pro-org/my-product knowledge file list
+```
+
+```text
+knowledge/
+  product/
+    features.md
+    overview.md
+  sources/
+    pricing.md
+```
+
+Filter to a subtree. The prefix becomes the tree root:
+
+```bash
+tpc --scope pro-org/my-product knowledge file list --path product
+```
+
+```text
+product/
+  features.md
+  overview.md
+```
+
+Scriptable JSON stays flat (no nested tree):
+
+```bash
+tpc --scope pro-org/my-product knowledge file list --format json
+```
+
+`--format csv` is not supported.
+
+## Get a file
+
+Text mode prints the file content. JSON mode prints the API payload.
+
+```bash
+tpc --scope pro-org/my-product knowledge file get product/overview.md
+tpc --scope pro-org/my-product knowledge file get product/overview.md --format json
+```
+
+## Write a file
+
+`put` creates the file, or replaces it when it already exists. Use either `--content` or `--content-file`.
+
+```bash
+tpc --scope pro-org/my-product knowledge file put product/overview.md \
+  --content "# Overview"
+```
+
+```bash
+tpc --scope pro-org/my-product knowledge file put product/overview.md \
+  --content-file ./overview.md
+```
+
+Text output prints the resulting path, commit, and repository message.
+
+## JSON output
+
+Every command supports `--format json` for scripting. List JSON is a flat list of files and paths, not a tree.

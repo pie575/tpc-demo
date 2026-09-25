@@ -1,0 +1,38 @@
+---
+title: "Content API overview"
+description: "Understand the TPC content API surfaces and common workflows."
+---
+
+# Content API overview
+
+The Content API manages the content surfaces that TPC uses for retrieval, publishing, and public markdown delivery.
+
+## Surfaces
+
+| Surface                               | Use it for                                                                             | Primary scope                   |
+| ------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------- |
+| Content lifecycle (`/api/v1/content`) | Create, generate, review (approve/reject/revise), publish, and manage product content. | `content:read`, `content:write` |
+| Site pages (deprecated)               | Legacy CRUD alias of the content surface; use `/api/v1/content` instead.               | `content:read`, `content:write` |
+| Agentic documents                     | Read and update document metadata and draft workflows.                                 | `content:read`, `content:write` |
+| llms.txt                              | Read and manage generated llms.txt resources.                                          | `content:read`, `content:write` |
+| Apps and app routes                   | Manage app configuration and route resources.                                          | `content:read`, `content:write` |
+
+Start with `/api/v1/content` for product pages, docs pages, and marketing content. Created and generated pages land in a review queue (`GET /api/v1/content?status=pending_review`) and publish only after approval (`POST /api/v1/content/{draftId}/review`).
+
+## Common workflow
+
+1. Create an API key with `content:read`.
+2. List existing resources for a product.
+3. Add `content:write` only when your integration needs mutations.
+4. Send `Idempotency-Key` on writes so retries are safe.
+5. Store `x-request-id` with your job logs.
+
+## Related guides
+
+<Card title="Site pages" icon="file-text" href="/api/content/site-pages" horizontal>
+  Sync product pages from a CMS or Markdown folder.
+</Card>
+
+<Card title="Agentic documents" icon="files" href="/api/content/documents" horizontal>
+  Work with generated and reviewed content documents.
+</Card>

@@ -1,0 +1,120 @@
+---
+title: "Agent Experience"
+description: "Set up AX experiments and competitive benchmarks, and answer onboarding questions from your terminal."
+---
+
+# Agent Experience
+
+Use `tpc sim ax setup` to configure an Agent Experience experiment for your product.
+Add `--type benchmark` to design a competitive benchmark instead.
+
+## Prerequisites
+
+* [Install the CLI](/cli/installation) and sign in with `tpc auth login`. Setup requires OAuth login; API keys are not supported.
+* Supply your organization and product with `--scope <org-slug>/<product-slug>`.
+* For competitive benchmarks, your organization must have benchmarks enabled.
+
+## Guided setup
+
+```bash
+# Set up your product's Agent Experience experiment
+tpc sim ax setup --scope acme/my-product
+
+# Design a competitive benchmark
+tpc sim ax setup --type benchmark --scope acme/my-product
+```
+
+In an interactive terminal, benchmark setup asks for a brief and competitors.
+Enter competitors as `NAME` or `NAME=DOMAIN`, then submit a blank line to finish.
+Your own product is included automatically.
+
+Setup follows progress and prompts when the agent requests text, credentials, or
+files. Credential input is hidden. File requests accept a local file path and
+upload the file before submitting the answer. Uploads must be regular files no
+larger than 100 MiB. The backend does not accept archives for benchmark setup;
+provide individual files when requested.
+
+Optional questions can be declined with a blank answer. Required questions must
+be answered; press Ctrl+C to leave the run paused and reconnect later.
+
+On successful watched setup, the command prints the experiment ID and a
+`tpc sim experiment run` command. Setup does not start a benchmark iteration.
+Review the experiment and configure any task credentials before running it.
+
+## Supply benchmark inputs with flags
+
+```bash
+tpc sim ax setup \
+  --type benchmark \
+  --scope acme/my-product \
+  --intent "Compare how easily agents can deploy a web app" \
+  --competitor "Vercel=https://vercel.com" \
+  --competitor "Netlify=https://netlify.com" \
+  --watch
+```
+
+| Flag           | Default                                   | Description                                                                                                                                                            |
+| -------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--type`       | `agent-experience`                        | `agent-experience` or `benchmark`.                                                                                                                                     |
+| `--intent`     | —                                         | Benchmark brief, 1–4000 characters. Only valid with `--type benchmark`.                                                                                                |
+| `--competitor` | —                                         | Repeatable `NAME` or `NAME=DOMAIN`. Supply 1–10 entries; the server adds your own product and requires at least one other product. Only valid with `--type benchmark`. |
+| `--watch`      | Enabled interactively; disabled otherwise | Follow progress. Use `--watch=false` to start setup and detach.                                                                                                        |
+
+Omitting `--type` selects the existing product AX flow. Product AX setup refreshes
+the product's singleton Agent Experience experiment. Each new benchmark setup run
+creates its own benchmark. Both types reattach to an existing in-flight run for
+the same product and type; resubmitting flags does not edit that in-flight run.
+
+## Resume onboarding
+
+```bash
+# Reconnect and answer pending questions for either setup type
+tpc sim ax setup resume <run-id> --scope acme/my-product
+
+# Inspect progress without answering questions
+tpc sim ax status <run-id> --scope acme/my-product
+
+# Follow progress until completion or a question requires input
+tpc sim ax status <run-id> --scope acme/my-product --watch
+```
+
+`setup resume` follows the existing run without starting another one. After it
+completes, use `tpc sim experiment list --scope acme/my-product` to inspect the
+generated experiment.
+
+## Automation and JSON output
+
+Without an interactive terminal, or with `--format json`, benchmark setup requires
+`--intent` and at least one `--competitor`. It never reads answers from piped stdin.
+
+```bash
+tpc sim ax setup --type benchmark \
+  --scope acme/my-product \
+  --intent "Compare deployment workflows" \
+  --competitor "Vercel=https://vercel.com" \
+  --format json
+```
+
+Without `--watch`, JSON output contains the setup response, including `runId` and
+`setupRunId`. With `--watch`, the command emits one final JSON object:
+
+* Completion: `runId`, `status`, `milestones`, and `experimentId` for watched `setup`.
+* Failure: `runId`, `status: "failed"`, and `milestones`, with a nonzero exit.
+* Required interaction: `runId`, `status: "input_required"`, and `pending` containing
+  the requested items, with a nonzero exit. Reconnect with `setup resume` in a terminal.
+
+Progress-only `status --watch` and non-interactive `setup resume` also stop with a
+nonzero exit when input is needed. Error guidance is written separately from JSON
+output. Secret answers are never included in the CLI's output.
+
+## Product AX credentials
+
+```bash
+tpc sim ax env set "API_KEY=$PRODUCT_API_KEY" --scope acme/my-product
+tpc sim ax env list --scope acme/my-product
+tpc sim ax env rm API_KEY --scope acme/my-product
+```
+
+These `env` commands apply to the product's singleton Agent Experience experiment,
+not competitive benchmarks. They require that experiment to exist and do not
+answer an onboarding question. Use `setup resume` for pending onboarding requests.

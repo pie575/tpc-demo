@@ -1,0 +1,88 @@
+---
+title: "Overview"
+description: "Evaluate and optimize how coding agents experience your product in sandboxed environments"
+---
+
+Agent experience lets you run real coding agents — Claude Code, Codex, and OpenCode — against your product inside isolated sandboxes, score each attempt against goals you define, and turn the results into concrete fixes for your docs, APIs, and onboarding.
+
+If AI agents struggle to install your SDK, authenticate, or follow your docs, they recommend something else. This product shows you exactly where that friction happens and what to change.
+
+## How it works
+
+1. **Define a task** — what the agent should accomplish with your product (e.g. "install the SDK and send a first event"), plus the goals that define success
+2. **Define environments** — which agent harness and model attempt the task, and what sandbox it runs in
+3. **Run an experiment** — execute every task across every environment in parallel, in fresh sandboxes
+4. **Review the results** — per-run scores, full transcripts, extracted signals, and failure clusters with root causes and recommended fixes
+
+## How the pieces fit together
+
+```text
+Experiment
+├── Tasks         (what to do + how success is measured)
+├── Environments  (which agent/model attempts it)
+└── Iterations    (numbered batches of runs)
+    └── Runs      (task × environment, one sandbox each)
+        ├── score, pass/fail, transcript, cost
+        └── signal values → aggregated per iteration
+```
+
+Each concept has its own page under **Core concepts** in the sidebar, and a matching command group in the [tpc CLI](/cli/overview):
+
+| Concept                                                        | Command group        | Common commands                                                |
+| -------------------------------------------------------------- | -------------------- | -------------------------------------------------------------- |
+| [Tasks](/guides/coding-agent-optimization/tasks)               | `tpc sim task`       | `create --file task.json`, `list`, `get`, `update`, `run`      |
+| [Environments](/guides/coding-agent-optimization/environments) | `tpc sim env`        | `create`, `list`, `update`, `task attach/detach`, `secret set` |
+| [Runs & iterations](/guides/coding-agent-optimization/runs)    | `tpc sim run`        | `list`, `get`, `logs`, `actions`                               |
+| [Experiments](/guides/coding-agent-optimization/experiments)   | `tpc sim experiment` | `create`, `run --watch`, `results`                             |
+| [Signals](/guides/coding-agent-optimization/signals)           | `tpc sim experiment` | `validate-signal-config`, `signals`                            |
+
+## What you get from each run
+
+* A pass/fail verdict and a 0–100 score against your goals
+* The complete agent transcript: every message, tool call, and thinking step
+* An archive of the sandbox after the run, so you can inspect exactly what the agent built
+* Token usage, cost, and duration
+* Signal values — custom metrics you define in YAML, extracted from the run automatically
+
+## Try it from the CLI
+
+With the [tpc CLI](/cli/overview), a task and the agent that attempts it live in a small directory, and one command runs the whole thing:
+
+```bash
+# One-time setup
+curl -fsSL https://cli.promptingco.com/install.sh | bash
+tpc auth login
+```
+
+```text
+my-task/
+├── task.json        # what to do + how success is scored
+├── instruction.md   # the prompt the agent receives
+└── environment.json # which agent/model attempts it (optional)
+```
+
+```bash
+# Create the task and environment if needed, then run — one command, from nothing
+tpc sim run ./my-task --scope pro-org/my-product
+```
+
+`tpc sim run ./my-task --scope pro-org/my-product` is idempotent: it reuses a matching task and environment if they already exist, updates them if the files changed, and creates them if they're new — so running it again never makes duplicates. Run `tpc sim spec` to print the full `task.json` contract, or `tpc sim task export <task-id>` to turn an existing task into a directory like this.
+
+To compare several agents on the same tasks, group them into an [experiment](/guides/coding-agent-optimization/experiments):
+
+```bash
+tpc sim experiment create --name "Quickstart friction" --task-ids task_abc --env-ids env_1,env_2 --scope pro-org/my-product
+tpc sim experiment run exp_789 --watch --scope pro-org/my-product      # trigger and follow to completion
+tpc sim experiment results exp_789 --scope pro-org/my-product
+```
+
+Every command accepts `--format json` for scripting. The guides below cover the CLI workflow for each abstraction.
+
+## Where to start
+
+* [Tasks](/guides/coding-agent-optimization/tasks) — defining what agents should do and how success is measured
+* [Environments](/guides/coding-agent-optimization/environments) — configuring agents and sandboxes
+* [Runs & iterations](/guides/coding-agent-optimization/runs) — what happens during an attempt and what it records
+* [Experiments](/guides/coding-agent-optimization/experiments) — running iterations and reading results
+* [Signals](/guides/coding-agent-optimization/signals) — extracting custom metrics from runs
+* [Limits & constraints](/guides/coding-agent-optimization/limits) — the execution model and hard limits that shape how you write tasks

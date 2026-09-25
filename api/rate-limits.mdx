@@ -1,0 +1,73 @@
+---
+title: "Rate limits"
+description: "Understand TPC API quotas, retry headers, and 429 handling."
+---
+
+# Rate limits
+
+The Prompting Company rate limits protect each authenticated principal. API keys are limited globally by key, and route-level limits can also apply to individual endpoints.
+
+## Current defaults
+
+| Caller                  | Default limit                                    | Window        |
+| ----------------------- | ------------------------------------------------ | ------------- |
+| Organization API key    | 300 requests                                     | 60 seconds    |
+| Session or OAuth bearer | No global wrapper limit unless the route opts in | Route-defined |
+
+API key rows can store a lower configured limit, but the platform cap remains 300 requests per 60 seconds.
+
+## 429 response
+
+When a caller exceeds its limit, the API returns `429`:
+
+```json
+{
+  "ok": false,
+  "code": "TOO_MANY_REQUESTS",
+  "message": "rate_limited",
+  "details": {
+    "limit": 300,
+    "resetAt": "2026-04-30T00:01:00.000Z"
+  }
+}
+```
+
+The response includes:
+
+```text
+Retry-After: 12
+x-request-id: 6efaa25e-3ef6-4a34-91c1-7ff3e0fd4cc8
+```
+
+`Retry-After` is seconds until the current bucket resets.
+
+<Note>
+  The wrapper currently emits `Retry-After` and `x-request-id`. It does not emit
+  `X-RateLimit-Limit`, `X-RateLimit-Remaining`, or `X-RateLimit-Reset`.
+</Note>
+
+## Retry with backoff
+
+Use `Retry-After` when it is present, then add exponential backoff with jitter for repeated `429` responses.
+
+```ts
+async function fetchWithBackoff(url: string, init: RequestInit, attempts = 4) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await fetch(url, init);
+
+    if (response.status !== 429) {
+      return response;
+    }
+
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const delayMs = Number.isFinite(retryAfter)
+      ? retryAfter * 1000
+      : Math.min(1000 * 2 ** attempt, 10000);
+    const jitterMs = Math.floor(Math.random() * 250);
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs + jitterMs));
+  }
+
+  throw new Error("Rate limit retries exhausted");
+}
+```

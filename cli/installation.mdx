@@ -1,0 +1,103 @@
+---
+title: "Installation"
+description: "Install, update, and pin versions of the TPC CLI on macOS, Linux, and Windows."
+---
+
+# Installation
+
+## macOS and Linux
+
+Install the latest stable release:
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | bash
+```
+
+After install, confirm the binary is available:
+
+```bash
+tpc --version
+```
+
+## Windows
+
+Install with winget:
+
+```powershell
+winget install promptingcompany.tpc
+```
+
+Or install with Scoop after adding The Prompting Company bucket:
+
+```powershell
+scoop bucket add promptingcompany https://github.com/promptingcompany/scoop-bucket
+scoop install tpc
+```
+
+PowerShell is also supported:
+
+```powershell
+irm https://cli.promptingco.com/install.ps1 | iex
+```
+
+If your execution policy blocks the installer, run this first in the same
+PowerShell session:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
+
+Manual fallback:
+
+1. Download the latest `tpc_<version>_windows_amd64.zip` or
+   `tpc_<version>_windows_arm64.zip` from
+   `https://cli.promptingco.com/tpc/<version>/`.
+2. Extract `tpc.exe`.
+3. Move `tpc.exe` to a directory on `PATH`, or add the new directory to `PATH`
+   through System Properties -> Environment Variables -> Path.
+4. Open a new PowerShell or cmd session, then verify the install:
+
+   ```powershell
+   tpc --version
+   ```
+
+## Update
+
+Check whether a newer CLI build is available:
+
+```bash
+tpc update --check
+```
+
+Upgrade the installed binary in place:
+
+```bash
+tpc update
+```
+
+## Install a specific version
+
+Install a pinned version:
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | TPC_VERSION=0.1.0-alpha.1 bash
+```
+
+Install from a release channel:
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | TPC_CHANNEL=alpha bash
+```
+
+<Note>
+  Putting the variable before `curl` (`TPC_VERSION=... curl ... | bash`) does not work — that assignment only applies to `curl`'s environment, not to the `bash` process reading the script on the other side of the pipe. The variable has to sit right before `bash`.
+</Note>
+
+## Installer URL
+
+The public installer is served from:
+
+```text
+https://cli.promptingco.com/install.sh
+https://cli.promptingco.com/install.ps1
+```

@@ -1,0 +1,64 @@
+---
+title: "Limits & constraints"
+description: "How the sandbox executes a run, and the hard limits that shape how you write tasks"
+---
+
+A few properties of the execution model shape how you should write tasks. Knowing them up front is the difference between a run that produces a clean result and one that produces nothing useful. This page collects the behavioral constraints and the hard limits in one place; the [core concept](/guides/coding-agent-optimization/overview) pages cover each piece in depth.
+
+## Execution model
+
+### Every run is a fresh, isolated sandbox
+
+Each run provisions a new sandbox, initializes it, and destroys it when the run completes — see [Runs & iterations](/guides/coding-agent-optimization/runs). Nothing carries over between runs or between tasks: no files, installed packages, environment variables, or context.
+
+Write each [task](/guides/coding-agent-optimization/tasks) to be **self-contained**. A task can't depend on another task having run first, and an instruction like "using the SDK you installed earlier" will fail. Anything the agent needs on disk or installed must come from the task's init files and init commands, or be done by the agent during the run.
+
+### The instruction is one-shot
+
+The agent receives the task instruction once and runs until it finishes or hits the time limit. There is **no multi-turn conversation** — you can't answer a clarifying question or send a follow-up mid-run. Everything the agent needs must be in the instruction.
+
+### No interactive display
+
+Sandboxes are **headless Linux** — there is no interactive browser or desktop UI. Design tasks around outcomes the agent can reach from the command line, the filesystem, or HTTP. (A headless browser is used internally for screenshot-based evaluation, but it isn't an agent tool.)
+
+### Finish the work and leave an artifact
+
+A run ends when the agent process exits, and the sandbox is torn down immediately after. **Any process the agent leaves running in the background is killed** and its output is lost. The common failure is an agent that ends its turn with "the dev server is now running" — the server dies with the sandbox and nothing is captured.
+
+Write instructions and goals so the agent **completes the work and leaves a durable artifact** rather than holding a process open:
+
+* Have the agent write output to a file, capture the HTTP response, or save logs — then score that artifact.
+* For "stand up a server" tasks, instruct the agent to start it, call it, save the response to a file, and stop it, all within the run.
+* Score the saved artifact (for example with a `bash_command` or `script_judge` [goal](/guides/coding-agent-optimization/tasks#goals-and-criteria)), not the live process.
+
+## Hard limits
+
+| Area                       | Limit                                                                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent execution            | Up to 60 minutes per run (the full run, including evaluation and analysis, can take up to \~70 minutes)                                   |
+| Init command — length      | 1–10,000 characters each                                                                                                                  |
+| Init command — count       | Up to 50 on a task and up to 50 on an environment (applied separately), run sequentially and fail-fast (first non-zero exit aborts setup) |
+| Init command — timeout     | 1 second to 30 minutes each (default 5 minutes)                                                                                           |
+| Init command — working dir | Must be under `/home/agent-user/`                                                                                                         |
+| Init file — zip size       | Up to 500 MB, auto-extracted                                                                                                              |
+| Init file — target path    | Must be under `/home/agent-user/`                                                                                                         |
+| Sandbox resources          | CPU 1–4, memory 1–8 GB, disk 1–10 GB — see [Environments](/guides/coding-agent-optimization/environments#sandbox-resources)               |
+| `script_judge` goal        | 120-second timeout by default, configurable per goal (exit code 124 means it timed out)                                                   |
+
+Out-of-range sandbox resource values are clamped to the allowed range rather than rejected. Requesting any GPU routes the run to GPU-backed infrastructure automatically.
+
+## Secrets and isolation
+
+Secrets are scoped to an environment and injected as environment variables at run time — see [Environments](/guides/coding-agent-optimization/environments#secrets-from-the-cli). Two constraints to know:
+
+* **Reserved names can't be overridden.** Platform-managed variables such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `AWS_*`, `HOME`, and `PATH` are protected.
+* **Platform secrets are revoked while a `script_judge` runs**, so a verification script can't read or exfiltrate them.
+
+Outbound network access is allowed by default — the agent harness needs it to reach the model provider.
+
+## Using `script_judge`
+
+The `script_judge` [evaluation type](/guides/coding-agent-optimization/tasks#goals-and-criteria) runs your own shell script in the sandbox after the agent finishes (exit 0 = pass). Before relying on it:
+
+* It requires the **`script_judge` feature flag** on your organization. Without it, use a deterministic alternative (`bash_command`, `file_exists`) or an `llm_judge`.
+* Every script is **security-reviewed when the task is registered** — scripts that read platform secrets, exfiltrate data, fetch and execute remote code, or exhaust resources are flagged.

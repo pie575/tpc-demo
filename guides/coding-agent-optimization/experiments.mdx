@@ -1,0 +1,60 @@
+---
+title: "Experiments"
+description: "Run tasks across environments in parallel and read the results"
+---
+
+An experiment is a controlled comparison: a set of tasks, a set of environments, and an optional signal config. Running an experiment produces an **iteration** — one run for every task × environment pair, executed in parallel.
+
+## Setting up an experiment
+
+1. Create the experiment and give it a name
+2. Attach the tasks to evaluate
+3. Attach the environments to compare
+4. Optionally upload a [signal config](/guides/coding-agent-optimization/signals) to extract custom metrics
+5. Trigger an iteration
+
+Experiments live in your product's **Simulation** section in the dashboard, and can also be created and run via the [API](/api/overview) or the CLI:
+
+```bash
+tpc sim experiment create --name "Onboarding friction" \
+  --task-ids task_abc,task_def \
+  --env-ids env_123,env_456 \
+  --signal-config signals.yaml
+
+# Or build it up incrementally
+tpc sim experiment create --name "Onboarding friction"
+tpc sim experiment task add exp_789 task_abc
+tpc sim experiment env add exp_789 env_123
+```
+
+Triggering an iteration creates one run per task × environment pair. See [Runs & iterations](/guides/coding-agent-optimization/runs) for what happens inside each run and what it records.
+
+## Iteration results
+
+When every run in an iteration completes, results are generated at the iteration level:
+
+* **Signal aggregates** — each signal folded across runs into rates, averages, medians, and distributions, grouped by environment and task
+* **Failure clusters** — recurring friction patterns identified across failing runs, each with a root cause (what in your product, docs, or infra caused it) and a recommended fix
+* **Summary** — task-level scores and environment comparisons
+
+Iterations are immutable. Re-running an experiment creates a new numbered iteration rather than overwriting the last one, so improvements stay measurable over time.
+
+## Running experiments from the CLI
+
+```bash
+# Trigger a new iteration and follow it to completion in one command
+# (one run per task × environment pair; polls every 5 seconds)
+tpc sim experiment run exp_789 --watch
+
+# Read iteration results: summary, task scores, failure clusters, suggestions
+tpc sim experiment results exp_789
+
+# Compare against an earlier iteration, or drill into one failure cluster
+tpc sim experiment results exp_789 --iteration 2
+tpc sim experiment results exp_789 --error-category "Auth failures"
+
+# Signal values, aggregated and per run
+tpc sim experiment signals exp_789
+```
+
+Use `--format json` on any of these to feed results into scripts or CI. To drill into individual runs (`tpc sim run get/logs/actions`), see [Runs & iterations](/guides/coding-agent-optimization/runs#inspecting-runs-from-the-cli).

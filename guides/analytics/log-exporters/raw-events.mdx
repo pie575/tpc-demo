@@ -1,0 +1,80 @@
+---
+title: "Raw events API"
+description: "Send crawler logs to The Prompting Company from any log source — nginx, CDNs, or a backfill script"
+---
+
+<Note>
+  **Set this up in the dashboard:** [Connect the raw events API](https://app.promptingco.com/traffic-onboarding/raw) gives you the request to copy, waits for your first AI content-page visit to arrive, and confirms the traffic is mapped to the right product. Use this page as the reference.
+</Note>
+
+The raw events API accepts request logs from any source: your own web server, a CDN without a managed export, or a script replaying historical logs. Events land in the same [AI traffic](/guides/metrics#ai-traffic) metric as every other collector, with AI crawler and agent classification handled on our side.
+
+On Cloudflare Enterprise? [Cloudflare Logpush](/guides/analytics/log-exporters/cloudflare-logpush) streams the same data with zero ongoing work.
+
+## Before you start
+
+* You need a The Prompting Company **API key** (organization or service-account key) from **Settings → API Keys**.
+
+## Send events
+
+POST a JSON array (a single object also works), plain or gzipped, to `https://logs.promptingco.com/v1/events/raw`. Authenticate with either an `X-API-Key` header or `Authorization: Bearer`.
+
+```bash
+curl -X POST "https://logs.promptingco.com/v1/events/raw" \
+  -H "X-API-Key: $TPC_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '[
+    {
+      "timestamp": "2026-08-11T12:00:00.000Z",
+      "status_code": 200,
+      "request_method": "GET",
+      "request_path": "/pricing",
+      "query_string": "ref=x",
+      "content_type": "text/html",
+      "client_ip": "203.0.113.7",
+      "hostname": "example.com",
+      "user_agent": "GPTBot/1.2",
+      "referrer": "https://www.google.com"
+    }
+  ]'
+```
+
+| Field                                                                                  | Required | Notes                                                                                                                   |
+| -------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `hostname`                                                                             | yes      | Events without it are counted as skipped                                                                                |
+| `timestamp`                                                                            | no       | ISO 8601 or unix seconds/millis/nanos; defaults to arrival time                                                         |
+| `request_path`                                                                         | no       | Defaults to `/`; may include the query string inline (`/pricing?ref=x`)                                                 |
+| `query_string`                                                                         | no       | Alternative to inlining the query in `request_path`                                                                     |
+| `user_agent`, `client_ip`, `request_method`, `status_code`, `content_type`, `referrer` | no       | Recommended — user agent and client IP drive AI classification; method, status, and content type identify content pages |
+
+Requests can be up to 64 MB (compressed and decompressed). Batch as many events per request as fits.
+
+## What gets ingested
+
+The Prompting Company keeps recognized AI traffic only when it qualifies as a content-page visit. When present, the method must be `GET`, the numeric status must be `200`–`299` except `204` and `205` (or `304`), and the content type must be `text/html` or `application/xhtml+xml`. Numeric `status_code` values may arrive as JSON numbers or decimal strings.
+
+Missing or non-numeric HTTP metadata fails open for page-looking paths. Senders that omit `content_type` or `status_code` will still ingest non-HTML AI hits such as JSON APIs unless the path matches a Next.js prefix or an asset suffix. Canonical Next.js prefixes (`/_next/static`, `/_next/image`, and `/_next/data`, lowercase) are always filtered, as are paths ending in common script, stylesheet, source-map, image, font, media, Rive, WASM, JSON, XML, text, or PDF suffixes when content type is missing. Suffix matching is case-insensitive and ignores a trailing slash; an HTML content type keeps a legitimate dotted page such as `/docs/node.js`.
+
+## Responses
+
+| Status | Meaning                                                                                                                                                                                               |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `200`  | Batch processed. Body reports `{"ok": true, "received": N, "ingested": N, "skipped": N, "filtered": N}`. A positive `filtered` count means non-AI or non-page requests were intentionally not stored. |
+| `401`  | Missing or invalid API key                                                                                                                                                                            |
+| `429`  | Key verification was rate limited — retry shortly                                                                                                                                                     |
+| `400`  | Body could not be decoded or parsed as JSON                                                                                                                                                           |
+| `413`  | Decompressed body too large — send smaller batches                                                                                                                                                    |
+| `503`  | Temporary ingestion outage — retry the batch                                                                                                                                                          |
+
+Delivery is at-least-once: retry the whole batch after a `503`, and occasional duplicates are expected and tolerated by the traffic metrics.
+
+## Verify it's working
+
+```bash
+curl -s -X POST "https://logs.promptingco.com/v1/events/raw" \
+  -H "X-API-Key: $TPC_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '[{"hostname": "example.com", "request_path": "/", "user_agent": "GPTBot/1.2", "client_ip": "203.0.113.7"}]'
+```
+
+A `200` with `"ingested": 1` confirms the pipeline, and the visit appears in your [AI traffic](/guides/metrics#ai-traffic) dashboard shortly after.

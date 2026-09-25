@@ -1,0 +1,118 @@
+---
+title: "Authentication"
+description: "Choose between session cookies, OAuth bearer tokens, and API keys for the TPC API."
+---
+
+# Authentication
+
+TPC resolves callers in a fixed order: API key, bearer token, then session cookie. If you send more than one credential, `x-api-key` wins.
+
+## Choose your credential
+
+| Credential     | Best for                       | Notes                                                                               |
+| -------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
+| Session cookie | First-party dashboard calls.   | Browser-only. Session callers rely on route-level organization and product checks.  |
+| OAuth bearer   | CLI and OAuth clients.         | `tpc auth login` uses a browser device flow, then the CLI sends bearer credentials. |
+| API key        | Server-to-server integrations. | Organization-scoped, rotatable, and limited by explicit scopes.                     |
+
+## Session cookie
+
+Session cookies are for The Prompting Company dashboard. The browser sends the `better-auth.session_token` cookie automatically.
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "Cookie: better-auth.session_token=session_token_here"
+```
+
+```ts
+const response = await fetch("/api/v1/site/pages?productId=product_123", {
+  credentials: "include",
+});
+```
+
+Use session cookies only for first-party browser flows.
+
+## OAuth bearer
+
+The CLI authenticates with browser-based device flow:
+
+```bash
+tpc auth login
+```
+
+After login, the CLI stores a local token and sends it as a bearer credential:
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "Authorization: Bearer $TPC_ACCESS_TOKEN"
+```
+
+```ts
+const response = await fetch(
+  "https://app.promptingco.com/api/v1/site/pages?productId=product_123",
+  {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  },
+);
+```
+
+Bearer callers must include the scopes required by the route.
+
+## API key
+
+API keys are the recommended credential for integrations.
+
+Create an organization API key from:
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+Then send it with `x-api-key`:
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+```ts
+const response = await fetch(
+  "https://app.promptingco.com/api/v1/site/pages?productId=product_123",
+  {
+    headers: {
+      "x-api-key": process.env.TPC_API_KEY!,
+    },
+  },
+);
+```
+
+## Precedence
+
+`resolveCaller` checks credentials in this order:
+
+1. `x-api-key`
+2. `Authorization: Bearer <token>`
+3. Session cookie
+
+That precedence makes server integrations deterministic. If a background job accidentally includes a browser cookie, the API key still identifies the integration.
+
+## Rotation and revocation
+
+Rotate API keys when a teammate leaves, a secret may have leaked, or an integration boundary changes.
+
+1. Create a new key with the same or narrower scopes.
+2. Deploy the new secret to your integration.
+3. Confirm requests are succeeding with the new key.
+4. Revoke the old key from the API key settings page.
+
+Revoked keys fail with:
+
+```json
+{
+  "ok": false,
+  "code": "UNAUTHORIZED",
+  "message": "invalid api key"
+}
+```

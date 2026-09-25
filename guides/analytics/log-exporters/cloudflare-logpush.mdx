@@ -1,0 +1,85 @@
+---
+title: "Cloudflare Logpush"
+description: "Stream HTTP request logs from Cloudflare to The Prompting Company and watch AI crawler traffic in your dashboards"
+---
+
+<Note>
+  **Set this up in the dashboard:** [Connect Cloudflare Logpush](https://app.promptingco.com/traffic-onboarding/cloudflare-logpush) walks through these steps, waits for your first AI content-page visit to arrive, and confirms the traffic is mapped to the right product. Use this page as the reference.
+</Note>
+
+Cloudflare Logpush pushes batches of your zone's HTTP request logs directly to The Prompting Company. Once the job is enabled, qualifying content-page visits from AI crawlers and agents (GPTBot, ChatGPT-User, ClaudeBot, PerplexityBot, and others) show up in the [AI traffic](/guides/metrics#ai-traffic) metric automatically — classification happens on our side, so you send everything and we keep what matters.
+
+Not on Cloudflare Enterprise? Use the [raw events API](/guides/analytics/log-exporters/raw-events) to stream from any log source instead, or [export a one-off CSV](/guides/analytics/cf-traffic-export) for history.
+
+## Before you start
+
+* You need a The Prompting Company **API key** (organization or service-account key) from **Settings → API Keys**.
+* The zone must be on a Cloudflare **Enterprise** plan — Logpush for the HTTP requests dataset is Enterprise-only.
+* Your DNS records must be **proxied** (orange cloud) — Logpush only captures traffic that flows through Cloudflare.
+
+## Configure the destination
+
+```text
+https://logs.promptingco.com/v1/events/cf-logpush?header_Authorization=Bearer%20YOUR_API_KEY
+```
+
+Cloudflare converts `header_*` query parameters into request headers, so this sends your key as an `Authorization: Bearer` header with every push. Keep the value URL-encoded (`%20` for the space).
+
+### Using the dashboard
+
+1. In the Cloudflare dashboard, open your zone and go to **Analytics & Logs → Logpush**.
+2. Click **Create a Logpush job** and select the **HTTP requests** dataset.
+3. Choose **HTTP destination** and paste the destination URL above.
+4. Select these fields: `ClientIP`, `ClientRequestHost`, `ClientRequestMethod`, `ClientRequestReferer`, `ClientRequestSource`, `ClientRequestURI`, `ClientRequestUserAgent`, `WorkerSubrequest`, `EdgeStartTimestamp`, `EdgeResponseContentType`, `EdgeResponseStatus`.
+5. Save and enable the job. Cloudflare validates the destination with a test message — this succeeds automatically.
+
+### Using the API
+
+```bash
+curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/logpush/jobs" \
+  -H "Authorization: Bearer $CF_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "name": "tpc-crawler-logs",
+    "dataset": "http_requests",
+    "enabled": true,
+    "destination_conf": "https://logs.promptingco.com/v1/events/cf-logpush?header_Authorization=Bearer%20YOUR_API_KEY",
+    "max_upload_bytes": 5000000,
+    "output_options": {
+      "field_names": [
+        "ClientIP", "ClientRequestHost", "ClientRequestMethod",
+        "ClientRequestReferer", "ClientRequestSource", "ClientRequestURI",
+        "ClientRequestUserAgent", "WorkerSubrequest", "EdgeStartTimestamp",
+        "EdgeResponseContentType", "EdgeResponseStatus"
+      ],
+      "timestamp_format": "rfc3339"
+    }
+  }'
+```
+
+Any `timestamp_format` works (`unixnano`, `unix`, or `rfc3339`); `rfc3339` is the easiest to debug.
+
+## What gets ingested
+
+You don't need to pre-filter traffic — send everything and The Prompting Company classifies AI crawlers and agents on ingestion. Recognized AI traffic is kept only when it qualifies as a content-page visit: `GET`, a `200`–`299` status except `204` and `205` (or `304`), and an HTML or XHTML content type when those fields are present. Numeric status values may arrive as JSON numbers or decimal strings.
+
+Missing or non-numeric HTTP metadata fails open for page-looking paths. Jobs that omit `EdgeResponseContentType` or `EdgeResponseStatus` will still ingest non-HTML AI hits such as JSON APIs unless the path matches a Next.js prefix or an asset suffix. Canonical Next.js prefixes (`/_next/static`, `/_next/image`, and `/_next/data`, lowercase) are always filtered, as are common script, stylesheet, source-map, image, font, media, Rive, WASM, JSON, XML, text, and PDF suffixes when content type is missing. Suffix matching is case-insensitive and ignores a trailing slash; an HTML content type keeps legitimate dotted pages.
+
+A few line types are skipped automatically so visits aren't double-counted: Cloudflare's destination-validation test message, Worker subrequests (`WorkerSubrequest: true`), non-eyeball requests (`ClientRequestSource` values like `edgeWorkerFetch` or purges), and lines without a `ClientRequestHost`. You can optionally add a Logpush filter to reduce volume, but it isn't required for correctness.
+
+## Responses
+
+| Status | Meaning                                                                                                                                                                                               |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `200`  | Batch processed. Body reports `{"ok": true, "received": N, "ingested": N, "skipped": N, "filtered": N}`. A positive `filtered` count means non-AI or non-page requests were intentionally not stored. |
+| `401`  | Missing or invalid API key — check the key in the destination URL                                                                                                                                     |
+| `429`  | Key verification was rate limited — Cloudflare retries                                                                                                                                                |
+| `400`  | Body could not be decoded                                                                                                                                                                             |
+| `413`  | Decompressed batch too large — lower the job's `max_upload_bytes`                                                                                                                                     |
+| `503`  | Temporary ingestion outage — Cloudflare retries automatically                                                                                                                                         |
+
+Delivery is at-least-once: failed batches are re-pushed in full, and occasional duplicates are expected and tolerated by the traffic metrics.
+
+## Verify it's working
+
+Real traffic starts appearing in the [AI traffic](/guides/metrics#ai-traffic) dashboard within a few minutes of enabling the job. To exercise the pipeline immediately without waiting for a crawler visit, send one test event through the [raw events API](/guides/analytics/log-exporters/raw-events#verify-its-working).

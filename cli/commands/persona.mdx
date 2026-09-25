@@ -1,0 +1,96 @@
+---
+title: "Personas"
+description: "List, create, update, and delete product personas from the TPC CLI."
+---
+
+# Personas
+
+Manage the personas of a product from the terminal. A persona is the user an AI assistant is asked to answer as when a prompt runs; prompts reference personas by ID. Pass `--scope <org-slug>/<product-slug>` to select the product. `tpc personas` is an alias for `tpc persona`.
+
+Persona commands work with an [OAuth login](/cli/authentication) (`tpc auth login`) or an API key holding `products:read` (list, get) and `products:write` (create, update, delete).
+
+## List personas
+
+Newest first. `--search` filters by name; `--page` is zero-based; `--page-size` defaults to 50.
+
+```bash
+tpc --scope pro-org/my-product persona list
+tpc --scope pro-org/my-product persona list --search revops
+```
+
+```text
+PRODUCT:  my-product
+PAGE:     1 of 1
+
+ID                                    NAME         DESCRIPTION                                   CREATED
+4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a  RevOps lead  Owns CRM hygiene for a 200-seat sales org     2026-09-22
+
+Total: 1
+```
+
+`--format csv` is not supported.
+
+## Get a persona
+
+Text mode prints the full description and system prompt. JSON mode prints the API payload.
+
+```bash
+tpc --scope pro-org/my-product persona get 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a
+```
+
+## Create a persona
+
+`--name` and `--description` are required. The system prompt is optional and comes from `--system-prompt` or `--system-prompt-file`, not both.
+
+```bash
+tpc --scope pro-org/my-product persona create \
+  --name "RevOps lead" \
+  --description "Owns CRM hygiene for a 200-seat sales org"
+```
+
+```bash
+tpc --scope pro-org/my-product persona create \
+  --name "Security reviewer" \
+  --description "Evaluates vendors for SOC 2 fit" \
+  --system-prompt-file ./security.md
+```
+
+Creating is idempotent on name, case-insensitively. If the product already has a persona with that name, the existing persona is returned and text output says so instead of creating a duplicate:
+
+```text
+Created persona RevOps lead (4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a)
+```
+
+```text
+Persona RevOps lead already exists (4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a)
+```
+
+## Update a persona
+
+Pass only the fields to change; the rest are left as they are. `--clear-system-prompt` removes the system prompt and cannot be combined with `--system-prompt` or `--system-prompt-file`.
+
+```bash
+tpc --scope pro-org/my-product persona update 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a \
+  --description "Owns CRM hygiene and lead routing"
+```
+
+```bash
+tpc --scope pro-org/my-product persona update 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a \
+  --clear-system-prompt
+```
+
+## Delete a persona
+
+Deleting is a soft delete: prompts that referenced the persona keep their history.
+
+```bash
+tpc --scope pro-org/my-product persona delete 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a
+```
+
+## JSON output
+
+Every command supports `--format json` for scripting. `list` prints `{ "personas": [...], "total": n }`; the other commands print the persona object.
+
+```bash
+tpc --scope pro-org/my-product persona list --format json | jq '.personas[].id'
+```

@@ -1,0 +1,60 @@
+---
+title: "Authentication"
+description: "Log in with device flow, or authenticate the TPC CLI non-interactively for CI."
+---
+
+# Authentication
+
+## Login
+
+Authenticate with browser-based device flow:
+
+```bash
+tpc auth login
+```
+
+The CLI uses the OAuth bearer path described in the
+[API authentication guide](/api/authentication#oauth-bearer).
+
+The flow is:
+
+1. `tpc` requests a device code.
+2. Your browser opens.
+3. You sign in to The Prompting Company.
+4. You approve the CLI.
+5. The CLI stores your session locally.
+
+After login, verify your session:
+
+```bash
+tpc auth whoami
+```
+
+Logout when needed:
+
+```bash
+tpc auth logout
+```
+
+## Non-interactive authentication
+
+For CI, scripts, and other headless environments where browser login is not available, the CLI reads credentials from environment variables. Two schemes are supported and they map to different request headers:
+
+| Variable        | Header sent                     | Use for                                                                                                          |
+| --------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `TPC_API_TOKEN` | `Authorization: Bearer <token>` | OAuth bearer tokens — for example, the session token issued by `tpc auth login`.                                 |
+| `TPC_API_KEY`   | `x-api-key: <key>`              | API keys created via the dashboard. See [API authentication](/api/authentication#api-key) for how to create one. |
+
+```bash
+# OAuth bearer token
+export TPC_API_TOKEN="your-bearer-token"
+tpc auth whoami
+
+# API key
+export TPC_API_KEY="your-api-key"
+tpc auth whoami
+```
+
+If both `TPC_API_TOKEN` and `TPC_API_KEY` are set, the CLI uses `TPC_API_TOKEN` and prints a warning to stderr.
+
+When neither variable is set, the CLI falls back to the session created by `tpc auth login`.

@@ -1,0 +1,65 @@
+---
+title: "Agentic documents"
+description: "Use TPC document endpoints for generated content and draft workflows."
+---
+
+# Agentic documents
+
+Agentic documents are generated or reviewed content records attached to a product. They are different from site pages: site pages are the stable content sync surface, while agentic documents power generated content, drafts, metadata suggestions, and review flows.
+
+## Read a document
+
+You need `content:read`.
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+## Find a document by path
+
+Use path lookup when your source system knows the product path instead of the document ID:
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/by-path?brandId=$TPC_PRODUCT_ID&path=docs/install" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+The query parameter is still named `brandId` for this legacy endpoint. Pass the product ID.
+
+## Update a document
+
+You need `content:write`.
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -X PUT \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: document-update-$DOCUMENT_ID" \
+  --data '{
+    "title": "Install The Prompting Company",
+    "content": "# Install The Prompting Company\n\nSet up TPC and publish content.",
+    "metaTitle": "Install The Prompting Company",
+    "metaDescription": "Set up TPC and publish content."
+  }'
+```
+
+## Update priority
+
+Use `PATCH` when you only need to change document priority:
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -X PATCH \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: document-priority-$DOCUMENT_ID" \
+  --data '{
+    "priority": 80
+  }'
+```
+
+## Review workflows
+
+Draft creation, metadata suggestions, and domain attachment endpoints are currently dashboard/internal routes. Use the generated Reference section to confirm whether a route is public before calling it with an API key.

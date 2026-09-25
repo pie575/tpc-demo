@@ -1,0 +1,37 @@
+---
+title: "Audit log"
+description: "Understand what TPC records for API write requests."
+---
+
+# Audit log
+
+TPC writes an API audit log entry for non-GET requests that return a 2xx response and belong to an organization.
+
+## What is logged
+
+Each audit row stores:
+
+| Field            | Description                                             |
+| ---------------- | ------------------------------------------------------- |
+| Organization ID  | The organization resolved from your credential.         |
+| User ID          | The human user when the credential has one.             |
+| API key ID       | The API key ID for API-key callers.                     |
+| Principal ID     | Service account ID, API key ID, session ID, or user ID. |
+| Route and method | The endpoint path and HTTP method.                      |
+| Status           | The response status.                                    |
+| Auth method      | `session`, `bearer`, or `api_key`.                      |
+| Request ID       | The `x-request-id` response header.                     |
+| Body hash        | A SHA-256 hash of the request body.                     |
+| Expiration       | The retention cutoff for the row.                       |
+
+## What is not logged
+
+TPC does not store full request bodies in the audit table. It stores only the request body hash so you can prove which payload was used without copying customer content into the audit trail.
+
+## Retention
+
+API audit log rows are retained for 180 days.
+
+## Lookup
+
+There is not yet a public audit-log endpoint. To look up a request today, send support the `x-request-id`, approximate timestamp, and organization slug.

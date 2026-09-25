@@ -1,0 +1,83 @@
+---
+title: "CLI overview"
+description: "Terminal access to your workspace, organizations, and simulation workflows."
+---
+
+# CLI overview
+
+The Prompting Company CLI gives you terminal access to your workspace, organizations, and simulation workflows.
+
+The binary name is:
+
+```text
+tpc
+```
+
+## Prerequisites
+
+* macOS, Linux, or Windows
+* `amd64` or `arm64`
+
+Start with [Installation](/cli/installation), then [Authentication](/cli/authentication).
+
+## Common commands
+
+```bash
+# Show current auth state
+tpc auth whoami
+
+# Show installed CLI version
+tpc version
+tpc --version
+
+# Check for updates
+tpc update --check
+
+# Install latest update
+tpc update
+
+# List organizations
+tpc org list
+
+# Product-scoped commands take --scope <org-slug>/<product-slug>
+tpc sim experiment list --scope cloudflare-dev/browser-run
+tpc analytics sov --scope nvidia-com/nvidia-dgx-spark --last 30d
+
+# List content
+tpc --scope prompting-co/my-product content list
+
+# List knowledge files
+tpc --scope prompting-co/my-product knowledge file list
+
+# Review generated prompt suggestions
+tpc --scope my-product/prompting-co prompts suggestions list
+tpc --scope my-product/prompting-co prompts suggestions generate
+
+# Add a persona for prompts to run as
+tpc --scope prompting-co/my-product persona create --name "RevOps lead" --description "Owns CRM hygiene"
+
+# Generate llms.txt files from a sitemap (no auth required)
+tpc llmstxt init https://docs.example.com/sitemap.xml
+tpc llmstxt generate
+
+# Show simulation command help
+tpc sim help
+
+# Start guided competitive benchmark setup
+tpc sim ax setup --type benchmark --scope acme/my-product
+
+# Show environment list help without requiring auth
+tpc env list -h
+
+# List simulation environments
+tpc env list
+
+# Model Council config and runs
+tpc council config get
+tpc council run
+tpc council list
+```
+
+## Next step
+
+Once installed and authenticated, you can move into product and simulation workflows from the terminal. See [Content](/cli/commands/content), [Knowledge](/cli/commands/knowledge), [Prompts](/cli/commands/prompts), [Personas](/cli/commands/persona), [Analytics](/cli/commands/analytics), [Model council](/cli/commands/council), [Agent Experience](/cli/commands/agent-experience), and [Simulation environments](/cli/commands/simulation-environments).

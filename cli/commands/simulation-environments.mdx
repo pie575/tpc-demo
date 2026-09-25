@@ -1,0 +1,26 @@
+---
+title: "Simulation environments"
+description: "Create and configure agent simulation environments from the TPC CLI."
+---
+
+# Simulation environment commands
+
+Create a simulation environment:
+
+```bash
+tpc sim env create \
+  --name "My Environment" \
+  --agent-config '{"harness":"claude","model":"claude-sonnet-4-6"}'
+```
+
+Create an environment with task links and schedule:
+
+```bash
+tpc sim env create \
+  --name "Test Env" \
+  --agent-config @examples/agent-config.json \
+  --task-ids task_123,task_456 \
+  --schedule 7d
+```
+
+TPC manages the sandbox provider. The CLI does not accept `sandboxProvider` in agent configuration or portable environment files.

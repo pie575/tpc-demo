@@ -1,0 +1,83 @@
+---
+title: "Connect a custom endpoint"
+description: "Publish TPC drafts to your own server via a JSON POST endpoint with bearer authentication"
+---
+
+Use the custom endpoint integration when your CMS is not natively supported. The Prompting Company POSTs JSON to your endpoint with a bearer token.
+
+## Endpoint requirements
+
+Your server must:
+
+* Accept `POST` requests with `Content-Type: application/json`
+* Validate the `Authorization: Bearer <token>` header
+* Return a `2xx` status code on success
+
+The response body is logged in TPC but not parsed.
+
+## Bearer token authentication
+
+TPC sends the token you paste into the integration form as:
+
+```text
+Authorization: Bearer <token>
+```
+
+Validate this on your endpoint before processing the request. Reject anything without a valid bearer with `401`.
+
+## Body template
+
+Use placeholders to map TPC's fields into your endpoint's expected shape. Available placeholders:
+
+* `{{title}}`
+* `{{content}}`
+* `{{excerpt}}`
+* `{{platform}}`
+* `{{status}}`
+* `{{thumbnailUrl}}`
+* `{{heroImageUrl}}`
+
+Example body template:
+
+```json
+{
+  "title": "{{title}}",
+  "html": "{{content}}",
+  "cover": "{{heroImageUrl}}"
+}
+```
+
+TPC substitutes placeholders before sending. Unset placeholders resolve to empty string.
+
+## Optional custom headers
+
+If your endpoint needs extra headers (API key, tenant ID), paste them as a JSON object in the integration form:
+
+```json
+{ "X-Tenant-Id": "abc123" }
+```
+
+## Connect in TPC
+
+1. Open **Settings → Integrations** in your TPC product workspace.
+2. Select **Custom endpoint**.
+3. Enter:
+   * **Endpoint URL** — the fully qualified URL TPC should POST to
+   * **Bearer token** — the token your server will validate
+   * **Body template** — JSON with placeholders
+   * **Custom headers** — optional JSON object
+4. Click **Save**, then **Test connection**.
+
+## Troubleshooting
+
+### Test connection times out
+
+TPC waits up to 30 seconds. Confirm the endpoint is publicly reachable and responds within that window.
+
+### 401 or 403
+
+Your endpoint rejected the bearer token. Confirm the token stored in your server matches the one pasted into TPC.
+
+### Non-2xx status but content saved
+
+Return a `2xx` status only after the write is durable. Any non-2xx response is treated as a failure and shown as an error in the publish log.
