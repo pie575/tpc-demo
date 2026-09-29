@@ -1,0 +1,82 @@
+{
+  "options": {
+    "experimentalClearLocaleDirs": true,
+    "mintlify": {
+      "openapi": {
+        "files": [
+          "./api-reference/openapi.json"
+        ]
+      },
+      "inferTitleFromFilename": true
+    },
+    "jsonSchema": {
+      "./api-reference/openapi.json": {
+        "preset": "openapi"
+      },
+      "./docs.json": {
+        "preset": "mintlify-hide-default"
+      }
+    },
+    "docsUrlPattern": "/[locale]",
+    "docsImportPattern": "/snippets/[locale]",
+    "generateRedirects": "./docs.json",
+    "experimentalLocalizeStaticImports": true,
+    "experimentalLocalizeStaticUrls": {
+      "skipUntranslatedPages": true
+    },
+    "experimentalLocalizeRelativeAssets": true,
+    "docsHideDefaultLocaleImport": true,
+    "experimentalHideDefaultLocale": true,
+    "experimentalAddHeaderAnchorIds": "mintlify"
+  },
+  "files": {
+    "json": {
+      "include": [
+        "./api-reference/openapi.json",
+        "./docs.json"
+      ],
+      "transform": [
+        {
+          "match": "^api-reference/openapi.json$",
+          "replace": "{locale}/api-reference/openapi.json"
+        }
+      ]
+    },
+    "mdx": {
+      "include": [
+        "./**/*.mdx",
+        "./**/*.md"
+      ],
+      "transform": {
+        "match": "^(snippets/)?(.*)$",
+        "replace": "$1{locale}/$2"
+      },
+      "exclude": [
+        "./[locales]/**/*.mdx",
+        "./snippets/[locales]/**/*.mdx",
+        "./[locales]/**/*.md",
+        "./snippets/[locales]/**/*.md",
+        "./**/README.md",
+        "./**/LICENSE.md",
+        "./**/COPYING.md",
+        "./**/NOTICE.md",
+        "./**/CHANGELOG.md",
+        "./**/HISTORY.md",
+        "./**/CODE_OF_CONDUCT.md",
+        "./**/CONTRIBUTING.md",
+        "./**/SECURITY.md",
+        "./**/GOVERNANCE.md",
+        "./**/AGENTS.md",
+        "./**/OWNERS.md",
+        "./**/MAINTAINERS.md"
+      ]
+    }
+  },
+  "locales": [
+    "es",
+    "ja",
+    "zh"
+  ],
+  "defaultLocale": "en",
+  "$schema": "https://assets.gtx.dev/config-schema.json"
+}

@@ -1,0 +1,60 @@
+---
+title: "Conectar Sanity"
+description: "Publica borradores de TPC en Sanity con un token de API limitado al proyecto"
+---
+
+The Prompting Company escribe documentos en tu dataset de Sanity mediante un token de API limitado al proyecto con permisos de Editor o Maintainer.
+
+## Antes de empezar {#before-you-start}
+
+* Rol de Admin o Developer en el proyecto de Sanity de destino.
+* Tu esquema de documentos desplegado en el dataset en el que vas a escribir.
+
+## Generar un token de API {#generate-an-api-token}
+
+1. Ve a [sanity.io/manage](https://sanity.io/manage) y abre tu proyecto.
+2. Abre la pestaña **API** y luego **Tokens**.
+3. Haz clic en **Add API token**.
+4. Ponle el nombre `TPC publisher` y elige **Editor** o **Maintainer**.
+5. Copia el token. Sanity solo lo muestra una vez.
+
+## Encuentra el ID del proyecto y el dataset {#find-your-project-id-and-dataset}
+
+* El **ID del proyecto** aparece en la parte superior de la página del proyecto en `sanity.io/manage`.
+* El **dataset** suele ser `production`. Asegúrate de que el nombre del dataset coincida exactamente.
+* La **versión de la API** es `v2025-03-01` de forma predeterminada. Cámbiala a una más reciente solo si necesitas alguna funcionalidad nueva.
+
+## Haz coincidir los campos de tu esquema {#match-your-schema-fields}
+
+TPC escribe en un único tipo de documento. Valores predeterminados:
+
+* **Tipo de documento**: `post`
+* **Campos**: `title`, `content`, `slug`, `excerpt`
+* **Campos de imagen**: `thumbnail`, `hero` (opcionales)
+
+Si tu esquema usa otros nombres, pega los nombres exactos de los campos en el formulario de la integración. Los campos de imagen son opcionales: déjalos en blanco si tu esquema no tiene referencias a imágenes.
+
+## Conectar en TPC {#connect-in-tpc}
+
+1. Abre **Settings → Integrations** en el espacio de trabajo de tu producto en TPC.
+2. Selecciona **Sanity**.
+3. Completa el ID del proyecto, el dataset, la versión de la API, el tipo de documento, los nombres de los campos y el token de la API.
+4. Haz clic en **Save** y, luego, en **Test connection**.
+
+## Solución de problemas {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+Al token le falta el permiso de escritura. Vuelve a generarlo con el scope **Editor** o **Maintainer**.
+
+### 404 o «unknown type» {#404-or-unknown-type}
+
+El **Tipo de documento** configurado en TPC no existe en el esquema desplegado. Despliega el esquema o actualiza el nombre del tipo para que coincidan.
+
+### Los campos se guardan como `null` {#fields-save-as-null}
+
+Los nombres de los campos distinguen entre mayúsculas y minúsculas y deben coincidir exactamente con la clave del esquema, no con la etiqueta que se muestra.
+
+## Enlaces relacionados {#related-links}
+
+* [Documentación sobre los tokens de API de Sanity](https://www.sanity.io/docs/http-auth)

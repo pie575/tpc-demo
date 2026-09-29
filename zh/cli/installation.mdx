@@ -1,0 +1,103 @@
+---
+title: "安装"
+description: "在 macOS、Linux 和 Windows 上安装和更新 TPC CLI，以及固定其版本。"
+---
+
+# 安装 {#installation}
+
+## macOS 和 Linux {#macos-and-linux}
+
+安装最新稳定版：
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | bash
+```
+
+安装完成后，确认二进制文件可用：
+
+```bash
+tpc --version
+```
+
+## Windows {#windows}
+
+使用 winget 安装：
+
+```powershell
+winget install promptingcompany.tpc
+```
+
+或者，先添加 The Prompting Company 的 bucket，再通过 Scoop 安装：
+
+```powershell
+scoop bucket add promptingcompany https://github.com/promptingcompany/scoop-bucket
+scoop install tpc
+```
+
+也可以使用 PowerShell：
+
+```powershell
+irm https://cli.promptingco.com/install.ps1 | iex
+```
+
+如果执行策略阻止了安装程序运行，请先在同一个
+PowerShell 会话中运行以下命令：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
+
+手动安装 (备用方案) ：
+
+1. 从
+   `https://cli.promptingco.com/tpc/<version>/` 下载最新的
+   `tpc_<version>_windows_amd64.zip` 或 `tpc_<version>_windows_arm64.zip`。
+2. 解压出 `tpc.exe`。
+3. 将 `tpc.exe` 移至 `PATH` 中的某个目录，或者通过“系统属性 -&gt; 环境变量 -&gt; Path”
+   将新目录添加到 `PATH`。
+4. 新开一个 PowerShell 或 cmd 会话，然后验证是否安装成功：
+
+   ```powershell
+   tpc --version
+   ```
+
+## 更新 {#update}
+
+检查是否有新版本的 CLI 可用：
+
+```bash
+tpc update --check
+```
+
+原地升级已安装的二进制文件：
+
+```bash
+tpc update
+```
+
+## 安装特定版本 {#install-a-specific-version}
+
+安装指定的固定版本：
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | TPC_VERSION=0.1.0-alpha.1 bash
+```
+
+从发布渠道安装：
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | TPC_CHANNEL=alpha bash
+```
+
+<Note>
+  把变量放在 `curl` 前面 (`TPC_VERSION=... curl ... | bash`) 是不起作用的——这样赋值只会影响 `curl` 的环境，而不会影响管道另一端负责读取脚本的 `bash` 进程。变量必须紧贴在 `bash` 前面。
+</Note>
+
+## 安装程序 URL {#installer-url}
+
+公开安装程序的下载地址为：
+
+```text
+https://cli.promptingco.com/install.sh
+https://cli.promptingco.com/install.ps1
+```

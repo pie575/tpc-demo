@@ -1,0 +1,67 @@
+---
+title: "Conectar WordPress"
+description: "Publica borradores de TPC en WordPress con el plugin conector de TPC"
+---
+
+The Prompting Company publica borradores en WordPress a través de un pequeño plugin conector que expone un endpoint autenticado mediante token. Funciona con WordPress autoalojado y con WordPress.com Business o superior (planes que admiten plugins personalizados).
+
+## Antes de empezar {#before-you-start}
+
+* Acceso de administrador a tu sitio de WordPress.
+* Permisos para subir y activar plugins.
+
+## Instalar el conector {#install-the-connector}
+
+1. Descarga el plugin conector:
+
+```text
+https://r2-assets.promptingco.com/tpc-wordpress-connector.php.zip
+```
+
+2. En el panel de administración de WordPress, ve a **Plugins → Add New → Upload Plugin**.
+3. Sube `tpc-wordpress-connector.php.zip` y haz clic en **Install Now**.
+4. Haz clic en **Activate**. Aparecerá un nuevo elemento de menú: **Settings → TPC Connector**.
+
+## Generar un token de conector {#generate-a-connector-token}
+
+1. Abre **Settings → TPC Connector**.
+2. Haz clic en **Generate Token**.
+3. Copia el token de inmediato, ya que solo se muestra una vez.
+
+<Warning>
+  Si pierdes el token, genera uno nuevo: el anterior dejará de funcionar en cuanto se genere el nuevo.
+</Warning>
+
+## Conectar en TPC {#connect-in-tpc}
+
+1. En el espacio de trabajo de tu producto en TPC, abre **Settings → Integrations**.
+2. Selecciona **WordPress**.
+3. Introduce:
+   * **Site URL**: la raíz de tu sitio de WordPress, por ejemplo, `https://blog.example.com`
+   * **Connector token**: el token que copiaste antes
+4. Haz clic en **Save** y luego en **Test connection**.
+
+## Metatítulo y metadescripción {#meta-title-and-description}
+
+Cada entrada publicada incluye el metatítulo y la metadescripción que el documento tiene en TPC. El conector los guarda en el plugin de SEO activo para que aparezcan tanto en los ajustes de la entrada de ese plugin como en la página renderizada:
+
+* Yoast SEO
+* Rank Math
+* All in One SEO
+* SEOPress
+
+Si no hay ninguno de estos plugins activo, el conector añade las etiquetas `<title>` y `<meta name="description">` directamente en la página de la entrada. Se requiere la versión 0.4.0 o posterior del conector; las versiones anteriores ignoran estos campos.
+
+## Solución de problemas {#troubleshooting}
+
+### La prueba de conexión falla con un error 401 {#test-connection-fails-with-401}
+
+El token de TPC no coincide con el de WordPress. Genera un token nuevo en **Settings → TPC Connector** y pega el nuevo valor en TPC.
+
+### La prueba de conexión falla con un error 404 {#test-connection-fails-with-404}
+
+El plugin no está activado o la URL del sitio es incorrecta. Comprueba que el plugin aparece como activo en **Plugins → Installed Plugins** y que la URL del sitio no termina con ninguna ruta adicional.
+
+### El borrador aparece, pero las imágenes no se muestran {#draft-appears-but-images-are-broken}
+
+Para subir archivos a WordPress, el conector debe poder acceder a tu biblioteca de medios. Comprueba que el sitio de WordPress sea accesible públicamente: TPC sube las imágenes mediante URL, no por transferencia binaria.

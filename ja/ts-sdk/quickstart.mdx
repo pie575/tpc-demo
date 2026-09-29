@@ -1,0 +1,361 @@
+---
+title: "クイックスタートガイド"
+description: "Next.js アプリケーションで The Prompting Company TypeScript SDK を使い、最初の連携を構築しましょう"
+---
+
+# クイックスタートガイド {#quickstart-guide}
+
+**Next.js Agent MD パターン**を使って、The Prompting Company TypeScript SDK をすぐに使い始めましょう。このガイドでは、シンプルな `.md` URL からエージェント向けドキュメントにアクセスできる、動的な Markdown 配信システムの構築手順を順を追って説明します。
+
+## 構築するもの {#what-youll-build}
+
+このガイドを完了すると、次の機能が利用できるようになります。
+
+* **クリーンな URL ルーティング**: ユーザーは `yoursite.com/docs/guide.md` のような URL でドキュメントにアクセスできます
+* **動的なコンテンツ配信**: ドキュメントは The Prompting Company プラットフォームから取得されます
+* **自動ミドルウェア**: URL の書き換えにより、`.md` 拡張子が透過的に処理されます
+* **スケーラブルなアーキテクチャ**: ネストされたドキュメント構造にも対応します
+
+## 仕組み {#how-it-works}
+
+この実装は、次の2つの要素で構成されています。
+
+1. **ミドルウェア**：`.md` で終わるリクエストをインターセプトし、内部でリライトします
+2. **API ルートハンドラー**：SDK を使用して実際の Markdown コンテンツを取得します
+
+**処理の流れの例：**
+
+```
+ユーザーのアクセス: /docs/getting-started.md
+↓ (ミドルウェアが書き換え)
+内部ルート: /md/docs/getting-started
+↓ (API ハンドラーが処理)
+レスポンス: 組織の Markdown コンテンツ
+```
+
+## 前提条件 {#prerequisites}
+
+始める前に、以下の準備ができていることを確認してください。
+
+* ✅ [SDK のインストール](/ja/ts-sdk/installation)が完了していること
+* ✅ App Router を使用した Next.js 13 以降のアプリケーション
+* ✅ API キー、組織の slug、プロダクトの slug
+
+## ステップ 1: ミドルウェアを作成する {#step-1-create-the-middleware}
+
+まず、`.md` 拡張子の URL 書き換えを処理するミドルウェアファイルを作成します。
+
+```typescript
+// src/middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+export function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  
+  // URL の末尾が .md 拡張子かどうかを確認
+  if (pathname.endsWith(".md")) {
+    // パスから .md 拡張子を取り除く
+    const pathWithoutMd = pathname.slice(0, -3);
+    
+    // /md プレフィックスを付けた新しい URL を作成
+    const newUrl = new URL(`/md${pathWithoutMd}`, request.url);
+    
+    // リクエストを新しいパスにリライト
+    return NextResponse.rewrite(newUrl);
+  }
+  
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * 以下で始まるパスを除く、すべてのリクエストパスにマッチ:
+     * - api (API ルート)
+     * - _next/static (静的ファイル)
+     * - _next/image (画像最適化ファイル)
+     * - favicon.ico (ファビコンファイル)
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
+```
+
+### ミドルウェアの仕組み {#how-the-middleware-works}
+
+1. **リクエストのインターセプト**: API ルートと静的ファイルを除くすべてのリクエストを捕捉します
+2. **.md 拡張子の検出**: URL が `.md` で終わるかどうかを確認します
+3. **URL の書き換え**: `/docs/guide.md` を内部で `/md/docs/guide` に書き換えます
+4. **透過的な処理**: ユーザーにはクリーンな URL がそのまま表示され、実際の処理は内部ルーティングが担います
+
+## ステップ 2: MD ルートハンドラーを作成する {#step-2-create-the-md-route-handler}
+
+書き換えられた URL を処理して Markdown コンテンツを取得する、API ルートハンドラーを作成します。
+
+```typescript
+// src/app/md/[[...path]]/route.ts
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+  // TPC_API_KEY は SDK が自動的に読み込みます
+});
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ path?: string[] }> }
+) {
+  // params の Promise を await する（Next.js 15 以降のパターン）
+  const { path } = await params;
+  const pathArray = path || [];
+  
+  // パスセグメントを結合してドキュメントのパスを生成する
+  const documentPath = pathArray.join("/");
+  
+  try {
+    const document = await client.document.getByPath(documentPath);
+    
+    if (!document.ok || !document.data) {
+      return new Response("Document not found", { status: 404 });
+    }
+    
+    return new Response(document.data.content, {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching document:', error);
+    return new Response("Internal server error", { status: 500 });
+  }
+}
+```
+
+### ルートハンドラーの仕組み {#understanding-the-route-handler}
+
+* **動的ルート**: `[[...path]]` で複数のパスセグメントを受け取ります (オプショナルキャッチオール)
+* **Next.js 15+ のパターン**: `params` は Promise になったため、await する必要があります
+* **パラメーターの分割代入**: `{ path } = await params` でパスセグメントを取り出します
+* **パスの処理**: `['docs', 'api', 'auth']` のようなセグメントを `"docs/api/auth"` に結合します
+* **SDK との統合**: TypeScript SDK を使ってドキュメントを取得します
+* **エラー処理**: 適切な HTTP ステータスコード (404、500) を返します
+* **コンテンツタイプ**: 正しい MIME タイプ (`text/markdown; charset=utf-8`) を設定します
+
+## ステップ 3: 全体の流れを理解する {#step-3-understanding-the-complete-flow}
+
+システム全体が連携して動作する仕組みは次のとおりです。
+
+### 1. ユーザーリクエスト {#1-user-request}
+
+```
+ユーザーのアクセス先: https://yoursite.com/docs/getting-started.md
+```
+
+### 2. ミドルウェアによる処理 {#2-middleware-processing}
+
+```typescript
+// src/middleware.ts がリクエストを処理
+"/docs/getting-started.md" 
+  ↓ (removes .md extension)
+"/docs/getting-started"
+  ↓ (adds /md prefix)  
+"/md/docs/getting-started"
+```
+
+### 3. ルートハンドラーの実行 {#3-route-handler-execution}
+
+```typescript
+// src/app/md/[[...path]]/route.ts が受け取る値:
+const { path } = await params; // Next.js 15 以降では await が必要
+pathArray = ["docs", "getting-started"]
+  ↓ (joins path segments)
+documentPath = "docs/getting-started"
+  ↓ (calls SDK)
+client.document.getByPath("docs/getting-started")
+```
+
+### 4. レスポンス {#4-response}
+
+```
+戻り値: 適切な MIME タイプが設定された未加工の Markdown コンテンツ
+Content-Type: text/markdown; charset=utf-8
+```
+
+## ステップ 4: ディレクトリ構成 {#step-4-directory-structure}
+
+プロジェクトが次の構成になっていることを確認してください。
+
+```
+src/
+├── middleware.ts                 # URL 書き換えロジック
+├── app/
+│   ├── md/
+│   │   └── [[...path]]/
+│   │       └── route.ts         # Markdown ハンドラー
+│   ├── layout.tsx
+│   └── page.tsx
+└── (その他のファイル)
+```
+
+### 重要なポイント: {#key-points}
+
+* **ミドルウェアの配置場所**: `src/middleware.ts`(またはルートの `middleware.ts`)に配置する必要があります
+* **動的ルート**: `[[...path]]` は任意の数のパスセグメントにマッチします
+* **ルートハンドラー**: Markdown の配信に必要なのは `GET` メソッドだけです
+* **エラー処理**: ドキュメントが見つからない場合は、適切な HTTP ステータスコードを返します
+
+## ステップ 5：実装をテストする {#step-5-testing-your-implementation}
+
+### 1. 開発サーバーを起動する {#1-start-your-development-server}
+
+```bash
+npm run dev
+```
+
+### 2. URL パターンをテストする {#2-test-the-url-pattern}
+
+これで、実装が次の URL パターンを処理できるようになっているはずです。
+
+**✅ 動作する URL：**
+
+```
+http://localhost:3000/docs/getting-started.md
+http://localhost:3000/api/auth.md  
+http://localhost:3000/guides/installation.md
+http://localhost:3000/nested/folder/structure/document.md
+```
+
+**テスト方法:**
+
+1. `.md` で終わる任意の URL にアクセスします
+2. ブラウザのネットワークタブを確認します。次の点を確認できるはずです:
+   * `yoursite.com/docs/guide.md` へのリクエストが送信されている
+   * レスポンスに `Content-Type: text/markdown` が含まれている
+   * 未加工の Markdown コンテンツが表示されている
+
+### 3. ドキュメントパスを確認する {#3-verify-document-paths}
+
+URL 構造は、組織のドキュメントパスに対応しています：
+
+```
+URL: /docs/getting-started.md
+  ↓ 
+Document Path: "docs/getting-started"
+  ↓
+SDK Call: client.document.getByPath("docs/getting-started")
+```
+
+The Prompting Company プラットフォーム上のドキュメントパスが、想定している URL 構造と一致していることを確認してください。
+
+### 4. エラー処理をテストする {#4-test-error-handling}
+
+**404 のテスト:**
+
+* `/nonexistent/document.md` にアクセスします
+* ステータスコード 404 と &quot;Document not found&quot; が返されることを確認します
+
+**パスのテスト:**
+
+* ルート階層: `/readme.md` → ドキュメントパス: `"readme"`
+* ネストされた階層: `/api/auth/oauth.md` → ドキュメントパス: `"api/auth/oauth"`
+
+## ステップ 6: コマンドラインでのテスト (任意) {#step-6-command-line-testing-optional}
+
+デバッグ時には、SDK を直接テストすることもできます。
+
+```typescript
+// test-sdk.ts
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+  // TPC_API_KEY は SDK が自動的に読み込みます
+});
+
+const doc = await client.document.getByPath("docs/getting-started");
+
+if (!doc.ok) {
+  console.error('Error:', doc);
+  process.exit(1);
+}
+
+console.log('Success! Document content:');
+console.log(doc.data?.content?.substring(0, 200) + '...');
+```
+
+次のコマンドで実行します。
+
+```bash
+npx tsx test-sdk.ts
+```
+
+## このパターンの利点 {#benefits-of-this-pattern}
+
+Next.js Agent MD パターンには、次のような利点があります。
+
+### ✅ **SEO に強い URL** {#seo-friendly-urls}
+
+`/docs/guide.md` のようなわかりやすい URL は、検索エンジンにインデックスされやすくなります
+
+### ✅ **動的コンテンツ** {#dynamic-content}
+
+ドキュメントは CMS からリアルタイムで取得されるため、静的生成は必要ありません
+
+### ✅ **スケーラブルなアーキテクチャ** {#scalable-architecture}
+
+ルーティングを追加しなくても、ドキュメント構造を無制限にネストできます
+
+### ✅ **適切な MIME タイプ** {#proper-mime-types}
+
+ブラウザには正しい Content-Type (`text/markdown`) が返されるため、適切に処理されます
+
+### ✅ **エラー処理** {#error-handling}
+
+存在しないドキュメントに対する 404 処理が組み込まれており、適切な HTTP ステータスコードを返します
+
+## 次のステップ {#next-steps}
+
+おめでとうございます！これで Next.js で Agent MD が動作するようになりました。さらに機能を強化するには、次のページを参照してください。
+
+<Columns cols={2}>
+  <Card title="高度な使い方" icon="settings" href="/ja/ts-sdk/advanced-usage">
+    キャッシュ、エラー処理、最適化の手法について説明します。
+  </Card>
+
+  <Card title="GitHub リポジトリ" icon="github" href="https://github.com/promptingcompany/nextjs-agent-md">
+    完全なリファレンス実装を GitHub で確認できます。
+  </Card>
+</Columns>
+
+## トラブルシューティング {#troubleshooting}
+
+### よくある問題 {#common-issues}
+
+**ミドルウェアが動作しない:**
+
+* `middleware.ts` が正しい場所 (`src/middleware.ts` またはルートの `middleware.ts`) にあることを確認してください
+* お使いの Next.js のバージョンがミドルウェアに対応している (12.2 以降) ことを確認してください
+* matcher の設定で必要なパスが除外されていることを確認してください
+
+**有効なドキュメントで 404 エラーが発生する:**
+
+* 組織内のドキュメントパスが URL 構造と一致していることを確認してください
+* 環境変数 (`TPC_API_KEY`、`TPC_ORG_SLUG`、`TPC_PRODUCT_SLUG`) が正しく設定されていることを確認してください
+* API キーに `read:documentation` 権限が付与されていることを確認してください
+
+**ルートハンドラーが見つからない:**
+
+* ディレクトリ構造が正しいことを確認してください: `src/app/md/[[...path]]/route.ts`
+* ルートファイルが `GET` 関数をエクスポートしていることを確認してください
+* Next.js App Router が有効になっている (Next.js 13 以降) ことを確認してください
+
+**SDK の接続に関する問題:**
+
+* コマンドラインの例を使って SDK を直接テストしてください
+* ネットワーク接続と API エンドポイントが利用可能かどうかを確認してください
+* 組織とプロダクトの slug が正しいことを確認してください
+
+お困りの場合は、[support@promptingco.com](mailto:support@promptingco.com) までお問い合わせいただくか、[プラットフォーム](https://app.promptingco.com)にアクセスしてください。

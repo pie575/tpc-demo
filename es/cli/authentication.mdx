@@ -1,0 +1,60 @@
+---
+title: "Autenticación"
+description: "Inicia sesión con el flujo de dispositivo o autentica la CLI de TPC de forma no interactiva para CI."
+---
+
+# Autenticación {#authentication}
+
+## Inicio de sesión {#login}
+
+Autentícate con el flujo de dispositivo desde el navegador:
+
+```bash
+tpc auth login
+```
+
+La CLI utiliza el método de autenticación OAuth bearer descrito en la
+[guía de autenticación de la API](/es/api/authentication#oauth-bearer).
+
+El flujo es el siguiente:
+
+1. `tpc` solicita un código de dispositivo.
+2. Se abre tu navegador.
+3. Inicias sesión en The Prompting Company.
+4. Autorizas la CLI.
+5. La CLI guarda tu sesión localmente.
+
+Después de iniciar sesión, comprueba tu sesión:
+
+```bash
+tpc auth whoami
+```
+
+Cierra sesión cuando lo necesites:
+
+```bash
+tpc auth logout
+```
+
+## Autenticación no interactiva {#non-interactive-authentication}
+
+En CI, scripts y otros entornos sin interfaz gráfica donde no se puede iniciar sesión desde el navegador, la CLI lee las credenciales de variables de entorno. Se admiten dos esquemas, cada uno asociado a un encabezado de solicitud distinto:
+
+| Variable        | Encabezado enviado              | Uso                                                                                                                                  |
+| --------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `TPC_API_TOKEN` | `Authorization: Bearer <token>` | Tokens OAuth bearer; por ejemplo, el token de sesión que emite `tpc auth login`.                                                     |
+| `TPC_API_KEY`   | `x-api-key: <key>`              | Claves de API creadas desde el dashboard. Consulta [Autenticación de la API](/es/api/authentication#api-key) para saber cómo crear una. |
+
+```bash
+# Token bearer de OAuth
+export TPC_API_TOKEN="your-bearer-token"
+tpc auth whoami
+
+# Clave de API
+export TPC_API_KEY="your-api-key"
+tpc auth whoami
+```
+
+Si se definen tanto `TPC_API_TOKEN` como `TPC_API_KEY`, la CLI usa `TPC_API_TOKEN` y muestra una advertencia en stderr.
+
+Si no se define ninguna de las dos variables, la CLI recurre a la sesión creada con `tpc auth login`.

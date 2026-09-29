@@ -1,0 +1,137 @@
+---
+title: "站点页面"
+description: "使用 TPC Site Pages API 列出、创建、更新和删除产品页面。"
+---
+
+# 站点页面 {#site-pages}
+
+<Warning>
+  `/api/v1/site/pages` 端点已弃用，将在未来版本中移除。请改用统一的内容生命周期 API：`GET/POST /api/v1/content`、`GET/PUT/DELETE /api/v1/content/{id}`，以及 `POST /api/v1/content/generate` 和各审核端点 (`/api/v1/content/{draftId}/review`、`/revision`、`/publish`、`/revert`) 。相关 schema 请参阅 API 参考。新创建的页面会进入审核队列，获得批准后才会发布。
+</Warning>
+
+站点页面是产品范围内的内容记录，包含路径、标题、状态、可选的正文内容、元数据以及域名关联。如果你的权威数据源是 CMS、文档站点或 Markdown 文件夹，请使用站点页面。
+
+## 列出页面 {#list-pages}
+
+需要 `content:read` 权限。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=$TPC_PRODUCT_ID&page=1&pageSize=25" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+可按搜索关键词、状态、路径以及是否包含内容进行筛选：
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=$TPC_PRODUCT_ID&query=pricing&status=published&pathPrefix=docs/&hasContent=true" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+## 创建页面 {#create-pages}
+
+需要 `content:write` 权限。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-create-docs-install" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "slug": "docs/install",
+        "title": "Install",
+        "content": "# Install\n\nInstall instructions."
+      }
+    ]
+  }'
+```
+
+每次请求最多可创建 25 个页面。
+
+## 更新页面 {#update-pages}
+
+只需传入要修改的字段：
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X PATCH \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-update-page-123" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "id": "page_123",
+        "title": "Install The Prompting Company",
+        "status": "published"
+      }
+    ]
+  }'
+```
+
+## 删除页面 {#delete-pages}
+
+删除操作均为软删除。已删除的页面不会再出现在常规列表结果中，但内部留存和审计系统仍可访问这些页面。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X DELETE \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-delete-page-123" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pageIds": ["page_123"]
+  }'
+```
+
+每次请求最多可删除 50 个页面。
+
+## 完整示例：同步 Markdown 文件 {#worked-example-sync-markdown-files}
+
+```ts
+import { readFile, readdir } from "node:fs/promises";
+import { join, relative } from "node:path";
+
+async function syncMarkdownFolder(root: string, productId: string, apiKey: string) {
+  const names = await readdir(root);
+  const pages = [];
+
+  for (const name of names) {
+    if (!name.endsWith(".md")) continue;
+
+    const path = join(root, name);
+    const content = await readFile(path, "utf8");
+    const slug = relative(root, path).replace(/\.md$/, "");
+
+    pages.push({
+      slug,
+      title: slug.replace(/-/g, " "),
+      content,
+    });
+  }
+
+  const results = [];
+
+  for (let index = 0; index < pages.length; index += 25) {
+    const batch = pages.slice(index, index + 25);
+    const response = await fetch("https://app.promptingco.com/api/v1/site/pages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "Idempotency-Key": `markdown-sync-${index}-${Date.now()}`,
+      },
+      body: JSON.stringify({ productId, pages: batch }),
+    });
+
+    results.push(await response.json());
+  }
+
+  return results;
+}
+```

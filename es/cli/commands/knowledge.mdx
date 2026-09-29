@@ -1,0 +1,80 @@
+---
+title: "Conocimiento"
+description: "Lista, lee y escribe archivos de conocimiento generados desde la CLI de TPC."
+---
+
+# Conocimiento {#knowledge}
+
+Lee y escribe desde la terminal los archivos de conocimiento generados para un producto. Usa `--scope <org-slug>/<product-slug>` para seleccionar el producto. `tpc kb` es un alias de `tpc knowledge`.
+
+Esta primera versión solo abarca archivos: list, get y put. Los comandos de propuestas, recuperación, ingesta y grafo todavía no están disponibles.
+
+<Note>
+  Los comandos de Knowledge requieren [iniciar sesión con OAuth](/es/cli/authentication) (`tpc auth login`). Si usas una clave de API, se rechaza con el error &quot;OAuth login required&quot;.
+</Note>
+
+## Listar archivos {#list-files}
+
+La salida en texto es un árbol con sangría al estilo Unix. La salida en JSON es la lista plana de archivos que devuelve la API.
+
+```bash
+tpc --scope pro-org/my-product knowledge file list
+```
+
+```text
+knowledge/
+  product/
+    features.md
+    overview.md
+  sources/
+    pricing.md
+```
+
+Filtra por un subárbol. El prefijo pasa a ser la raíz del árbol:
+
+```bash
+tpc --scope pro-org/my-product knowledge file list --path product
+```
+
+```text
+product/
+  features.md
+  overview.md
+```
+
+El JSON pensado para scripts se mantiene plano (sin árbol anidado):
+
+```bash
+tpc --scope pro-org/my-product knowledge file list --format json
+```
+
+No se admite `--format csv`.
+
+## Obtener un archivo {#get-a-file}
+
+El modo texto muestra el contenido del archivo. El modo JSON muestra la carga útil de la API.
+
+```bash
+tpc --scope pro-org/my-product knowledge file get product/overview.md
+tpc --scope pro-org/my-product knowledge file get product/overview.md --format json
+```
+
+## Escribir un archivo {#write-a-file}
+
+`put` crea el archivo o lo reemplaza si ya existe. Usa `--content` o `--content-file`, pero no ambos.
+
+```bash
+tpc --scope pro-org/my-product knowledge file put product/overview.md \
+  --content "# Overview"
+```
+
+```bash
+tpc --scope pro-org/my-product knowledge file put product/overview.md \
+  --content-file ./overview.md
+```
+
+La salida en formato de texto muestra la ruta resultante, el commit y el mensaje del repositorio.
+
+## Salida JSON {#json-output}
+
+Todos los comandos admiten `--format json` para usarlos en scripts. La salida JSON de un listado es una lista plana de archivos y rutas, no un árbol.

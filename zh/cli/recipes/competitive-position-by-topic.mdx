@@ -1,0 +1,302 @@
+---
+title: "各主题下的竞争地位"
+description: "使用 TPC CLI 查看您在每个所跟踪主题中的行业排名。"
+---
+
+# 各主题下的竞争地位 {#competitive-position-across-topics}
+
+控制台中的“行业排名”组件会展示你所有追踪对话中被提及最多的竞争对手。但有时你需要更细致的视角：在你追踪的每个主题下，你的实际排名究竟如何？
+
+本示例借助 [`tpc analytics sov`](/zh/cli/commands/analytics)，用一个脚本就能解答这个问题，无需在控制台里逐一点击查看。
+
+## 前提条件 {#prerequisites}
+
+* 已安装 CLI 并完成身份验证。请参阅[安装](/zh/cli/installation)和[身份验证](/zh/cli/authentication)。
+* 为要检查的 product 指定 `--scope <org-slug>/<product-slug>`。
+* 已在本地安装 [`jq`](https://jqlang.org)。
+
+## 脚本 {#the-script}
+
+每个主题都需要单独查询排名，因此该脚本会并发执行这些查询，而不是逐个运行。每个结果都会先写入各自的临时文件，以免并行输出相互交错，最后再按原始主题顺序依次打印。
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCOPE="${SCOPE:?set SCOPE to <org-slug>/<product-slug>}"
+ORG="${SCOPE%%/*}"
+SLUG="${SCOPE##*/}"
+YOUR_PRODUCT=$(tpc --format json product list --scope "$ORG" \
+  | jq -r --arg slug "$SLUG" '.[] | select(.slug == $slug) | .name')
+if [ -z "$YOUR_PRODUCT" ]; then
+  echo "product $SLUG was not found in org $ORG" >&2
+  exit 1
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+check_topic() {
+  local topic_id="$1" topic="$2"
+  local you
+  you=$(tpc analytics sov --scope "$SCOPE" --by competitor --topic "$topic_id" --top 100 --json \
+    | jq -r --arg name "$YOUR_PRODUCT" '.[] | select(.label == $name) | "\(.rank)\t\(.sov)"')
+  if [ -n "$you" ]; then
+    local rank sov
+    rank=$(echo "$you" | cut -f1)
+    sov=$(echo "$you" | cut -f2)
+    printf "%-14s rank #%-4s sov %s%%\n" "$topic" "$rank" "$sov"
+  else
+    printf "%-14s not in top 100\n" "$topic"
+  fi
+}
+
+topic_ids=()
+while IFS=$'\t' read -r topic_id topic; do
+  topic_ids+=("$topic_id")
+  check_topic "$topic_id" "$topic" > "$tmpdir/$topic_id" &
+done < <(tpc analytics sov --scope "$SCOPE" --by topic --json | jq -r '.[] | [.key, .label] | @tsv')
+
+wait
+
+for topic_id in "${topic_ids[@]}"; do
+  cat "$tmpdir/$topic_id"
+done
+```
+
+运行脚本：
+
+```bash
+chmod +x competitive-position.sh
+./competitive-position.sh
+```
+
+示例输出：
+
+```text
+comparison     rank #1    sov 58.8%
+feature        rank #2    sov 42.4%
+use-case       rank #3    sov 36.0%
+budget         rank #2    sov 34.2%
+industry       rank #22   sov 18.0%
+```
+
+## 工作原理 {#how-it-works}
+
+1. `$SCOPE` 的格式为 `<org-slug>/<product-slug>`。脚本从第一段提取组织 (`ORG="${SCOPE%%/*}"`) ，从第二段提取 product slug (`SLUG="${SCOPE##*/}"`) ，然后列出该组织下的所有 product，并取匹配 product 的显示名称——排名行的 `label` 使用的正是这个名称。
+2. `tpc analytics sov --scope "$SCOPE" --by topic` 会列出你跟踪的所有主题，以及每个主题的 ID (`key`) 和名称 (`label`) 。
+3. 对于每个主题，脚本会在后台调用 `check_topic`，运行 `tpc analytics sov --scope "$SCOPE" --by competitor --topic <topicId>`。这与控制台中“行业排名”组件显示的排名视图相同，只是范围限定为单个主题，而非全部主题。所有主题会并发查询，无需逐个等待。
+4. `jq` 会找出与你的 product 显示名称匹配的行，并将其排名和 share of voice 写入该主题对应的临时文件。
+5. `wait` 会一直阻塞，直到所有后台查询完成，随后按主题的原始顺序 (而非完成顺序) 输出结果。
+
+<Note>
+  提速效果取决于你跟踪的主题数量。如果主题不多，大部分实际耗时都花在每次调用的固定开销上 (身份验证和组织解析) ，因此并行化节省的时间会比预期少。如果有几十个主题，并发运行与顺序运行的差别就在于几秒钟和几分钟。
+</Note>
+
+<Note>
+  `--top 100` 是该固定命令允许的最大分页大小。如果某个主题跟踪的竞争对手超过 100 个，而结果中没有你的 product，请使用 `tpc analytics explore --scope "$SCOPE" --metric sov --by competitor --topic <topicId> --page 2` 继续查看，不要直接认定自己未进入排名。
+</Note>
+
+## 变体 {#variations}
+
+只想查看总体排名，不需要按主题细分？
+
+```bash
+tpc analytics sov --scope <org-slug>/<product-slug> --by competitor --last 30d
+```
+
+不想要格式化的表格，而是想获取原始 JSON，用于控制台或 Slack 摘要？删掉 `printf` 行，直接用管道传递 `jq` 的输出即可。本示例中的所有命令都支持 `--json`。
+
+只关心其中几个主题？可以跳过列出主题的步骤，直接硬编码你已知的主题 ID：
+
+```bash
+tpc analytics sov --scope "$SCOPE" --by competitor --topic <topicId>
+```
+
+## 显示排名相邻的竞争对手 {#show-competitors-around-your-rank}
+
+了解你在某个主题中的排名和 share of voice 固然有用，但这并不能告诉你，在这个排名位置上与你直接竞争的究竟是谁。此脚本针对单个主题，列出排名紧挨在你前后的竞争对手，所用的正是上文主脚本中 `tpc analytics sov --by competitor --topic` 的同一份响应。所有竞争对手的排名都已包含在这一次调用中，因此无需再发起额外的 API 请求。
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+TOPIC_ID="$1"
+WINDOW="${2:-2}"
+
+SCOPE="${SCOPE:?set SCOPE to <org-slug>/<product-slug>}"
+ORG="${SCOPE%%/*}"
+SLUG="${SCOPE##*/}"
+YOUR_PRODUCT=$(tpc --format json product list --scope "$ORG" \
+  | jq -r --arg slug "$SLUG" '.[] | select(.slug == $slug) | .name')
+if [ -z "$YOUR_PRODUCT" ]; then
+  echo "product $SLUG was not found in org $ORG" >&2
+  exit 1
+fi
+
+rows=$(tpc analytics sov --scope "$SCOPE" --by competitor --topic "$TOPIC_ID" --top 100 --json \
+  | jq -r --arg name "$YOUR_PRODUCT" --argjson window "$WINDOW" '
+      . as $rows
+      | ($rows | map(.label) | index($name)) as $idx
+      | if $idx == null then empty else
+          $rows[(if $idx - $window < 0 then 0 else $idx - $window end):($idx + $window + 1)][]
+          | [.rank, .label, .sov, (if .label == $name then "you" else "" end)] | @tsv
+        end
+    ')
+
+if [ -z "$rows" ]; then
+  echo "$YOUR_PRODUCT is not in the top 100 for this topic"
+  exit 0
+fi
+
+echo "$rows" | while IFS=$'\t' read -r rank label sov marker; do
+  if [ "$marker" = "you" ]; then
+    printf "%-4s %-20s %s%%  <-- you\n" "$rank" "$label" "$sov"
+  else
+    printf "%-4s %-20s %s%%\n" "$rank" "$label" "$sov"
+  fi
+done
+```
+
+运行时需传入一个主题 ID (可通过 `tpc analytics sov --scope <org-slug>/<product-slug> --by topic --json` 获取，也可以从上方脚本中列出主题的步骤里获取) ：
+
+```bash
+chmod +x competitors-around-rank.sh
+./competitors-around-rank.sh a8bbcb6f-1ee3-462b-98f1-abe8e05e5437
+```
+
+输出示例：
+
+```text
+19   MongoDB              21.15%
+20   Cassandra            19.23%
+21   Planetscale          19.23%  <-- you
+22   AlloyDB              17.31%
+23   ClickHouse           17.31%
+```
+
+传入第二个参数可扩大或缩小显示范围 (默认上下各显示 2 行) ：
+
+```bash
+./competitors-around-rank.sh a8bbcb6f-1ee3-462b-98f1-abe8e05e5437 5
+```
+
+<Note>
+  如果你在某个主题中排名第 1 (或接近跟踪列表的末尾) ，窗口只会收缩到该方向上实际存在的行。此时该侧显示的相邻竞争对手会少一些，但不会报错。
+</Note>
+
+## 所有主题，并显示排名前后的竞争对手 {#all-topics-with-competitors-around-your-rank}
+
+此脚本融合了上述两个脚本：像[第一个脚本](#the-script)那样并发遍历所有主题，同时像上一个脚本那样，在每个主题中显示你排名前后一定范围内的竞争对手，而不只是你自己那一行。它沿用了相同的并行查询结构：由后台作业将结果写入各主题对应的临时文件，再按原始顺序依次输出，只是每个主题会显示更多行。
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+WINDOW="${1:-2}"
+
+SCOPE="${SCOPE:?set SCOPE to <org-slug>/<product-slug>}"
+ORG="${SCOPE%%/*}"
+SLUG="${SCOPE##*/}"
+YOUR_PRODUCT=$(tpc --format json product list --scope "$ORG" \
+  | jq -r --arg slug "$SLUG" '.[] | select(.slug == $slug) | .name')
+if [ -z "$YOUR_PRODUCT" ]; then
+  echo "product $SLUG was not found in org $ORG" >&2
+  exit 1
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+check_topic() {
+  local topic_id="$1" topic="$2"
+  local rows
+  rows=$(tpc analytics sov --scope "$SCOPE" --by competitor --topic "$topic_id" --top 100 --json \
+    | jq -r --arg name "$YOUR_PRODUCT" --argjson window "$WINDOW" '
+        . as $rows
+        | ($rows | map(.label) | index($name)) as $idx
+        | if $idx == null then empty else
+            $rows[(if $idx - $window < 0 then 0 else $idx - $window end):($idx + $window + 1)][]
+            | [.rank, .label, .sov, (if .label == $name then "you" else "" end)] | @tsv
+          end
+      ')
+
+  echo "$topic"
+  if [ -z "$rows" ]; then
+    printf "  %s not in top 100\n" "$YOUR_PRODUCT"
+  else
+    echo "$rows" | while IFS=$'\t' read -r rank label sov marker; do
+      if [ "$marker" = "you" ]; then
+        printf "  %-4s %-20s %s%%  <-- you\n" "$rank" "$label" "$sov"
+      else
+        printf "  %-4s %-20s %s%%\n" "$rank" "$label" "$sov"
+      fi
+    done
+  fi
+  echo
+}
+
+topic_ids=()
+while IFS=$'\t' read -r topic_id topic; do
+  topic_ids+=("$topic_id")
+  check_topic "$topic_id" "$topic" > "$tmpdir/$topic_id" &
+done < <(tpc analytics sov --scope "$SCOPE" --by topic --json | jq -r '.[] | [.key, .label] | @tsv')
+
+wait
+
+for topic_id in "${topic_ids[@]}"; do
+  cat "$tmpdir/$topic_id"
+done
+```
+
+运行：
+
+```bash
+chmod +x competitive-position-with-window.sh
+./competitive-position-with-window.sh
+```
+
+将窗口大小作为第一个参数传入 (默认为 2) ：
+
+```bash
+./competitive-position-with-window.sh 5
+```
+
+示例输出：
+
+```text
+comparison
+  1    Planetscale          58.82%  <-- you
+  2    Vitess               47.06%
+  3    MySQL                44.12%
+
+feature
+  1    PostgreSQL           45.45%
+  2    Planetscale          42.42%  <-- you
+  3    MySQL                42.42%
+  4    Google Cloud Spanner 33.33%
+
+use-case
+  1    Amazon Aurora        38%
+  2    Redis                38%
+  3    Planetscale          36%  <-- you
+  4    Google Cloud Spanner 34%
+  5    AWS                  34%
+
+budget
+  1    PostgreSQL           34.15%
+  2    Planetscale          34.15%  <-- you
+  3    Google Cloud SQL     31.71%
+  4    Neon                 31.71%
+
+industry
+  19   MongoDB              21.15%
+  20   Cassandra            19.23%
+  21   Planetscale          19.23%  <-- you
+  22   AlloyDB              17.31%
+  23   ClickHouse           17.31%
+```
+
+<Note>
+  为每个主题各发起一个并发请求时，如果你在短时间内反复运行该脚本 (例如在调试修改期间) ，偶尔可能会触发 API 的速率限制 (`429 Too many requests`) 。稍等几秒后重试即可。这只是针对请求量的速率限制，并不代表你的数据或账户有问题。
+</Note>

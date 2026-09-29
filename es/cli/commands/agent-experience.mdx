@@ -1,0 +1,120 @@
+---
+title: "Agent Experience"
+description: "Configura experimentos de AX y benchmarks competitivos, y responde a las preguntas de incorporación desde tu terminal."
+---
+
+# Agent Experience {#agent-experience}
+
+Usa `tpc sim ax setup` para configurar un experimento de Agent Experience para tu producto.
+Si prefieres diseñar un benchmark competitivo, añade `--type benchmark`.
+
+## Requisitos previos {#prerequisites}
+
+* [Instala la CLI](/es/cli/installation) e inicia sesión con `tpc auth login`. La configuración requiere iniciar sesión con OAuth; no se admiten claves de API.
+* Indica tu organización y tu producto con `--scope <org-slug>/<product-slug>`.
+* Para los benchmarks competitivos, tu organización debe tener los benchmarks habilitados.
+
+## Configuración guiada {#guided-setup}
+
+```bash
+# Configura el experimento de Agent Experience de tu producto
+tpc sim ax setup --scope acme/my-product
+
+# Diseña un benchmark frente a la competencia
+tpc sim ax setup --type benchmark --scope acme/my-product
+```
+
+En una terminal interactiva, la configuración del benchmark te pide una descripción breve y los competidores.
+Introduce los competidores como `NAME` o `NAME=DOMAIN` y, después, envía una línea en blanco para terminar.
+Tu propio producto se incluye automáticamente.
+
+La configuración muestra el progreso y te pide datos cuando el agente solicita texto, credenciales o
+archivos. Las credenciales se introducen de forma oculta. En las solicitudes de archivos, puedes indicar una ruta local y
+el archivo se sube antes de enviar la respuesta. Los archivos subidos deben ser archivos normales de no
+más de 100 MiB. El backend no acepta archivos comprimidos para la configuración del benchmark;
+proporciona archivos individuales cuando se soliciten.
+
+Las preguntas opcionales se pueden omitir dejando la respuesta en blanco. Las preguntas obligatorias deben
+responderse; pulsa Ctrl+C para dejar la ejecución en pausa y volver a conectarte más tarde.
+
+Si la configuración supervisada finaliza correctamente, el comando muestra el ID del experimento y un
+comando `tpc sim experiment run`. La configuración no inicia ninguna iteración del benchmark.
+Revisa el experimento y configura las credenciales de las tareas que lo necesiten antes de ejecutarlo.
+
+## Proporcionar las entradas del benchmark con flags {#supply-benchmark-inputs-with-flags}
+
+```bash
+tpc sim ax setup \
+  --type benchmark \
+  --scope acme/my-product \
+  --intent "Compare how easily agents can deploy a web app" \
+  --competitor "Vercel=https://vercel.com" \
+  --competitor "Netlify=https://netlify.com" \
+  --watch
+```
+
+| Opción         | Valor predeterminado                                         | Descripción                                                                                                                                                                         |
+| -------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--type`       | `agent-experience`                                           | `agent-experience` o `benchmark`.                                                                                                                                                   |
+| `--intent`     | —                                                            | Descripción del benchmark, de 1 a 4000 caracteres. Solo es válida con `--type benchmark`.                                                                                           |
+| `--competitor` | —                                                            | `NAME` o `NAME=DOMAIN`; se puede repetir. Indica entre 1 y 10 entradas; el servidor añade tu propio producto y exige al menos otro producto. Solo es válida con `--type benchmark`. |
+| `--watch`      | Activada en modo interactivo; desactivada en los demás casos | Muestra el progreso. Usa `--watch=false` para iniciar la configuración y desvincularte.                                                                                             |
+
+Si omites `--type`, se usa el flujo AX de producto existente. La configuración de AX de producto actualiza
+el experimento único de Agent Experience del producto. Cada nueva ejecución de configuración de benchmark
+crea su propio benchmark. En ambos tipos, se vuelve a vincular a la ejecución en curso que ya exista para
+el mismo producto y tipo; volver a enviar las opciones no modifica esa ejecución en curso.
+
+## Reanudar la incorporación {#resume-onboarding}
+
+```bash
+# Vuelve a conectarte y responde las preguntas pendientes en cualquiera de los dos tipos de configuración
+tpc sim ax setup resume <run-id> --scope acme/my-product
+
+# Consulta el progreso sin responder preguntas
+tpc sim ax status <run-id> --scope acme/my-product
+
+# Sigue el progreso hasta que finalice o hasta que una pregunta requiera tu respuesta
+tpc sim ax status <run-id> --scope acme/my-product --watch
+```
+
+`setup resume` retoma la ejecución existente sin iniciar otra nueva. Cuando
+termine, usa `tpc sim experiment list --scope acme/my-product` para revisar el
+experimento generado.
+
+## Automatización y salida JSON {#automation-and-json-output}
+
+Si no hay una terminal interactiva, o si se usa `--format json`, la configuración del benchmark requiere
+`--intent` y al menos un `--competitor`. Nunca lee respuestas desde stdin canalizado.
+
+```bash
+tpc sim ax setup --type benchmark \
+  --scope acme/my-product \
+  --intent "Compare deployment workflows" \
+  --competitor "Vercel=https://vercel.com" \
+  --format json
+```
+
+Sin `--watch`, la salida JSON contiene la respuesta de configuración, incluidos `runId` y
+`setupRunId`. Con `--watch`, el comando emite un único objeto JSON final:
+
+* Finalización: `runId`, `status`, `milestones` y `experimentId` cuando se supervisa `setup`.
+* Error: `runId`, `status: "failed"` y `milestones`, con un código de salida distinto de cero.
+* Interacción requerida: `runId`, `status: "input_required"` y `pending`, con los
+  elementos solicitados, y un código de salida distinto de cero. Vuelve a conectarte con `setup resume` en una terminal.
+
+`status --watch`, que solo muestra el progreso, y `setup resume` en modo no interactivo también terminan con un
+código de salida distinto de cero cuando se requiere información. Los mensajes de error se escriben por separado de la salida
+JSON. La salida de la CLI nunca incluye las respuestas secretas.
+
+## Credenciales de AX del producto {#product-ax-credentials}
+
+```bash
+tpc sim ax env set "API_KEY=$PRODUCT_API_KEY" --scope acme/my-product
+tpc sim ax env list --scope acme/my-product
+tpc sim ax env rm API_KEY --scope acme/my-product
+```
+
+Estos comandos `env` se aplican al experimento único de Agent Experience del producto,
+no a los benchmarks competitivos. Requieren que ese experimento ya exista y no
+responden a ninguna pregunta de incorporación. Usa `setup resume` para las solicitudes de incorporación pendientes.

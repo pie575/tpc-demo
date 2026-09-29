@@ -1,0 +1,103 @@
+---
+title: "Instalación"
+description: "Instala, actualiza y fija versiones de la CLI de TPC en macOS, Linux y Windows."
+---
+
+# Instalación {#installation}
+
+## macOS y Linux {#macos-and-linux}
+
+Instala la última versión estable:
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | bash
+```
+
+Tras la instalación, comprueba que el binario esté disponible:
+
+```bash
+tpc --version
+```
+
+## Windows {#windows}
+
+Instala con winget:
+
+```powershell
+winget install promptingcompany.tpc
+```
+
+O instálalo con Scoop después de añadir el bucket de The Prompting Company:
+
+```powershell
+scoop bucket add promptingcompany https://github.com/promptingcompany/scoop-bucket
+scoop install tpc
+```
+
+También se admite PowerShell:
+
+```powershell
+irm https://cli.promptingco.com/install.ps1 | iex
+```
+
+Si tu directiva de ejecución bloquea el instalador, ejecuta primero este comando en la misma
+sesión de PowerShell:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
+
+Alternativa manual:
+
+1. Descarga el archivo más reciente `tpc_<version>_windows_amd64.zip` o
+   `tpc_<version>_windows_arm64.zip` desde
+   `https://cli.promptingco.com/tpc/<version>/`.
+2. Extrae `tpc.exe`.
+3. Mueve `tpc.exe` a un directorio incluido en `PATH`, o agrega el nuevo directorio a `PATH`
+   en Propiedades del sistema -&gt; Variables de entorno -&gt; Path.
+4. Abre una nueva sesión de PowerShell o cmd y verifica la instalación:
+
+   ```powershell
+   tpc --version
+   ```
+
+## Actualización {#update}
+
+Comprueba si hay una versión más reciente de la CLI disponible:
+
+```bash
+tpc update --check
+```
+
+Actualiza el binario instalado sin moverlo de su ubicación:
+
+```bash
+tpc update
+```
+
+## Instalar una versión específica {#install-a-specific-version}
+
+Instala una versión concreta:
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | TPC_VERSION=0.1.0-alpha.1 bash
+```
+
+Instala desde un canal de lanzamiento:
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | TPC_CHANNEL=alpha bash
+```
+
+<Note>
+  Poner la variable antes de `curl` (`TPC_VERSION=... curl ... | bash`) no funciona: esa asignación solo afecta al entorno de `curl`, no al proceso `bash` que lee el script al otro lado de la tubería. La variable tiene que ir justo antes de `bash`.
+</Note>
+
+## URL del instalador {#installer-url}
+
+El instalador público está disponible en:
+
+```text
+https://cli.promptingco.com/install.sh
+https://cli.promptingco.com/install.ps1
+```

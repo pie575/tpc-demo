@@ -1,0 +1,80 @@
+---
+title: "原始事件 API"
+description: "从任意日志源（nginx、CDN 或回填脚本）向 The Prompting Company 发送爬虫日志"
+---
+
+<Note>
+  **在控制台中设置：**[连接原始事件 API](https://app.promptingco.com/traffic-onboarding/raw) 会提供可直接复制的请求，等待接收你的第一次 AI 内容页面访问，并确认该流量已映射到正确的产品。本页可作为参考文档。
+</Note>
+
+原始事件 API 可接收来自任意来源的请求日志，包括你自己的 Web 服务器、不提供托管导出功能的 CDN，或用于重放历史日志的脚本。与其他采集器一样，这些事件会汇入同一个 [AI 流量](/zh/guides/metrics#ai-traffic)指标，AI 爬虫和智能体的分类由我们负责。
+
+在使用 Cloudflare Enterprise？[Cloudflare Logpush](/zh/guides/analytics/log-exporters/cloudflare-logpush) 可以流式传输相同的数据，配置后无需任何后续维护。
+
+## 开始之前 {#before-you-start}
+
+* 你需要在 **Settings → API Keys** 中获取一个 The Prompting Company **API 密钥** (组织密钥或服务账号密钥) 。
+
+## 发送事件 {#send-events}
+
+向 `https://logs.promptingco.com/v1/events/raw` 发送 POST 请求，请求体为 JSON 数组 (也可以是单个对象) ，可以不压缩，也可以使用 gzip 压缩。身份验证可使用 `X-API-Key` 请求头，也可使用 `Authorization: Bearer`。
+
+```bash
+curl -X POST "https://logs.promptingco.com/v1/events/raw" \
+  -H "X-API-Key: $TPC_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '[
+    {
+      "timestamp": "2026-08-11T12:00:00.000Z",
+      "status_code": 200,
+      "request_method": "GET",
+      "request_path": "/pricing",
+      "query_string": "ref=x",
+      "content_type": "text/html",
+      "client_ip": "203.0.113.7",
+      "hostname": "example.com",
+      "user_agent": "GPTBot/1.2",
+      "referrer": "https://www.google.com"
+    }
+  ]'
+```
+
+| 字段                                                                                     | 必填 | 说明                                                |
+| -------------------------------------------------------------------------------------- | -- | ------------------------------------------------- |
+| `hostname`                                                                             | 是  | 缺少该字段的事件将计为已跳过                                    |
+| `timestamp`                                                                            | 否  | ISO 8601 或 Unix 秒/毫秒/纳秒时间戳；默认为接收时间                |
+| `request_path`                                                                         | 否  | 默认为 `/`；可直接内联查询字符串 (`/pricing?ref=x`)             |
+| `query_string`                                                                         | 否  | 如不在 `request_path` 中内联查询字符串，可改用此字段                |
+| `user_agent`, `client_ip`, `request_method`, `status_code`, `content_type`, `referrer` | 否  | 建议填写：用户代理和客户端 IP 是 AI 分类的依据；请求方法、状态码和内容类型用于识别内容页面 |
+
+请求大小上限为 64 MB (压缩前和解压后均适用) 。请在上限范围内，尽量在每个请求中批量发送更多事件。
+
+## 哪些数据会被摄取 {#what-gets-ingested}
+
+只有当已识别的 AI 流量属于内容页面访问时，The Prompting Company 才会保留该流量。如果请求中包含相应字段，则请求方法必须为 `GET`，数值状态码必须在 `200`–`299` 范围内 (`204` 和 `205` 除外) 或为 `304`，且内容类型必须为 `text/html` 或 `application/xhtml+xml`。数值型 `status_code` 既可以是 JSON 数字，也可以是十进制字符串。
+
+对于看起来像页面的路径，如果 HTTP 元数据缺失或不是数值，则默认放行。如果发送方未提供 `content_type` 或 `status_code`，那么非 HTML 的 AI 访问 (例如 JSON API) 仍会被摄取，除非路径匹配 Next.js 前缀或静态资源后缀。标准 Next.js 前缀 (`/_next/static`、`/_next/image` 和 `/_next/data`，小写) 始终会被过滤；在缺少内容类型时，以常见脚本、样式表、source map、图片、字体、媒体、Rive、WASM、JSON、XML、文本或 PDF 后缀结尾的路径也会被过滤。后缀匹配不区分大小写，且会忽略末尾的斜杠；如果内容类型为 HTML，则像 `/docs/node.js` 这样路径中带点号的合法页面仍会被保留。
+
+## 响应 {#responses}
+
+| 状态    | 含义                                                                                                                                  |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `200` | 批次已处理。响应体返回 `{"ok": true, "received": N, "ingested": N, "skipped": N, "filtered": N}`。`filtered` 计数大于 0 表示有非 AI 请求或非页面请求被有意跳过、未予存储。 |
+| `401` | 缺少 API 密钥或 API 密钥无效                                                                                                                 |
+| `429` | 密钥验证触发速率限制——请稍后重试                                                                                                                   |
+| `400` | 请求体无法解码或无法解析为 JSON                                                                                                                  |
+| `413` | 解压后的请求体过大——请减小批次大小                                                                                                                  |
+| `503` | 数据摄取暂时中断——请重试该批次                                                                                                                    |
+
+投递语义为“至少一次”：收到 `503` 后请重试整个批次；偶尔出现重复数据属于正常现象，流量指标能够容忍。
+
+## 验证是否正常运行 {#verify-its-working}
+
+```bash
+curl -s -X POST "https://logs.promptingco.com/v1/events/raw" \
+  -H "X-API-Key: $TPC_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '[{"hostname": "example.com", "request_path": "/", "user_agent": "GPTBot/1.2", "client_ip": "203.0.113.7"}]'
+```
+
+如果返回 `200` 且包含 `"ingested": 1`，即表明数据管道运行正常，该访问记录很快就会出现在你的 [AI 流量](/zh/guides/metrics#ai-traffic)控制台中。

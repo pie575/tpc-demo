@@ -1,0 +1,108 @@
+---
+title: "环境"
+description: "配置由哪些智能体来完成你的任务，以及它们运行所用的沙箱"
+---
+
+环境将智能体配置与沙箱资源组合在一起，用于回答两个问题：*由哪个智能体来完成任务*，以及*它使用什么样的机器*？
+
+环境是实验中的变量，因此你通常会为每种要对比的配置分别创建一个环境 (例如“Claude Code + 最新 Sonnet”对比“Codex + 最新 GPT”) ，然后让它们在相同的任务上运行。
+
+## 智能体配置 {#agent-configuration}
+
+| 设置                           | 选项                                                                  |
+| ---------------------------- | ------------------------------------------------------------------- |
+| **Harness**                  | `claude` (Claude Code) 、`codex` (Codex CLI) 、`opencode` (OpenCode)  |
+| **模型**                       | 所选 harness 支持的任意模型，将在运行启动时校验                                        |
+| **Temperature / max tokens** | 可选，用于覆盖默认采样参数                                                       |
+| **沙箱模式**                     | `read-only`、`workspace-write` 或 `danger-full-access`                |
+
+harness 在沙箱内以无头模式运行，与开发者在自己终端中的运行方式完全一致。无论会话日志由哪个 harness 生成，都会被捕获并解析为统一格式的运行记录，因此不同 harness 的运行结果可以直接比较。
+
+## 沙箱资源 {#sandbox-resources}
+
+每次运行都会分配一个全新且相互隔离的 Linux 沙箱：
+
+* **CPU**：1–4 核
+* **内存**：1–8 GB
+* **磁盘**：1–10 GB
+* **GPU** (可选) ：T4、L4、A10G、A100 或 H100
+
+未使用 GPU 的运行在默认沙箱提供商上执行；如果请求了 GPU，运行会自动路由到配备 GPU 的基础设施上。沙箱在运行开始时创建，并使用任务的文件、命令和密钥完成初始化；运行结束后先归档，再销毁。
+
+## 定时运行 {#scheduling}
+
+环境可以按固定周期定时运行 (每 7 天或每 14 天一次) 。定时运行会自动执行环境中的任务，是持续监控智能体体验最简单的方式——如果某次文档变更破坏了智能体的上手流程，问题会在下一次定时运行时就暴露出来，无需等到下一次手动实验。
+
+## 选择比较对象 {#choosing-what-to-compare}
+
+常见的比较方案：
+
+* **模型对比** — 使用相同的 harness 搭配不同模型，看看哪些模型能很好地处理你的 product
+* **Harness 对比** — 在 Claude Code、Codex 和 OpenCode 中使用同一模型系列，找出特定于某个 harness 的使用障碍
+* **前后对比** — 在文档或 API 变更前后，将相同的环境作为独立的 iteration 分别运行
+
+## 通过 CLI 使用环境 {#working-with-environments-from-the-cli}
+
+创建环境最简单的方法是：在任务所在目录下的 `environment.json` 中声明环境，然后运行该目录。详见[从目录运行任务](/zh/guides/coding-agent-optimization/tasks#run-a-task-from-a-directory)。只需一条 `tpc sim run` 命令，即可创建环境、完成关联，并将运行加入队列。
+
+如需直接管理环境，可以通过内联 JSON 或 `@file` (JSON 或 TOML 格式) 传入智能体配置：
+
+```json
+{
+  "harness": "claude",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "sandboxResources": {
+    "cpu": 2,
+    "memory": 4,
+    "disk": 10
+  }
+}
+```
+
+```bash
+# 基于配置文件创建环境，同时关联任务
+tpc sim env create --name "Claude Code + Sonnet" \
+  --agent-config @agent-config.json \
+  --task-ids task_123,task_456
+
+# 也可以直接内联传入配置
+tpc sim env create --name "Codex sweep" \
+  --agent-config '{"harness":"codex","provider":"openai","model":"gpt-5"}'
+
+# 浏览环境（可组合多个筛选条件）
+tpc sim env list --search claude --enabled true
+
+# 查看单个环境：智能体配置、初始化命令、初始化文件名及已关联的任务
+tpc sim env get env_123
+
+# 后续关联或取消关联任务
+tpc sim env task attach env_123 task_789
+tpc sim env task detach env_123 task_789
+
+# 更新设置：一次调用可组合多个标志（--schedule 可设为 7d 或 14d；设为 none 则清除）
+tpc sim env update env_123 --name "Shared Claude Sonnet" --schedule 7d
+tpc sim env update env_123 --enabled false
+
+# 删除环境（需先取消关联所有任务）
+tpc sim env delete env_123
+```
+
+如需请求 GPU 沙箱，请在 `sandboxResources` 中添加相应配置，例如 `"gpu": "A100", "gpuCount": 1`。
+
+## 通过 CLI 管理密钥 {#secrets-from-the-cli}
+
+密钥按环境分别设置，并在运行时以环境变量的形式注入。CLI 绝不会回显密钥的值。
+
+```bash
+# 直接用字面值设置密钥，或从本地 shell 环境中安全读取
+tpc sim env secret set env_123 --name FEATURE_FLAG --value enabled
+tpc sim env secret set env_123 --name ACME_API_KEY --from-env ACME_API_KEY
+
+# 从 .env 文件批量导入（或通过 --env-file - 从标准输入读取）
+tpc sim env secret import env_123 --env-file .env.simulation
+
+# 列出元数据并清理密钥
+tpc sim env secret list env_123
+tpc sim env secret delete env_123 --name ACME_API_KEY
+```

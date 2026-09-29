@@ -1,0 +1,39 @@
+---
+title: "添加提示词"
+description: "添加和管理提示词，追踪你的产品是否在 AI 回答中被提及"
+---
+
+提示词就是你希望用户提问时能让你的产品被找到的那些问题。我们会在 ChatGPT、Perplexity 等模型上运行这些提示词，查看你的产品在回答中是如何被提及的。
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/aFZmCK5Dnhk" title="YouTube 视频播放器" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen />
+
+## 提示词建议 {#prompt-suggestions}
+
+系统每天都会根据你的产品和网站，为你推荐 10 条新的提示词。我们的 AI 会挖掘那些已经在带来流量的真实问题。在侧边栏中打开 Prompts 标签页，然后点击 Add prompts。在 Select from suggested prompts 下，为想要跟踪的提示词点赞，其余的点踩。点踩时请注明原因，帮助我们的 AI 不断学习。
+
+我们挖掘出的问题示例：
+
+* 初创公司如何在一个平台上统一管理现金、资金跑道和支出？
+* 最适合初创公司的企业银行平台是哪个？
+* 有没有一个平台能统一管理初创公司的银行业务、银行卡和支付？
+
+## 手动添加提示词 {#add-prompts-manually}
+
+如需从零开始添加自己的提示词，请使用 Write new prompts。
+
+#### 1. 让提示词以寻找工具为导向 {#1-make-prompts-tool-seeking}
+
+每条提示词都应询问某个工具、应用或平台，而不只是寻求一个答案。如果问题是在寻求推荐，模型就更有可能推荐某个产品。
+
+* 推荐：&quot;有什么工具能帮助初创公司集中管理现金、资金跑道和支出？&quot;或&quot;有没有什么平台能帮我管理初创公司的银行业务、银行卡和付款？&quot;
+* 避免：&quot;初创公司如何集中管理现金、资金跑道和支出？&quot;
+
+模型会回答这类问题，但通常不会推荐产品。我们希望出现在以寻找工具为导向的问题中。
+
+#### 2. 围绕追问来设计 {#2-design-for-the-follow-up}
+
+提示词代表的是你希望自己的产品被推荐的那类问题，而不是在规定用户该问什么。实际使用中，人们往往先提出一个宽泛的问题，再追问有没有合适的工具。你的产品应该出现在这第二个问题的回答中。典型流程如下：
+
+* 用户先问一个宽泛的问题 (例如，初创公司如何管理现金和支出) 。
+* 接着追问：“有没有什么工具可以帮忙？”
+* 你的产品应该在这一步被推荐。请针对这一时刻编写提示词。

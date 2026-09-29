@@ -1,0 +1,66 @@
+---
+title: "Alcances"
+description: "Consulta el catálogo de alcances de la API de TPC y ejemplos de alcances mínimos."
+---
+
+# Alcances {#scopes}
+
+Los alcances definen qué puede hacer una clave de API o un token OAuth bearer. Las llamadas autenticadas con sesión no pasan por las comprobaciones de alcance, ya que el dashboard aplica en su lugar la autorización de organización y producto a nivel de ruta.
+
+Usa el conjunto mínimo de alcances que permita completar el flujo de trabajo.
+
+## Catálogo {#catalog}
+
+| Alcance             | Descripción                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| `content:read`      | Leer páginas del sitio, contenido Markdown y archivos llms.txt                           |
+| `content:write`     | Crear, actualizar y eliminar páginas y contenido del sitio                               |
+| `prompts:read`      | Leer prompts, temas, sugerencias de prompts y resultados del análisis de prompts         |
+| `prompts:write`     | Crear, actualizar y archivar prompts, y generar, editar o revisar sugerencias de prompts |
+| `simulations:read`  | Leer tareas, ejecuciones, entornos y analíticas de simulación de agentes                 |
+| `simulations:write` | Crear e iniciar ejecuciones de simulación                                                |
+| `logs:read`         | Leer registros de tráfico de IA y eventos de auditoría por solicitud                     |
+| `analytics:read`    | Leer datos agregados de analíticas, incluidos rankings, menciones, fuentes y SOV         |
+| `analytics:write`   | Registrar eventos en analíticas                                                          |
+| `products:read`     | Leer metadatos de productos y datos de competidores                                      |
+| `products:write`    | Actualizar la configuración de productos y las listas de competidores                    |
+
+<Note>
+  Este catálogo es una copia de `apps/client/src/lib/api/scopes.ts`. Actualiza ambos
+  archivos cada vez que se agreguen, renombren o eliminen alcances.
+</Note>
+
+## Ejemplos de alcance mínimo {#minimum-scope-examples}
+
+| Tarea                                                           | Alcances mínimos                        |
+| --------------------------------------------------------------- | --------------------------------------- |
+| Integración de solo lectura con el dashboard                    | `content:read`                          |
+| Pipeline de sincronización de contenido que escribe páginas     | `content:read`, `content:write`         |
+| Tarea de exportación de analítica                               | `analytics:read`                        |
+| Tarea de informes de prompts                                    | `prompts:read`                          |
+| Ejecutor de simulaciones                                        | `simulations:read`, `simulations:write` |
+| Exportación para auditorías de soporte o cumplimiento normativo | `logs:read`                             |
+
+## Solicitudes denegadas {#denied-requests}
+
+Si a un cliente que se autentica con un token le falta un alcance requerido, TPC devuelve `403`:
+
+```json
+{
+  "ok": false,
+  "code": "FORBIDDEN",
+  "message": "insufficient_scope",
+  "details": {
+    "requiredScopes": ["content:write"],
+    "missingScopes": ["content:write"]
+  }
+}
+```
+
+Crea una clave nueva o rota la clave de integración actual desde:
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+No agregues alcances de escritura a una clave que solo se use para dashboards o informes.

@@ -1,0 +1,85 @@
+---
+title: "Model Council"
+description: "TPC CLI を使用して、Model Council のスナップショットの実行、config.yaml の管理、結果の参照や削除を行います。"
+---
+
+# Model council {#model-council}
+
+`tpc council` は Model Council 用の CLI です。プロダクト、トピック、またはプロンプトに対するすべての応答を、プロダクトの質問設定に基づいてスコアリングします。council スナップショットの実行、ステータスやレポートの確認、設定 YAML の置き換え、完了したスナップショットの削除を行えます。
+
+`tpc snapshot` は `tpc council` のエイリアスです。
+
+<Note>
+  プロダクトスコープの council コマンドには `--scope <org-slug>/<product-slug>` の指定が必要です。`config.yaml` を保存または削除するには、管理者セッションが必要です。
+</Note>
+
+## 設定 {#config}
+
+現在の YAML を取得します：
+
+```bash
+tpc council config get --scope pro-org/my-product
+tpc council config get --out config.yaml --scope pro-org/my-product
+```
+
+ファイル (または stdin) から読み込んで置き換えるには、次のようにします。
+
+```bash
+tpc council config set --file config.yaml --scope pro-org/my-product
+cat config.yaml | tpc council config set --file - --scope pro-org/my-product
+```
+
+`$VISUAL` または `$EDITOR` で編集します：
+
+```bash
+tpc council config edit --scope pro-org/my-product
+```
+
+設定を削除します。新しい設定をアップロードするまで、`tpc council run` は失敗します。
+
+```bash
+tpc council config delete --scope pro-org/my-product
+```
+
+## 実行 {#run}
+
+高速モードはデフォルトで有効です (ゲートウェイで同期的に分析) 。バッチ処理を使用する場合は `--fast-mode=false` を指定してください。
+
+```bash
+tpc council run --scope pro-org/my-product
+tpc council run --scope pro-org/my-product --topic <topicId>
+tpc council run --prompt <promptId> --scope pro-org
+tpc council run --scope pro-org/my-product --from 2025-01-01 --to 2025-04-01
+tpc council run --fast-mode=false --scope pro-org/my-product
+```
+
+`run` はワークフローを開始するとすぐに終了します。council の実行は完了までに時間がかかる場合があります。ステータスは `list` で確認してください。
+
+## 結果 {#results}
+
+```bash
+tpc council list --scope pro-org/my-product
+tpc council get --snapshot <snapshotId>
+tpc council report --snapshot <snapshotId>
+tpc --format json council report --snapshot <snapshotId> > report.json
+```
+
+`report` はデフォルトで Markdown 形式の要約 (エグゼクティブサマリー、追跡対象のシグナル、推奨アクション、表示件数に上限のあるクレーム表) を出力します。完全なペイロードを取得するには `--format json` を指定してください。レポートを利用できるのは、ステータスが `completed` のスナップショットのみです。
+
+## スナップショットを削除する {#delete-a-snapshot}
+
+既存のスナップショット行を更新 (patch) するAPIはありません。`tpc council config set` で採点基準を変更し、改めて実行してください。完了または失敗したスナップショットは、次のコマンドで削除できます。
+
+```bash
+tpc council delete --snapshot <snapshotId>
+```
+
+生成中のスナップショットは削除できません。
+
+## JSON 出力 {#json-output}
+
+```bash
+tpc --format json council list
+tpc --format json council config get
+tpc --format json council get --snapshot <snapshotId>
+```

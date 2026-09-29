@@ -1,0 +1,119 @@
+---
+title: "Agent Experience"
+description: "直接在终端中设置 AX 实验和竞品基准测试，并回答入门引导问题。"
+---
+
+# Agent Experience {#agent-experience}
+
+使用 `tpc sim ax setup` 为你的产品配置 Agent Experience 实验。
+如需改为设计竞品基准测试，请添加 `--type benchmark`。
+
+## 前提条件 {#prerequisites}
+
+* [安装 CLI](/zh/cli/installation) 并使用 `tpc auth login` 登录。设置过程需要通过 OAuth 登录，不支持使用 API 密钥。
+* 通过 `--scope <org-slug>/<product-slug>` 指定你的组织和产品。
+* 如需运行竞品基准测试，你的组织须已启用基准测试功能。
+
+## 引导式设置 {#guided-setup}
+
+```bash
+# 为你的产品设置 Agent Experience 实验
+tpc sim ax setup --scope acme/my-product
+
+# 设计竞品基准测试
+tpc sim ax setup --type benchmark --scope acme/my-product
+```
+
+在交互式终端中，基准测试设置会要求你提供简介和竞争对手。
+以 `NAME` 或 `NAME=DOMAIN` 格式输入竞争对手，输入完毕后提交一个空行即可结束。
+你自己的产品会自动包含在内。
+
+设置过程会实时显示进度，并在代理需要文本、凭据或
+文件时提示你输入。输入凭据时内容会被隐藏。遇到文件请求时，可以输入本地文件路径，
+系统会先上传该文件，再提交答案。上传的文件必须是不超过 100 MiB 的
+常规文件。后端不接受使用压缩包进行基准测试设置；
+请按要求逐个提供文件。
+
+可选问题可以留空跳过。必答问题则必须
+作答；按 Ctrl+C 可将运行保持在暂停状态，稍后再重新连接。
+
+受监视的设置成功完成后，该命令会输出实验 ID 以及一条
+`tpc sim experiment run` 命令。设置过程不会启动基准测试迭代。
+运行前，请先检查实验，并配置所需的任务凭据。
+
+## 通过命令行标志提供基准测试输入 {#supply-benchmark-inputs-with-flags}
+
+```bash
+tpc sim ax setup \
+  --type benchmark \
+  --scope acme/my-product \
+  --intent "Compare how easily agents can deploy a web app" \
+  --competitor "Vercel=https://vercel.com" \
+  --competitor "Netlify=https://netlify.com" \
+  --watch
+```
+
+| 标志             | 默认值                | 描述                                                                                                                 |
+| -------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `--type`       | `agent-experience` | `agent-experience` 或 `benchmark`。                                                                                  |
+| `--intent`     | —                  | 基准测试简介，1–4000 个字符。仅在指定 `--type benchmark` 时有效。                                                                     |
+| `--competitor` | —                  | 可重复指定，格式为 `NAME` 或 `NAME=DOMAIN`。需提供 1–10 项；服务器会自动加入你自己的 product，并要求至少再包含一个其他 product。仅在指定 `--type benchmark` 时有效。 |
+| `--watch`      | 交互模式下启用，否则禁用       | 跟踪进度。使用 `--watch=false` 可在启动设置后立即分离。                                                                               |
+
+省略 `--type` 时，将沿用现有的 product AX 流程。Product AX 设置会刷新
+该 product 唯一的 Agent Experience 实验。而每次新的基准测试设置运行
+都会创建一个独立的基准测试。对于同一 product 和类型，两种类型都会重新附加到
+正在进行的现有运行；重新提交标志不会修改该运行。
+
+## 继续完成引导设置 {#resume-onboarding}
+
+```bash
+# 重新连接并回答待处理的问题（两种设置类型均适用）
+tpc sim ax setup resume <run-id> --scope acme/my-product
+
+# 仅查看进度，不回答问题
+tpc sim ax status <run-id> --scope acme/my-product
+
+# 持续跟踪进度，直到完成或遇到需要输入的问题
+tpc sim ax status <run-id> --scope acme/my-product --watch
+```
+
+`setup resume` 会接续现有的运行，而不会另外启动新的运行。运行完成后，
+使用 `tpc sim experiment list --scope acme/my-product` 查看生成的
+实验。
+
+## 自动化与 JSON 输出 {#automation-and-json-output}
+
+在非交互式终端中运行，或使用 `--format json` 时，基准测试设置必须提供
+`--intent` 以及至少一个 `--competitor`。它不会从通过管道传入的 stdin 读取回答。
+
+```bash
+tpc sim ax setup --type benchmark \
+  --scope acme/my-product \
+  --intent "Compare deployment workflows" \
+  --competitor "Vercel=https://vercel.com" \
+  --format json
+```
+
+不使用 `--watch` 时，JSON 输出为设置响应，其中包含 `runId` 和
+`setupRunId`。使用 `--watch` 时，该命令会输出一个最终的 JSON 对象：
+
+* 完成：`runId`、`status`、`milestones`；若监视的是 `setup`，还包括 `experimentId`。
+* 失败：`runId`、`status: "failed"` 和 `milestones`，并以非零状态码退出。
+* 需要交互：`runId`、`status: "input_required"`，以及列出所需输入项的 `pending`，
+  并以非零状态码退出。请在终端中运行 `setup resume` 重新连接。
+
+仅显示进度的 `status --watch` 和非交互式的 `setup resume` 在需要输入时同样会停止运行，并以
+非零状态码退出。错误提示与 JSON 输出分开写入。CLI 的输出中绝不会包含机密答案。
+
+## 产品级 AX 凭据 {#product-ax-credentials}
+
+```bash
+tpc sim ax env set "API_KEY=$PRODUCT_API_KEY" --scope acme/my-product
+tpc sim ax env list --scope acme/my-product
+tpc sim ax env rm API_KEY --scope acme/my-product
+```
+
+这些 `env` 命令作用于该产品唯一的 Agent Experience 实验，
+而非竞品基准测试。使用前需确保该实验已存在，且这些命令不会
+回答引导设置中的问题。如有待处理的引导设置请求，请使用 `setup resume`。

@@ -1,0 +1,123 @@
+---
+title: "Analíticas"
+description: "Consulta el share of voice, el sentimiento, el tráfico y las citas desde la CLI de TPC, o crea una consulta personalizada con `explore`."
+---
+
+# Analíticas {#analytics}
+
+Consulta las analíticas del producto activo desde la terminal. Los comandos de analíticas son de solo lectura y requieren un token o una clave de API con el ámbito `analytics:read`.
+
+<Note>
+  Los comandos de analíticas requieren `--scope <org-slug>/<product-slug>`.
+</Note>
+
+```bash
+# Share of voice del producto en los últimos 30 días
+tpc analytics sov --scope pro-org/my-product
+
+# Ranking del sector (share of voice de la competencia)
+tpc analytics sov --scope pro-org/my-product --by competitor
+
+# Sentimiento por prompt con variación semanal
+tpc analytics sentiment --scope pro-org/my-product --wow
+
+# Tráfico de IA agrupado por página
+tpc analytics traffic --scope pro-org/my-product --by page
+
+# Ranking de las fuentes más citadas
+tpc analytics citations --scope pro-org/my-product --last 30d --top 25
+```
+
+## Share of voice {#share-of-voice}
+
+`tpc analytics sov` devuelve un único valor para el intervalo de fechas seleccionado. Cuenta
+las ejecuciones completadas que mencionan el producto, divide esa cifra entre el total de ejecuciones completadas del
+mismo ámbito e intervalo y multiplica el resultado por 100. El intervalo predeterminado abarca
+el día de hoy y los 29 días naturales anteriores.
+
+```bash
+# Un único valor acumulado para un intervalo explícito
+tpc analytics sov --scope pro-org/my-product --from 2026-04-01 --to 2026-04-30
+
+# Instantáneas móviles de 30 días para generar gráficos
+tpc analytics sov --scope pro-org/my-product --timeseries --last 90d
+
+# Instantáneas móviles de siete días para las últimas 30 fechas de instantánea
+tpc analytics sov --scope pro-org/my-product --timeseries --rolling-window 7 --last 30d
+
+# Instantáneas móviles de cuatro semanas agrupadas en intervalos semanales que comienzan el lunes
+tpc analytics sov --scope pro-org/my-product --timeseries --granularity week --rolling-window 4 --last 90d
+
+# Los desgloses clasificados usan el endpoint de analíticas de series temporales
+tpc analytics sov --scope pro-org/my-product --by competitor --last 30d
+
+# Clasificación de competidores dentro de un tema
+tpc analytics sov --scope pro-org/my-product --by competitor --topic <topicId>
+```
+
+`--timeseries`, `--by`, `--prompt` y `--topic` devuelven instantáneas móviles. En
+esos modos, `--from`, `--to` y `--last` seleccionan las fechas de las instantáneas. En una
+solicitud a nivel de producto o con `--by engine`, `--granularity day|week|month` selecciona el intervalo
+de calendario UTC y `--rolling-window 1..30` controla cuántos intervalos se
+incluyen en cada punto. Sus valores predeterminados son `day` y `30`. Las instantáneas adyacentes
+se superponen, así que no sumes sus valores de `mentions` o `runs`.
+
+## Explore: crea tu propia consulta de analíticas {#explore-build-your-own-analytics-query}
+
+`tpc analytics explore` es la interfaz de consulta flexible en la que se basan los comandos fijos anteriores. Elige una métrica, agrúpala por un único valor como máximo con `--by` y, después, acótala con filtros y un intervalo de fechas. Este comando llama al endpoint `POST /api/v1/analytics/explore`, así que todo lo que hagas aquí también puedes hacerlo desde la API o con la herramienta MCP `exploreAnalytics`.
+
+| Métrica     | Agrupar por (`--by`)                                    | Filtros                                                                                                                  |
+| ----------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `sov`       | `date`, `prompt`, `topic`, `engine`, `competitor`       | `--view`, `--prompt`, `--topic`, `--engine`, `--region`                                                                  |
+| `citations` | `source`, `category`, `type`, `author`, `model`, `date` | `--view`, `--topic`, `--region`, `--category`, `--content-type`, `--model`, `--author`, `--query`, `--product-mentioned` |
+| `traffic`   | `date`, `page`, `model`, `category`                     | `--traffic-type`, `--provider`, `--category`                                                                             |
+| `sentiment` | `prompt`                                                | `--view`, `--prompt`, `--topic`                                                                                          |
+
+```bash
+# Instantánea más reciente del share of voice del producto
+tpc analytics explore --scope pro-org/my-product --metric sov
+
+# Serie de share of voice con ventana móvil de siete días
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --rolling-window 7 --last 30d
+
+# Serie de share of voice con ventana móvil de cuatro semanas
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --granularity week --rolling-window 4 --last 90d
+
+# Share of voice con ventana móvil de cuatro semanas, agrupado por motor de respuestas
+tpc analytics explore --scope pro-org/my-product --metric sov --by engine --granularity week --rolling-window 4 --last 90d
+
+# Ranking del sector: share of voice de todos los competidores, en orden
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --last 30d
+
+# Ranking del sector dentro de un tema (ranking por categoría)
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --topic <topicId>
+
+# Serie temporal de share of voice de un prompt
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --prompt <promptId>
+
+# Citas de los últimos 90 días agrupadas por categoría de fuente
+tpc analytics explore --scope pro-org/my-product --metric citations --by category --last 90d
+
+# Fuentes más citadas ordenadas por conversaciones únicas
+tpc analytics explore --scope pro-org/my-product --metric citations --by source --sort-by mentions --top 25
+
+# Tráfico de IA en intervalos semanales
+tpc analytics explore --scope pro-org/my-product --metric traffic --by date --granularity week
+
+# Tráfico humano por página
+tpc analytics explore --scope pro-org/my-product --metric traffic --by page --traffic-type human
+
+# Sentimiento por prompt comparado con la semana anterior
+tpc analytics explore --scope pro-org/my-product --metric sentiment --compare wow
+```
+
+De forma predeterminada, los intervalos de fechas abarcan los últimos 30 días. Usa `--last 7d|30d|90d`, o bien `--from` y `--to` juntos, para seleccionar un rango. La consulta flexible de SoV de `explore` mantiene la semántica de instantáneas: si omites `--by`, solo se devuelve la instantánea móvil más reciente disponible, mientras que `--by date` devuelve una instantánea móvil superpuesta por cada fecha. `--granularity day|week|month` selecciona el intervalo UTC y `--rolling-window 1..30` controla cuántos intervalos contiene cada instantánea de SOV; sus valores predeterminados son `day` y `30`. La configuración personalizada funciona con las series de SOV por producto, fecha y motor. Los valores `mentions` y `runs` de SoV que devuelve `explore` no son totales acumulados de principio a fin, así que no debes sumarlos entre filas con fecha. Usa el comando fijo `tpc analytics sov` cuando necesites un único valor acumulado para un rango de fechas.
+
+La respuesta es una tabla genérica: la API devuelve los metadatos de las columnas junto con filas planas, de modo que todas las métricas se muestran de la misma forma. Añade `--json` para obtener la respuesta en un formato legible por máquina y usarla en tus scripts:
+
+```bash
+# Los tres principales competidores en filas JSON
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --top 3 --json | jq '.rows'
+```
+
+Los filtros que no se aplican a la métrica elegida se rechazan y se devuelve la lista de filtros admitidos, de modo que los agentes y scripts reciben un error que les indica cómo corregirlo, en lugar de obtener datos incorrectos sin ningún aviso. Consulta `tpc analytics explore --help` para ver la referencia completa de opciones.

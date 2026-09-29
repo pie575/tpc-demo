@@ -1,0 +1,71 @@
+---
+title: "冪等性"
+description: "Idempotency-Key を使用して、TPC API へのリクエストを安全に再試行します。"
+---
+
+# 冪等性 {#idempotency}
+
+ネットワークのタイムアウトによってリクエストが成功したかどうかわからなくなるおそれがある場合は、GET 以外の書き込みリクエストに `Idempotency-Key` を指定してください。
+
+## 使用する場面 {#when-to-use-it}
+
+自動的に再試行される可能性がある作成・更新・削除のジョブには、冪等性キーを送信してください。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: content-sync-2026-04-30-pricing" \
+  --data '{"productId":"product_123","pages":[{"slug":"pricing","title":"Pricing"}]}'
+```
+
+## リプレイ時の動作 {#replay-behavior}
+
+TPC は、成功した JSON レスポンスを 24 時間保存します。
+
+| 同じキー | 同じルートとメソッド | 同じボディ       | 結果                                                   |
+| ---- | ---------- | ----------- | ---------------------------------------------------- |
+| はい   | はい         | はい          | キャッシュされたレスポンスが `x-idempotent-replay: true` 付きで返されます。 |
+| はい   | はい         | いいえ         | API は `409 CONFLICT` を返します。                          |
+| はい   | はい         | リクエストがまだ処理中 | API は `409 CONFLICT` を返します。                          |
+| はい   | いいえ        | 任意のボディ      | 別の操作として扱われます。                                        |
+
+キーのスコープは、組織、ルート、メソッド、リクエストボディのハッシュの組み合わせ単位で決まります。
+
+## リトライの例 {#retry-example}
+
+```ts
+async function createPageWithRetry(productId: string, apiKey: string) {
+  const body = {
+    productId,
+    pages: [
+      {
+        slug: "docs/retry-safe-page",
+        title: "Retry-safe page",
+        content: "# Retry-safe page",
+      },
+    ],
+  };
+
+  const key = `site-page-create-${productId}-retry-safe-page`;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch("https://app.promptingco.com/api/v1/site/pages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "Idempotency-Key": key,
+        },
+        body: JSON.stringify(body),
+      });
+
+      return await response.json();
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+  }
+}
+```

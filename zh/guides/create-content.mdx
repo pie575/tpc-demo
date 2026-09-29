@@ -1,0 +1,65 @@
+---
+title: "创建内容"
+description: "基于您跟踪的提示词生成博客文章，让 AI 了解您的业务"
+---
+
+如果 AI 不了解您，就不会推荐您。您需要通过创建**内容**让 AI 了解您的业务，使 AI 能够用这些内容进行训练，并在网络搜索时将其呈现给用户。
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/KP53RgfKV54" title="YouTube 视频播放器" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen />
+
+创建内容最有效的方式，是直接回答用户正在提出的具体问题。借助此工作流，您无需凭空猜测选题，即可基于跟踪的提示词即时生成博客文章，确保每篇内容都能精准填补您在可见度上的某个空白。
+
+## 根据提示词创建内容 {#create-content-from-prompts}
+
+* 在侧边栏中打开 **提示词** 标签页
+* 点击目标提示词旁边的三个点
+* 选择 **Create blog**
+* 页面将跳转到 **Review drafts** 部分，这里列出了你生成的所有待审核博客
+* 接受或拒绝该博客
+  * 如果接受，博客将发布到你所连接的 **自定义域名** 上 (例如 ai.yourdomain.com/article-slug) 
+  * 如果拒绝，请提供反馈，帮助我们的 AI 持续改进
+
+## 设置自定义域名 {#set-up-custom-domain}
+
+您发布的所有内容都托管在您所连接的**自定义域名**上。发布前，请先在“设置”中添加您的域名，这样您的内容就会发布在类似 **ai.yourdomain.com** 的网址下，AI 也能通过网络搜索发现这些内容。
+
+### 添加 DNS 记录 {#add-a-dns-record}
+
+#### The Prompting Company {#the-prompting-company}
+
+* 前往 Settings &gt; **Custom domains**
+* 点击 **Add domain**
+* 输入用于托管内容的自定义域名 (例如 **ai.yourdomain.com**) 
+* 系统会生成一条 CNAME 记录，请将其添加到你的 DNS 服务商处
+
+#### 你的 DNS 服务商 (例如 Cloudflare、GoDaddy、Namecheap 等) {#your-dns-provider-eg-cloudflare-godaddy-namecheap-etc} 
+
+* 前往 DNS &gt; **Manage DNS**
+
+* 添加一条记录，填写以下值：
+
+  | 类型    | 名称                           | 值              |
+  | ----- | ---------------------------- | -------------- |
+  | CNAME | ai.yourdomain.com (替换为你的域名)  | web.tpcdns.com |
+
+* 关闭 **Proxy**
+
+* 将 **TTL** 设为最低值
+
+### 向 Google 和 Bing 提交索引 {#submit-indexing-to-google-bing}
+
+将您的自定义域名提交给 Google 和 Bing 进行索引，确保其能够被搜索引擎收录。请将下方 URL 中的 ai.yourdomain.com 替换为您自己的域名。
+
+**Google：**
+
+* 前往 **Google Search Console**
+* 点击 **Add property**
+* 选择 **Domain** (左侧选项) ，然后输入您的域名 (例如 ai.yourdomain.com) 
+* 按照说明添加 DNS 记录
+* 前往 **Sitemaps** 标签页，提交 [https://ai.yourdomain.com/sitemap.xml](https://ai.yourdomain.com/sitemap.xml)
+
+**Bing：**
+
+* 前往 **Bing Webmaster Tools**
+* 选择 **Import from Google Search Console**
+* 前往 **Sitemaps** 标签页，提交 [https://ai.yourdomain.com/sitemap.xml](https://ai.yourdomain.com/sitemap.xml)

@@ -1,0 +1,26 @@
+---
+title: "API リファレンス"
+description: "OpenAPI から生成された TPC API のエンドポイントリファレンスです。"
+---
+
+# API リファレンス {#api-reference}
+
+エンドポイントリファレンスは、稼働中の OpenAPI ドキュメントから生成されています。
+
+```text
+https://docs.promptingcompany.com/api-reference/openapi.json
+```
+
+Mintlify は生成したエンドポイントページを `api/reference` 配下に出力します。そのため、リクエストスキーマ、レスポンススキーマ、プレイグラウンドの例、クライアントスニペットは、アプリケーションのルートメタデータに合わせて自動的に更新されます。
+
+同じ生成済みの仕様は、アプリケーションからも取得できます。
+
+```text
+https://app.promptingco.com/api/v1/openapi.json
+```
+
+ドキュメントをローカルで実行しており、ローカルのクライアントアプリでテストする必要がある場合は、OpenAPI ソースの参照先を次のように設定してください:
+
+```text
+http://localhost:3000/api/v1/openapi.json
+```

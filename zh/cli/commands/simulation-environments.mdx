@@ -1,0 +1,26 @@
+---
+title: "模拟环境"
+description: "使用 TPC CLI 创建和配置智能体模拟环境。"
+---
+
+# 模拟环境命令 {#simulation-environment-commands}
+
+创建模拟环境：
+
+```bash
+tpc sim env create \
+  --name "My Environment" \
+  --agent-config '{"harness":"claude","model":"claude-sonnet-4-6"}'
+```
+
+创建一个包含任务链接和调度计划的环境：
+
+```bash
+tpc sim env create \
+  --name "Test Env" \
+  --agent-config @examples/agent-config.json \
+  --task-ids task_123,task_456 \
+  --schedule 7d
+```
+
+沙箱提供方由 TPC 统一管理。CLI 不支持在智能体配置或可移植环境文件中设置 `sandboxProvider`。

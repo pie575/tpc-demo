@@ -1,0 +1,139 @@
+---
+title: "タスク"
+description: "エージェントが達成すべき内容と、成功の測定方法を定義します"
+---
+
+タスクは、エージェントには達成すべき内容を、プラットフォームにはその試行の採点方法を伝えます。この両方がタスク自体に定義されているため、どの環境で実行しても同じ基準で評価されます。
+
+## タスクの構成 {#anatomy-of-a-task}
+
+| 要素                | 目的                                                    |
+| ----------------- | ----------------------------------------------------- |
+| **Instruction**   | エージェントが受け取るプロンプト。何を構築、インストール、または達成するかを指示します           |
+| **ゴール**         | 成功基準。各基準に重み付きスコアと合格しきい値を設定します                         |
+| **Init files**    | 実行前にサンドボックスへ配置するファイル。zip アップロードまたは git リポジトリで指定します    |
+| **Init commands** | サンドボックスのセットアップ時に実行するシェルコマンド (依存関係のインストール、初期データの投入など)  |
+| **シークレット**       | 環境変数として実行環境に渡される名前付きの認証情報                             |
+
+## 指示の書き方 {#writing-instructions}
+
+指示は、「こう書いてほしい」という理想ではなく、実際のユーザーがエージェントに依頼するときの書き方に合わせて作成してください。目的はプロダクトのエージェント体験を測定することなので、一般的なユーザーなら書かないようなヒントを盛り込むのは避けましょう。
+
+* **良い例:** 「Acme を使って、この Express アプリにエラー追跡を設定してください。」
+* **親切すぎる例:** 「`@acme/sdk@2.1` をインストールし、ダッシュボードで取得した DSN を指定して `acme.init()` を呼び出してください。」
+
+## ゴールと基準 {#goals-and-criteria}
+
+各ゴールには 1 つ以上の**基準**が含まれます。各基準には、評価タイプ、重み、最大スコアを設定します。ゴールのスコアは `weighted_average`、`binary`、`percentage` のいずれかの方式で算出され、0〜100 の範囲で設定した合格しきい値に基づいて判定されます。
+
+基準の評価方法は次のいずれかです。
+
+| 評価                   | チェック内容                             |
+| -------------------- | ---------------------------------- |
+| `comparison`         | 実行メトリクス (所要時間、トークン数、コスト) をしきい値と比較  |
+| `file_exists`        | 実行後のサンドボックス内にファイルが存在するか            |
+| `file_content_match` | ファイルの内容がパターンに一致するか                 |
+| `json_schema`        | 出力が JSON Schema に準拠しているか           |
+| `bash_command`       | 実行後のサンドボックスでシェルコマンドが終了コード 0 で終了するか |
+| `python_script`      | カスタムの Python チェックに合格するか            |
+| `script_judge`       | 独自の検証スクリプト (終了コード 0 = 合格)          |
+| `llm_judge`          | LLM がルーブリックに基づいてトランスクリプトを判定        |
+
+可能な限り、決定的なチェック (`file_exists`、`bash_command`、`script_judge`) を使用してください。コストが低く、再現性も高いためです。`llm_judge` は、「エージェントはドキュメントに記載された手順に従ったか？」のような、本質的に主観的な基準にのみ使用してください。
+
+## サンドボックスのセットアップ {#sandbox-setup}
+
+Init files と Init commands は、エージェントの開始前にサンドボックスを準備します。
+
+* **Zip アップロード** — アーカイブをサンドボックスに展開します (デフォルトの展開先: エージェントのホームディレクトリ)
+* **Git クローン** — 特定の ref でリポジトリをクローンします。プライベートリポジトリの場合は、シークレット参照を使って認証します
+* **Init commands** — シェルコマンドを順番に実行します。コマンドごとに作業ディレクトリとタイムアウトを指定します
+
+この 2 つは組み合わせて使えます。使い分けの目安はシンプルです。**Init files はファイルを配置し** (スターターリポジトリ、フィクスチャ、ドキュメント一式など) 、**Init commands はセットアップ処理を実行します** (依存関係のインストール、ビルド、データの投入など) 。両者を組み合わせれば、プロダクトの統合を待つ作りかけのアプリのような、現実に近い状態からエージェントを開始できます。なお、こうしたセットアップは指示文に含めないでください。そうすることで、下準備ではなくタスクそのものを測定できます。
+
+## シークレット {#secrets}
+
+シークレットは、組織(または単一の環境)をスコープとする暗号化された認証情報です。タスク内で名前を指定して参照すると、実行時に環境変数として注入されるため、API キーがタスク定義やトランスクリプトに現れることはありません。
+
+シークレットは環境単位で管理されます。CLI でのワークフローについては [Environments](/ja/guides/coding-agent-optimization/environments#secrets-from-the-cli) を参照してください。
+
+## CLI でタスクを操作する {#working-with-tasks-from-the-cli}
+
+タスクは JSON ファイルから作成します。`tpc sim spec` を実行すると、完全な仕様が出力されます。最小構成の `task.json` は次のようになります。
+
+```json
+{
+  "name": "Checkout regression",
+  "description": "Validate checkout flow",
+  "category": "coding",
+  "prompt": "Open the app, add an item to cart, and complete checkout successfully.",
+  "goals": [
+    {
+      "name": "Checkout succeeds",
+      "description": "The agent should add an item to the cart, proceed through the checkout flow, and reach a confirmation page without errors.",
+      "evaluationType": "llm_judge",
+      "model": "claude-sonnet-4-6",
+      "passingThreshold": 70,
+      "scoringMethod": "weighted_average"
+    }
+  ]
+}
+```
+
+`category` には `coding`、`research`、`documentation`、`analysis` のいずれかを指定します。`product` フィールドは含めないでください。CLI が `--scope <org-slug>/<product-slug>` をもとにプロダクトを自動で設定します。
+
+```bash
+# タスクを作成する
+tpc sim task create --file task.json --scope pro-org/my-product
+
+# タスクを一覧表示・確認する
+tpc sim task list --search checkout --scope pro-org/my-product
+
+# タスクの詳細 — ゴール、init コマンド、init ファイル名、リンク済みの環境
+tpc sim task get task_123 --scope pro-org/my-product
+
+# メタデータを更新する、またはファイルの内容でゴール/定義を置き換える
+tpc sim task update task_123 --name "Checkout regression v2" --scope pro-org/my-product
+tpc sim task update task_123 --file task.json --scope pro-org/my-product
+
+# タスクにリンクされた有効な環境すべてで実行をキューに登録する
+tpc sim task run task_123 --scope pro-org/my-product
+
+# ...または特定の環境でのみ実行する（カンマ区切りで指定するか、フラグを複数回指定する）
+tpc sim task run task_123 --environment-id env_a,env_b --scope pro-org/my-product
+
+# タスクを削除する（論理削除のため、実行履歴は保持される）
+tpc sim task delete task_123 --scope pro-org/my-product
+```
+
+## ディレクトリからタスクを実行する {#run-a-task-from-a-directory}
+
+タスクと、そのタスクに取り組むエージェントは、持ち運びしやすい小さなディレクトリにまとめて配置できます。
+
+```text
+checkout-regression/
+├── task.json         # メタデータと目標（プロンプトは含まない。後述）
+├── instruction.md    # エージェントに渡すプロンプト
+└── environment.json  # テスト対象のエージェント設定（任意）
+```
+
+エージェントの設定は `environment.json` で宣言します：
+
+```json
+{
+  "name": "Claude Code + Sonnet",
+  "agentConfig": {
+    "harness": "claude",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  }
+}
+```
+
+```bash
+tpc sim run ./checkout-regression
+```
+
+1 つのコマンドでディレクトリの内容をプロダクトと照合し、実行をキューに登録します。一致するタスクと環境があれば再利用し、ファイルが変更されていれば更新し、新規であれば作成します。そのため、何度実行しても重複は発生しません。既存の環境に対して実行する場合は、`environment.json` を省略してください (または `--environment-id` を指定してください) 。
+
+`tpc sim task export <task-id>` を使うと、これとまったく同じ構成のディレクトリが書き出されます (タスクにリンクされた環境が 1 つだけの場合は `environment.json` も含まれます) 。そのため、タスクを取得して編集し、どこでも実行できます。

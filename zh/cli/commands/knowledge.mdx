@@ -1,0 +1,80 @@
+---
+title: "知识"
+description: "使用 TPC CLI 列出、读取和写入已生成的知识文件。"
+---
+
+# 知识 {#knowledge}
+
+在终端中读取和写入产品的生成知识文件。传入 `--scope <org-slug>/<product-slug>` 即可选择产品。`tpc kb` 是 `tpc knowledge` 的别名。
+
+首个版本仅支持文件操作：list、get 和 put。提案、检索、导入和图谱相关命令暂不可用。
+
+<Note>
+  Knowledge 命令需要先完成 [OAuth 登录](/zh/cli/authentication) (`tpc auth login`) 。使用 API 密钥的请求会被拒绝，并返回“OAuth login required”错误。
+</Note>
+
+## 列出文件 {#list-files}
+
+文本格式输出为带缩进的 Unix 风格目录树。JSON 格式输出为 API 返回的扁平文件列表。
+
+```bash
+tpc --scope pro-org/my-product knowledge file list
+```
+
+```text
+knowledge/
+  product/
+    features.md
+    overview.md
+  sources/
+    pricing.md
+```
+
+仅筛选某个子树。该前缀将作为树的根节点：
+
+```bash
+tpc --scope pro-org/my-product knowledge file list --path product
+```
+
+```text
+product/
+  features.md
+  overview.md
+```
+
+供脚本使用的 JSON 输出保持扁平结构 (不嵌套为树) ：
+
+```bash
+tpc --scope pro-org/my-product knowledge file list --format json
+```
+
+不支持 `--format csv`。
+
+## 获取文件 {#get-a-file}
+
+文本模式会输出文件内容，JSON 模式则输出 API 返回的数据。
+
+```bash
+tpc --scope pro-org/my-product knowledge file get product/overview.md
+tpc --scope pro-org/my-product knowledge file get product/overview.md --format json
+```
+
+## 写入文件 {#write-a-file}
+
+`put` 用于创建文件；若文件已存在，则将其覆盖。请使用 `--content` 或 `--content-file` 二者之一。
+
+```bash
+tpc --scope pro-org/my-product knowledge file put product/overview.md \
+  --content "# Overview"
+```
+
+```bash
+tpc --scope pro-org/my-product knowledge file put product/overview.md \
+  --content-file ./overview.md
+```
+
+文本输出会打印写入后的文件路径、提交以及仓库消息。
+
+## JSON 输出 {#json-output}
+
+所有命令均支持 `--format json`，便于编写脚本。列表命令的 JSON 输出是由文件和路径组成的扁平列表，而非树形结构。

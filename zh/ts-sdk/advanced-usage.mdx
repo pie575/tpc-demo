@@ -1,0 +1,495 @@
+---
+title: "高级用法"
+description: "使用 The Prompting Company TypeScript SDK 的高级模式与技巧"
+---
+
+# 高级用法 {#advanced-usage}
+
+了解 The Prompting Company TypeScript SDK 的高级用法模式、错误处理及优化技巧。
+
+## 错误处理 {#error-handling}
+
+SDK 会返回一个结构化响应，通过其中的 `ok` 属性表示操作成功与否。访问数据前，请务必先检查该属性：
+
+```typescript
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: "your-product",
+  organizationSlug: "your-org",
+});
+
+async function getDocumentSafely(path: string) {
+  try {
+    const result = await client.document.getByPath(path);
+    
+    if (!result.ok) {
+      // 处理 API 错误
+      console.error('API Error:', result.error);
+      throw new Error(`Failed to fetch document: ${result.error?.message || 'Unknown error'}`);
+    }
+    
+    return result.data;
+  } catch (error) {
+    // 处理网络错误、SDK 错误等
+    console.error('SDK Error:', error);
+    throw error;
+  }
+}
+```
+
+## 客户端配置 {#client-configuration}
+
+### 按环境配置 {#environment-based-configuration}
+
+为不同环境分别创建配置：
+
+```typescript
+// lib/sdk-config.ts
+import tpc from "@promptingcompany/sdk";
+
+interface SDKConfig {
+  productSlug: string;
+  organizationSlug: string;
+}
+
+function getSDKConfig(): SDKConfig {
+  return {
+    productSlug: process.env.TPC_PRODUCT_SLUG!,
+    organizationSlug: process.env.TPC_ORG_SLUG!,
+  };
+}
+
+export const client = new tpc(getSDKConfig());
+```
+
+### 多个客户端实例 {#multiple-client-instances}
+
+如果你需要访问多个产品或组织：
+
+```typescript
+// lib/multi-client.ts
+import tpc from "@promptingcompany/sdk";
+
+export const clients = {
+  mainProduct: new tpc({
+    productSlug: "main-product",
+    organizationSlug: "your-org",
+  }),
+  
+  docsProduct: new tpc({
+    productSlug: "documentation",
+    organizationSlug: "your-org",
+  }),
+  
+  partnerOrg: new tpc({
+    productSlug: "shared-docs",
+    organizationSlug: "partner-org",
+  }),
+};
+
+// 使用示例
+const mainDoc = await clients.mainProduct.document.getByPath("guide/intro");
+const partnerdoc = await clients.partnerOrg.document.getByPath("api/reference");
+```
+
+## 缓存策略 {#caching-strategies}
+
+### 简单的内存缓存 {#simple-in-memory-cache}
+
+通过缓存减少 API 调用次数：
+
+```typescript
+// lib/cached-client.ts
+import tpc from "@promptingcompany/sdk";
+
+class CachedSDKClient {
+  private client: tpc;
+  private cache = new Map<string, any>();
+  private ttl = 5 * 60 * 1000; // 5 分钟
+
+  constructor(config: { productSlug: string; organizationSlug: string }) {
+    this.client = new tpc(config);
+  }
+
+  async getDocumentByPath(path: string, useCache = true) {
+    const cacheKey = `doc:${path}`;
+    
+    if (useCache && this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey);
+      if (Date.now() - cached.timestamp < this.ttl) {
+        return cached.data;
+      }
+    }
+
+    const result = await this.client.document.getByPath(path);
+    
+    if (result.ok && useCache) {
+      this.cache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+      });
+    }
+    
+    return result;
+  }
+
+  clearCache() {
+    this.cache.clear();
+  }
+}
+
+export const cachedClient = new CachedSDKClient({
+  productSlug: process.env.PROMPTING_COMPANY_PRODUCT_SLUG!,
+  organizationSlug: process.env.PROMPTING_COMPANY_ORG_SLUG!,
+});
+```
+
+### 在 Next.js App Router 中使用缓存 {#nextjs-app-router-with-caching}
+
+通过 `unstable_cache` 使用 Next.js 内置的缓存功能：
+
+```typescript
+// lib/cached-documents.ts
+import { unstable_cache } from 'next/cache';
+import { client } from './prompting-company';
+
+export const getCachedDocument = unstable_cache(
+  async (path: string) => {
+    const result = await client.document.getByPath(path);
+    
+    if (!result.ok) {
+      throw new Error(`Failed to fetch document: ${path}`);
+    }
+    
+    return result.data;
+  },
+  ['document-by-path'],
+  {
+    revalidate: 300, // 5 分钟
+    tags: ['documents'],
+  }
+);
+
+// 在 Server Components 中使用
+export default async function DocumentPage({ params }: { params: { path: string } }) {
+  const document = await getCachedDocument(params.path);
+  
+  return (
+    <div>
+      <h1>Document: {params.path}</h1>
+      <div>{document.content}</div>
+    </div>
+  );
+}
+```
+
+## 批量操作 {#batch-operations}
+
+如需高效获取多个文档，可以使用以下方法：
+
+```typescript
+// lib/batch-operations.ts
+import { client } from './prompting-company';
+
+export async function getMultipleDocuments(paths: string[]) {
+  const results = await Promise.allSettled(
+    paths.map(path => client.document.getByPath(path))
+  );
+
+  return results.map((result, index) => ({
+    path: paths[index],
+    success: result.status === 'fulfilled' && result.value.ok,
+    data: result.status === 'fulfilled' && result.value.ok ? result.value.data : null,
+    error: result.status === 'rejected' 
+      ? result.reason 
+      : result.status === 'fulfilled' && !result.value.ok 
+        ? result.value.error 
+        : null,
+  }));
+}
+
+// 使用示例
+const documents = await getMultipleDocuments([
+  'en-us/contact',
+  'en-us/about',
+  'en-us/pricing',
+]);
+
+documents.forEach(({ path, success, data, error }) => {
+  if (success && data) {
+    console.log(`✅ ${path}: ${data.content.substring(0, 50)}...`);
+  } else {
+    console.error(`❌ ${path}: ${error}`);
+  }
+});
+```
+
+## React Hooks {#react-hooks}
+
+为常用模式创建自定义 Hook：
+
+```typescript
+// hooks/use-document.ts
+import { useState, useEffect } from 'react';
+import { client } from '@/lib/prompting-company';
+
+interface UseDocumentResult {
+  document: any | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export function useDocument(path: string): UseDocumentResult {
+  const [document, setDocument] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDocument = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await client.document.getByPath(path);
+      
+      if (result.ok) {
+        setDocument(result.data);
+      } else {
+        setError('Failed to fetch document');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (path) {
+      fetchDocument();
+    }
+  }, [path]);
+
+  return {
+    document,
+    loading,
+    error,
+    refetch: fetchDocument,
+  };
+}
+
+// 在组件中使用
+export function DocumentViewer({ path }: { path: string }) {
+  const { document, loading, error, refetch } = useDocument(path);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!document) return <div>Document not found</div>;
+
+  return (
+    <div>
+      <button onClick={refetch}>Refresh</button>
+      <div>{document.content}</div>
+    </div>
+  );
+}
+```
+
+## TypeScript 工具类型 {#typescript-utilities}
+
+创建工具类型，增强类型安全：
+
+```typescript
+// types/sdk.ts
+import tpc from "@promptingcompany/sdk";
+
+// 提取客户端类型
+export type TPCClient = InstanceType<typeof tpc>;
+
+// 为 API 响应创建工具类型
+export type APIResponse<T> = {
+  ok: true;
+  data: T;
+} | {
+  ok: false;
+  error: {
+    message: string;
+    code?: string;
+  };
+};
+
+// 文档类型（请根据 SDK 的实际响应调整）
+export interface Document {
+  content: string;
+  path: string;
+  title?: string;
+  lastModified?: string;
+  metadata?: Record<string, any>;
+}
+
+// 具有正确类型的辅助函数
+export async function safeAPICall<T>(
+  apiCall: () => Promise<APIResponse<T>>
+): Promise<T> {
+  const result = await apiCall();
+  
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+  
+  return result.data;
+}
+
+// 用法示例
+const document = await safeAPICall(() => 
+  client.document.getByPath("en-us/contact")
+);
+```
+
+## 开发与调试 {#development-and-debugging}
+
+### 调试模式 {#debug-mode}
+
+开发阶段可添加调试日志：
+
+```typescript
+// lib/debug-client.ts
+import tpc from "@promptingcompany/sdk";
+
+class DebugSDKClient {
+  private client: tpc;
+  private debug: boolean;
+
+  constructor(config: { productSlug: string; organizationSlug: string }, debug = false) {
+    this.client = new tpc(config);
+    this.debug = debug || process.env.NODE_ENV === 'development';
+  }
+
+  async getDocumentByPath(path: string) {
+    if (this.debug) {
+      console.log(`[SDK] Fetching document: ${path}`);
+      console.time(`[SDK] ${path}`);
+    }
+
+    try {
+      const result = await this.client.document.getByPath(path);
+      
+      if (this.debug) {
+        console.timeEnd(`[SDK] ${path}`);
+        console.log(`[SDK] Result for ${path}:`, result.ok ? 'SUCCESS' : 'ERROR');
+        if (!result.ok) {
+          console.error(`[SDK] Error:`, result.error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      if (this.debug) {
+        console.timeEnd(`[SDK] ${path}`);
+        console.error(`[SDK] Exception for ${path}:`, error);
+      }
+      throw error;
+    }
+  }
+}
+
+export const debugClient = new DebugSDKClient({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+});
+```
+
+## 性能优化 {#performance-optimization}
+
+### 并行加载文档 {#parallel-document-loading}
+
+并行加载多个文档，以提升性能：
+
+```typescript
+// components/multi-document-viewer.tsx
+import { useState, useEffect } from 'react';
+import { getMultipleDocuments } from '@/lib/batch-operations';
+
+interface MultiDocumentViewerProps {
+  paths: string[];
+}
+
+export function MultiDocumentViewer({ paths }: MultiDocumentViewerProps) {
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDocuments() {
+      setLoading(true);
+      const results = await getMultipleDocuments(paths);
+      setDocuments(results);
+      setLoading(false);
+    }
+
+    loadDocuments();
+  }, [paths]);
+
+  if (loading) {
+    return <div>Loading {paths.length} documents...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {documents.map(({ path, success, data, error }) => (
+        <div key={path} className="border rounded-lg p-4">
+          <h3 className="font-semibold mb-2">{path}</h3>
+          {success && data ? (
+            <div className="prose">
+              {data.content.substring(0, 200)}...
+            </div>
+          ) : (
+            <div className="text-red-600">
+              Error: {error}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## 最佳实践 {#best-practices}
+
+1. 访问响应数据前，**务必检查 `ok` 属性**
+2. **使用 TypeScript**，以获得更好的开发体验，并及早发现错误
+3. 为频繁访问的文档**实现缓存**
+4. **妥善处理错误**，向用户展示友好的错误信息
+5. **使用环境变量**管理配置
+6. 如需频繁调用 API，**请考虑速率限制**
+7. 针对网络故障**实现重试逻辑**
+8. 尽可能**使用批量操作**，以减少 API 调用次数
+
+## 故障排除 {#troubleshooting}
+
+### 常见问题 {#common-issues}
+
+**“找不到文档”错误：**
+
+* 确认该文档路径存在于你的组织中
+* 检查产品 slug 是否正确
+* 确保你的 API 密钥有权访问该文档
+
+**网络超时：**
+
+* 实现带指数退避的重试逻辑
+* 可考虑缩短超时时间，以改善用户体验
+* 添加加载状态，提升感知性能
+
+**处理大型文档时的内存问题：**
+
+* 如果可用，请实现分页
+* 如果支持，请使用流式响应
+* 对于大型文档集合，可考虑使用懒加载
+
+**TypeScript 错误：**
+
+* 确保使用的是最新版本的 SDK
+* 检查 TypeScript 配置是否兼容
+* 检查响应对象时，使用恰当的类型守卫

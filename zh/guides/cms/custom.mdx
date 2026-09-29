@@ -1,0 +1,83 @@
+---
+title: "连接自定义端点"
+description: "通过采用 bearer 身份验证的 JSON POST 端点，将 TPC 草稿发布到您自己的服务器"
+---
+
+如果您使用的 CMS 暂无原生支持，请使用自定义端点集成。The Prompting Company 会携带 bearer 令牌，通过 POST 请求向您的端点发送 JSON 数据。
+
+## 端点要求 {#endpoint-requirements}
+
+你的服务器必须：
+
+* 接受 `Content-Type: application/json` 的 `POST` 请求
+* 校验 `Authorization: Bearer <token>` 请求头
+* 成功时返回 `2xx` 状态码
+
+TPC 会记录响应体，但不会对其进行解析。
+
+## Bearer 令牌身份验证 {#bearer-token-authentication}
+
+TPC 会将你在集成表单中粘贴的令牌以如下格式发送：
+
+```text
+Authorization: Bearer <token>
+```
+
+在处理请求之前，请先在你的端点上验证该令牌。凡是未携带有效 bearer 令牌的请求，一律返回 `401` 予以拒绝。
+
+## 请求体模板 {#body-template}
+
+使用占位符将 TPC 的字段映射为你的端点所需的结构。可用的占位符如下：
+
+* `{{title}}`
+* `{{content}}`
+* `{{excerpt}}`
+* `{{platform}}`
+* `{{status}}`
+* `{{thumbnailUrl}}`
+* `{{heroImageUrl}}`
+
+请求体模板示例：
+
+```json
+{
+  "title": "{{title}}",
+  "html": "{{content}}",
+  "cover": "{{heroImageUrl}}"
+}
+```
+
+TPC 会在发送前替换占位符。未设置的占位符会被替换为空字符串。
+
+## 可选的自定义请求头 {#optional-custom-headers}
+
+如果你的端点需要额外的请求头 (如 API 密钥、租户 ID) ，请将其以 JSON 对象的形式粘贴到集成表单中：
+
+```json
+{ "X-Tenant-Id": "abc123" }
+```
+
+## 在 TPC 中连接 {#connect-in-tpc}
+
+1. 在您的 TPC 产品工作区中打开 **Settings → Integrations**。
+2. 选择 **Custom endpoint**。
+3. 填写以下内容：
+   * **Endpoint URL**：TPC 发送 POST 请求的完整 URL
+   * **Bearer token**：由您的服务器进行验证的令牌
+   * **Body template**：包含占位符的 JSON
+   * **Custom headers**：可选的 JSON 对象
+4. 点击 **Save**，然后点击 **Test connection**。
+
+## 故障排除 {#troubleshooting}
+
+### 测试连接超时 {#test-connection-times-out}
+
+TPC 最多等待 30 秒。请确认该端点可从公网访问，并能在此时限内返回响应。
+
+### 401 或 403 {#401-or-403}
+
+你的端点拒绝了该 bearer 令牌。请确认服务器中存储的令牌与你粘贴到 TPC 中的令牌一致。
+
+### 返回非 2xx 状态码，但内容已保存 {#non-2xx-status-but-content-saved}
+
+请确保写入已持久化后再返回 `2xx` 状态码。任何非 2xx 响应都会被视为失败，并在发布日志中显示为错误。

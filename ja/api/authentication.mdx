@@ -1,0 +1,118 @@
+---
+title: "認証"
+description: "TPC API の認証方式として、セッション Cookie、OAuth bearer トークン、API キーのいずれかを選択します。"
+---
+
+# 認証 {#authentication}
+
+TPC は、API キー、bearer トークン、セッション Cookie という決まった順序で呼び出し元を解決します。複数の認証情報を送信した場合は、`x-api-key` が優先されます。
+
+## 認証情報を選択する {#choose-your-credential}
+
+| 認証情報         | 主な用途                      | 備考                                                             |
+| ------------ | ------------------------- | -------------------------------------------------------------- |
+| セッション Cookie | ファーストパーティのダッシュボードからの呼び出し。 | ブラウザ専用です。セッションによる呼び出しでは、ルート単位で行われる組織およびプロダクトのチェックに依存します。       |
+| OAuth bearer | CLI および OAuth クライアント。     | `tpc auth login` はブラウザのデバイスフローで認証した後、CLI から bearer 認証情報を送信します。 |
+| API キー       | サーバー間連携。                  | 組織単位のスコープを持ち、ローテーションが可能で、明示的に付与されたスコープによって権限が制限されます。           |
+
+## セッション Cookie {#session-cookie}
+
+セッション Cookie は The Prompting Company のダッシュボードで使用します。`better-auth.session_token` Cookie はブラウザから自動的に送信されます。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "Cookie: better-auth.session_token=session_token_here"
+```
+
+```ts
+const response = await fetch("/api/v1/site/pages?productId=product_123", {
+  credentials: "include",
+});
+```
+
+セッション Cookie は、ファーストパーティのブラウザフローでのみ使用してください。
+
+## OAuth bearer {#oauth-bearer}
+
+CLI はブラウザベースのデバイスフローで認証します：
+
+```bash
+tpc auth login
+```
+
+ログイン後、CLI はトークンをローカルに保存し、bearer 認証情報として送信します。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "Authorization: Bearer $TPC_ACCESS_TOKEN"
+```
+
+```ts
+const response = await fetch(
+  "https://app.promptingco.com/api/v1/site/pages?productId=product_123",
+  {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  },
+);
+```
+
+Bearer トークンを使用する呼び出し元は、ルートが必要とするスコープを含める必要があります。
+
+## APIキー {#api-key}
+
+連携には、認証情報としてAPIキーの使用を推奨します。
+
+組織のAPIキーは、次の場所から作成します：
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+次に、`x-api-key` ヘッダーに指定して送信します：
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+```ts
+const response = await fetch(
+  "https://app.promptingco.com/api/v1/site/pages?productId=product_123",
+  {
+    headers: {
+      "x-api-key": process.env.TPC_API_KEY!,
+    },
+  },
+);
+```
+
+## 優先順位 {#precedence}
+
+`resolveCaller` は、次の順序で認証情報を確認します。
+
+1. `x-api-key`
+2. `Authorization: Bearer <token>`
+3. セッション Cookie
+
+この優先順位があるため、サーバー連携の動作は常に一定になります。バックグラウンドジョブに誤ってブラウザーの Cookie が含まれていても、連携は引き続き API キーによって識別されます。
+
+## ローテーションと失効 {#rotation-and-revocation}
+
+チームメンバーが離脱したとき、シークレットが漏洩した恐れがあるとき、または連携の境界が変わったときは、API キーをローテーションしてください。
+
+1. 同じスコープ、またはより狭いスコープで新しいキーを作成します。
+2. 新しいシークレットを連携先にデプロイします。
+3. 新しいキーでリクエストが成功していることを確認します。
+4. API キーの設定ページで古いキーを失効させます。
+
+失効したキーを使用すると、次のエラーが返されます:
+
+```json
+{
+  "ok": false,
+  "code": "UNAUTHORIZED",
+  "message": "invalid api key"
+}
+```

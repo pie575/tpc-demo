@@ -1,0 +1,38 @@
+---
+title: "内容 API 概览"
+description: "了解 TPC 内容 API 的各类接口面及常见工作流。"
+---
+
+# 内容 API 概览 {#content-api-overview}
+
+内容 API 用于管理 TPC 在检索、发布和公开分发 Markdown 时所用的各类内容接口面。
+
+## 接口面 {#surfaces}
+
+| 接口面                         | 用途                                      | 主要 scope                       |
+| --------------------------- | --------------------------------------- | ------------------------------ |
+| 内容生命周期 (`/api/v1/content`)  | 创建、生成、审核 (批准/拒绝/退回修订) 、发布和管理产品内容。       | `content:read`、`content:write` |
+| 站点页面 (已弃用)                  | 内容接口面的旧版 CRUD 别名，请改用 `/api/v1/content`。 | `content:read`、`content:write` |
+| 智能体文档                       | 读取和更新文档元数据及草稿工作流。                       | `content:read`、`content:write` |
+| llms.txt                    | 读取和管理生成的 llms.txt 资源。                   | `content:read`、`content:write` |
+| 应用和应用路由                     | 管理应用配置和路由资源。                            | `content:read`、`content:write` |
+
+产品页面、文档页面和营销内容建议从 `/api/v1/content` 入手。新建和生成的页面会先进入审核队列 (`GET /api/v1/content?status=pending_review`) ，只有审核通过 (`POST /api/v1/content/{draftId}/review`) 后才会发布。
+
+## 常见工作流 {#common-workflow}
+
+1. 创建一个具有 `content:read` 权限的 API 密钥。
+2. 列出某个产品下的现有资源。
+3. 仅在集成需要执行变更操作时，才添加 `content:write` 权限。
+4. 在写入请求中携带 `Idempotency-Key`，确保可以安全重试。
+5. 将 `x-request-id` 与作业日志一并保存。
+
+## 相关指南 {#related-guides}
+
+<Card title="站点页面" icon="file-text" href="/zh/api/content/site-pages" horizontal>
+  从 CMS 或 Markdown 文件夹同步产品页面。
+</Card>
+
+<Card title="智能体文档" icon="files" href="/zh/api/content/documents" horizontal>
+  管理已生成和已审核的内容文档。
+</Card>

@@ -1,0 +1,55 @@
+---
+title: "Prismic を接続する"
+description: "永続アクセストークンを使用して、TPC の下書きを Prismic リポジトリに公開します"
+---
+
+The Prompting Company は、書き込みスコープを持つ永続アクセストークンを使用して、お使いの Prismic リポジトリにドキュメントを書き込みます。
+
+## 始める前に {#before-you-start}
+
+* Prismic リポジトリに対する Owner または Administrator ロールが付与されていること。
+* カスタムタイプがリポジトリにデプロイ済みであること。
+
+## リポジトリ名を確認する {#find-your-repository-name}
+
+Prismic のリポジトリ名は、Prismic の URL のサブドメイン部分です。たとえば `myblog.prismic.io` の場合、リポジトリ名は `myblog` です。
+
+## 永続アクセストークンを生成する {#generate-a-permanent-access-token}
+
+1. Prismic リポジトリを開きます。
+2. **Settings → API &amp; Security** に移動します。
+3. **Permanent access tokens** セクションまでスクロールします。
+4. **Create new** をクリックし、**Write** 権限を付与します。
+5. トークンはすぐにコピーしてください。Prismic では一度しか表示されません。
+
+## TPC で接続する {#connect-in-tpc}
+
+1. TPC のプロダクトワークスペースで **Settings → Integrations** を開きます。
+2. **Prismic** を選択します。
+3. 次の項目を入力します。
+   * **Repository name** — サブドメイン (例: `myblog`) 
+   * **Access token** — コピーしたトークン
+   * **Custom type** — 書き込み先のカスタムタイプの API ID
+4. **Save** をクリックしてから、**Test connection** をクリックします。
+
+<Note>
+  リポジトリが公開されていて、読み取りアクセスだけで足りる場合は、**Access token** を空欄のままにしておけます。ただし、TPC で下書きを公開するには書き込みアクセスが必要です。
+</Note>
+
+## トラブルシューティング {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+トークンが読み取り専用になっています。**Write** 権限を付与してトークンを再生成してください。
+
+### 400 &quot;unknown type&quot; {#400-unknown-type}
+
+**Custom type** の値が、デプロイ済みの API ID と一致しません。Prismic のダッシュボードで **Custom Types** を確認してください。API ID は表示名の横に表示されます。
+
+### フィールドが空のまま保存される {#fields-save-empty}
+
+Prismic のスライスベースのコンテンツでは、フィールドパスをカスタムタイプのスキーマと一致させる必要があります。フィールドの API ID とリッチテキストの構造を確認してください。
+
+## 関連リンク {#related-links}
+
+* [Prismic のアクセストークンに関するドキュメント](https://prismic.io/docs/access-token)

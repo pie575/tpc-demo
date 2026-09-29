@@ -1,0 +1,361 @@
+---
+title: "快速入门指南"
+description: "在 Next.js 应用中使用 The Prompting Company TypeScript SDK 构建您的第一个集成"
+---
+
+# 快速入门指南 {#quickstart-guide}
+
+借助 **Next.js Agent MD 模式**，快速上手 The Prompting Company TypeScript SDK。本指南将带你构建一个动态 Markdown 服务系统，让用户通过简洁的 `.md` URL 访问你的智能体文档。
+
+## 构建目标 {#what-youll-build}
+
+完成本指南后，你将实现：
+
+* **简洁的 URL 路由**：用户可以通过 `yoursite.com/docs/guide.md` 这样的地址访问文档
+* **动态内容分发**：从 The Prompting Company 平台获取文档
+* **自动化中间件**：通过 URL 重写透明地处理 `.md` 扩展名
+* **可扩展的架构**：支持嵌套的文档结构
+
+## 工作原理 {#how-it-works}
+
+该实现由两部分组成：
+
+1. **中间件 (Middleware)&#x20;**：拦截以 `.md` 结尾的请求，并在内部重写这些请求
+2. **API 路由处理程序 (API Route Handler)&#x20;**：通过 SDK 获取实际的 Markdown 内容
+
+**示例流程：**
+
+```
+用户访问： /docs/getting-started.md
+↓（中间件重写）
+内部路由： /md/docs/getting-started
+↓（API 处理程序处理请求）
+返回：你所在组织的 Markdown 内容
+```
+
+## 前提条件 {#prerequisites}
+
+开始之前，请确保你已完成以下准备：
+
+* ✅ [已安装 SDK](/zh/ts-sdk/installation)
+* ✅ 一个使用 App Router 的 Next.js 13+ 应用
+* ✅ 你的 API 密钥、组织 slug 和产品 slug
+
+## 步骤 1：创建中间件 {#step-1-create-the-middleware}
+
+首先，创建一个中间件文件，用于处理带 `.md` 扩展名的 URL 重写：
+
+```typescript
+// src/middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+export function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  
+  // 检查 URL 是否以 .md 扩展名结尾
+  if (pathname.endsWith(".md")) {
+    // 去掉路径中的 .md 扩展名
+    const pathWithoutMd = pathname.slice(0, -3);
+    
+    // 构造带 /md 前缀的新 URL
+    const newUrl = new URL(`/md${pathWithoutMd}`, request.url);
+    
+    // 将请求重写到新路径
+    return NextResponse.rewrite(newUrl);
+  }
+  
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * 匹配所有请求路径，但以下列前缀开头的路径除外：
+     * - api（API 路由）
+     * - _next/static（静态文件）
+     * - _next/image（图片优化文件）
+     * - favicon.ico（网站图标文件）
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
+```
+
+### 中间件的工作原理 {#how-the-middleware-works}
+
+1. **拦截请求**：捕获除 API 路由和静态文件以外的所有请求
+2. **检测 .md 扩展名**：检查 URL 是否以 `.md` 结尾
+3. **URL 重写**：在内部将 `/docs/guide.md` 重写为 `/md/docs/guide`
+4. **对用户透明**：用户看到的始终是简洁的 URL，具体逻辑则由内部路由处理
+
+## 第 2 步：创建 MD 路由处理程序 {#step-2-create-the-md-route-handler}
+
+创建一个 API 路由处理程序，用于处理重写后的 URL 并获取 Markdown 内容：
+
+```typescript
+// src/app/md/[[...path]]/route.ts
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+  // SDK 会自动读取 TPC_API_KEY
+});
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ path?: string[] }> }
+) {
+  // 等待 params Promise 解析（Next.js 15+ 写法）
+  const { path } = await params;
+  const pathArray = path || [];
+  
+  // 拼接路径段，得到文档路径
+  const documentPath = pathArray.join("/");
+  
+  try {
+    const document = await client.document.getByPath(documentPath);
+    
+    if (!document.ok || !document.data) {
+      return new Response("Document not found", { status: 404 });
+    }
+    
+    return new Response(document.data.content, {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching document:', error);
+    return new Response("Internal server error", { status: 500 });
+  }
+}
+```
+
+### 理解路由处理程序 {#understanding-the-route-handler}
+
+* **动态路由**：`[[...path]]` 可捕获多个路径段 (可选的捕获所有路由)
+* **Next.js 15+ 写法**：`params` 现在是一个 Promise，必须通过 await 获取
+* **参数解构**：通过 `{ path } = await params` 提取路径段
+* **路径处理**：将 `['docs', 'api', 'auth']` 等路径段拼接为 `"docs/api/auth"`
+* **SDK 集成**：使用 TypeScript SDK 获取文档
+* **错误处理**：返回恰当的 HTTP 状态码 (404、500)
+* **内容类型**：设置正确的 MIME 类型 (`text/markdown; charset=utf-8`)
+
+## 第 3 步：了解完整流程 {#step-3-understanding-the-complete-flow}
+
+整个系统的协同运作方式如下：
+
+### 1. 用户请求 {#1-user-request}
+
+```
+用户访问： https://yoursite.com/docs/getting-started.md
+```
+
+### 2. 中间件处理 {#2-middleware-processing}
+
+```typescript
+// src/middleware.ts 处理请求
+"/docs/getting-started.md" 
+  ↓ (removes .md extension)
+"/docs/getting-started"
+  ↓ (adds /md prefix)  
+"/md/docs/getting-started"
+```
+
+### 3. 执行路由处理程序 {#3-route-handler-execution}
+
+```typescript
+// src/app/md/[[...path]]/route.ts 接收到：
+const { path } = await params; // Next.js 15+ 要求使用 await
+pathArray = ["docs", "getting-started"]
+  ↓ (joins path segments)
+documentPath = "docs/getting-started"
+  ↓ (calls SDK)
+client.document.getByPath("docs/getting-started")
+```
+
+### 4. 响应 {#4-response}
+
+```
+返回：原始 Markdown 内容，并附带正确的 MIME 类型
+Content-Type: text/markdown; charset=utf-8
+```
+
+## 第 4 步：目录结构 {#step-4-directory-structure}
+
+你的项目结构应如下所示：
+
+```
+src/
+├── middleware.ts                 # URL 重写逻辑
+├── app/
+│   ├── md/
+│   │   └── [[...path]]/
+│   │       └── route.ts         # Markdown 处理程序
+│   ├── layout.tsx
+│   └── page.tsx
+└── （其他文件）
+```
+
+### 要点： {#key-points}
+
+* **中间件位置**：必须位于 `src/middleware.ts` (或根目录下的 `middleware.ts`)
+* **动态路由**：`[[...path]]` 可匹配任意数量的路径段
+* **路由处理程序**：只需实现 `GET` 方法即可返回 Markdown 内容
+* **错误处理**：文档不存在时返回恰当的 HTTP 状态码
+
+## 第 5 步：测试实现效果 {#step-5-testing-your-implementation}
+
+### 1. 启动开发服务器 {#1-start-your-development-server}
+
+```bash
+npm run dev
+```
+
+### 2. 测试 URL 模式 {#2-test-the-url-pattern}
+
+现在，你的实现应该能够处理以下 URL 模式：
+
+**✅ 可正常访问的 URL：**
+
+```
+http://localhost:3000/docs/getting-started.md
+http://localhost:3000/api/auth.md  
+http://localhost:3000/guides/installation.md
+http://localhost:3000/nested/folder/structure/document.md
+```
+
+**测试方法：**
+
+1. 访问任意以 `.md` 结尾的 URL
+2. 打开浏览器的网络 (Network) 面板查看，应能看到：
+   * 发往 `yoursite.com/docs/guide.md` 的请求
+   * 响应头包含 `Content-Type: text/markdown`
+   * 页面显示原始 Markdown 内容
+
+### 3. 验证文档路径 {#3-verify-document-paths}
+
+URL 结构与您组织的文档路径一一对应：
+
+```
+URL: /docs/getting-started.md
+  ↓ 
+Document Path: "docs/getting-started"
+  ↓
+SDK Call: client.document.getByPath("docs/getting-started")
+```
+
+请确保 The Prompting Company 平台中的文档路径与您期望的 URL 结构相符。
+
+### 4. 测试错误处理 {#4-test-error-handling}
+
+**404 测试：**
+
+* 访问 `/nonexistent/document.md`
+* 应返回 &quot;Document not found&quot;，状态码为 404
+
+**路径测试：**
+
+* 根目录：`/readme.md` → 文档路径：`"readme"`
+* 嵌套路径：`/api/auth/oauth.md` → 文档路径：`"api/auth/oauth"`
+
+## 第 6 步：命令行测试 (可选) {#step-6-command-line-testing-optional}
+
+如需调试，可以直接测试 SDK：
+
+```typescript
+// test-sdk.ts
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+  // SDK 会自动读取 TPC_API_KEY
+});
+
+const doc = await client.document.getByPath("docs/getting-started");
+
+if (!doc.ok) {
+  console.error('Error:', doc);
+  process.exit(1);
+}
+
+console.log('Success! Document content:');
+console.log(doc.data?.content?.substring(0, 200) + '...');
+```
+
+运行以下命令：
+
+```bash
+npx tsx test-sdk.ts
+```
+
+## 此模式的优势 {#benefits-of-this-pattern}
+
+Next.js Agent MD 模式具有以下优势：
+
+### ✅ **SEO 友好的 URL** {#seo-friendly-urls}
+
+像 `/docs/guide.md` 这样简洁的 URL 更易于被搜索引擎收录
+
+### ✅ **动态内容** {#dynamic-content}
+
+文档从您的 CMS 实时获取，无需静态生成
+
+### ✅ **可扩展架构** {#scalable-architecture}
+
+无需额外配置路由，即可支持任意层级的嵌套文档结构
+
+### ✅ **正确的 MIME 类型** {#proper-mime-types}
+
+浏览器会收到正确的 `text/markdown` 内容类型，从而妥善处理页面内容
+
+### ✅ **错误处理** {#error-handling}
+
+内置 404 处理机制，文档不存在时会返回正确的 HTTP 状态码
+
+## 后续步骤 {#next-steps}
+
+恭喜！您已经成功搭建了一个可运行的 Next.js Agent MD 实现。接下来，您可以通过以下方式进一步完善它：
+
+<Columns cols={2}>
+  <Card title="高级用法" icon="settings" href="/zh/ts-sdk/advanced-usage">
+    了解缓存、错误处理和优化技巧。
+  </Card>
+
+  <Card title="GitHub 仓库" icon="github" href="https://github.com/promptingcompany/nextjs-agent-md">
+    在 GitHub 上查看完整的参考实现。
+  </Card>
+</Columns>
+
+## 故障排除 {#troubleshooting}
+
+### 常见问题 {#common-issues}
+
+**中间件不生效：**
+
+* 确保 `middleware.ts` 位于正确的位置 (`src/middleware.ts` 或根目录下的 `middleware.ts`)
+* 检查你的 Next.js 版本是否支持中间件 (12.2+)
+* 确认 matcher 配置已排除必要的路径
+
+**有效文档返回 404 错误：**
+
+* 确认组织中的文档路径与 URL 结构一致
+* 检查环境变量是否设置正确 (`TPC_API_KEY`、`TPC_ORG_SLUG`、`TPC_PRODUCT_SLUG`)
+* 确认 API 密钥具有 `read:documentation` 权限
+
+**找不到路由处理程序：**
+
+* 确保目录结构正确：`src/app/md/[[...path]]/route.ts`
+* 检查路由文件是否导出了 `GET` 函数
+* 确认已启用 Next.js App Router (Next.js 13+)
+
+**SDK 连接问题：**
+
+* 使用命令行示例直接测试 SDK
+* 检查网络连接以及 API 端点是否可用
+* 确认组织和产品的 slug 是否正确
+
+需要帮助？请联系 [support@promptingco.com](mailto:support@promptingco.com) 或访问我们的[平台](https://app.promptingco.com)。

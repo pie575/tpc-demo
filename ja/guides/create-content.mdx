@@ -1,0 +1,65 @@
+---
+title: "コンテンツを作成する"
+description: "トラッキング中のプロンプトからブログ記事を生成し、AI に自社のビジネスを理解させましょう"
+---
+
+AI に知られていなければ、AI に推薦されることはありません。**コンテンツ**を作成して、AI に自社のビジネスを伝えましょう。そうすれば、AI はそのコンテンツを学習し、Web 検索を通じてユーザーに届けられるようになります。
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/KP53RgfKV54" title="YouTube 動画プレーヤー" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen />
+
+コンテンツ作成で最も効果的なのは、ユーザーが実際に尋ねている具体的な質問に答えることです。このワークフローなら、トピックを推測で選ぶ必要はありません。トラッキング中のプロンプトからブログ記事をすぐに生成できるため、どの記事も可視性の具体的なギャップを確実に埋められます。
+
+## プロンプトからコンテンツを作成する {#create-content-from-prompts}
+
+* サイドバーの **Prompts** タブに移動します
+* コンテンツを作成したいプロンプトの横にある三点アイコンをクリックします
+* **Create blog** を選択します
+* **Review drafts** セクションに移動します。ここには、生成したブログのうちレビューが必要なものがすべて表示されます
+* ブログを承認または却下します
+  * 承認すると、接続済みの **カスタムドメイン** (例: ai.yourdomain.com/article-slug) でブログが公開されます
+  * 却下する場合は、AI が学習できるようにフィードバックを入力してください
+
+## カスタムドメインを設定する {#set-up-custom-domain}
+
+公開するコンテンツはすべて、接続した**カスタムドメイン**でホストされます。公開前に設定画面でドメインを追加してください。これにより、コンテンツが **ai.yourdomain.com** のような URL で公開され、AI がウェブ検索で見つけられるようになります。
+
+### DNS レコードを追加する {#add-a-dns-record}
+
+#### The Prompting Company {#the-prompting-company}
+
+* Settings &gt; **Custom domains** に移動します
+* **Add domain** をクリックします
+* コンテンツのホスト先となるカスタムドメインを入力します (例: **ai.yourdomain.com**) 
+* DNS プロバイダーに追加する CNAME レコードが表示されます
+
+#### ご利用の DNS プロバイダー (例: Cloudflare、GoDaddy、Namecheap など) {#your-dns-provider-eg-cloudflare-godaddy-namecheap-etc} 
+
+* DNS &gt; **Manage DNS** に移動します
+
+* 次の値でレコードを追加します。
+
+  | Type  | Name                                    | Value          |
+  | ----- | --------------------------------------- | -------------- |
+  | CNAME | ai.yourdomain.com (ご自身のドメインに置き換えてください)  | web.tpcdns.com |
+
+* **Proxy** をオフにします
+
+* **TTL** は最も短い値を選択します
+
+### Google と Bing にインデックス登録をリクエストする {#submit-indexing-to-google-bing}
+
+カスタムドメインが Google と Bing にインデックスされるよう、インデックス登録をリクエストしてください。以下の URL 内の ai.yourdomain.com は、ご自身のドメインに置き換えてください。
+
+**Google:**
+
+* **Google Search Console** にアクセスします
+* **Add property** をクリックします
+* **Domain** (左側のオプション) を選択し、ドメインを入力します (例: ai.yourdomain.com) 
+* 画面の手順に従って DNS レコードを追加します
+* **Sitemaps** タブを開き、[https://ai.yourdomain.com/sitemap.xml](https://ai.yourdomain.com/sitemap.xml) を送信します
+
+**Bing:**
+
+* **Bing Webmaster Tools** にアクセスします
+* **Import from Google Search Console** を選択します
+* **Sitemaps** タブを開き、[https://ai.yourdomain.com/sitemap.xml](https://ai.yourdomain.com/sitemap.xml) を送信します

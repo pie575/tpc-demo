@@ -1,0 +1,181 @@
+{
+  "global": {
+    "anchors": [
+      {
+        "anchor": "平台",
+        "href": "https://app.promptingco.com",
+        "icon": "globe"
+      },
+      {
+        "anchor": "GitHub",
+        "href": "https://github.com/promptingcompany",
+        "icon": "github"
+      }
+    ]
+  },
+  "tabs": [
+    {
+      "groups": [
+        {
+          "group": "快速入门",
+          "pages": [
+            "zh/guides/quickstart-guide",
+            "zh/guides/MCP-Server"
+          ]
+        },
+        {
+          "group": "控制台概览",
+          "pages": [
+            "zh/guides/knowledge-base",
+            "zh/guides/add-prompts",
+            "zh/guides/create-content",
+            "zh/guides/metrics"
+          ]
+        },
+        {
+          "group": "内容发布",
+          "pages": [
+            "zh/guides/cms/overview",
+            "zh/guides/cms/wordpress",
+            "zh/guides/cms/sanity",
+            "zh/guides/cms/webflow",
+            "zh/guides/cms/ghost",
+            "zh/guides/cms/framer",
+            "zh/guides/cms/prismic",
+            "zh/guides/cms/custom"
+          ]
+        },
+        {
+          "group": "数据分析",
+          "pages": [
+            "zh/guides/analytics/cf-integration",
+            {
+              "group": "第三方日志导出工具",
+              "pages": [
+                "zh/guides/analytics/log-exporters/cloudflare-logpush",
+                "zh/guides/analytics/log-exporters/raw-events"
+              ]
+            },
+            "zh/guides/analytics/cf-traffic-export"
+          ]
+        },
+        {
+          "group": "智能体体验",
+          "pages": [
+            "zh/guides/coding-agent-optimization/overview",
+            {
+              "group": "核心概念",
+              "pages": [
+                "zh/guides/coding-agent-optimization/tasks",
+                "zh/guides/coding-agent-optimization/environments",
+                "zh/guides/coding-agent-optimization/runs",
+                "zh/guides/coding-agent-optimization/experiments",
+                "zh/guides/coding-agent-optimization/signals"
+              ]
+            },
+            "zh/guides/coding-agent-optimization/limits"
+          ]
+        }
+      ],
+      "tab": "指南"
+    },
+    {
+      "groups": [
+        {
+          "group": "快速入门",
+          "pages": [
+            "zh/cli/overview",
+            "zh/cli/installation",
+            "zh/cli/authentication",
+            "zh/cli/organizations"
+          ]
+        },
+        {
+          "group": "命令",
+          "pages": [
+            "zh/cli/commands/content",
+            "zh/cli/commands/knowledge",
+            "zh/cli/commands/prompts",
+            "zh/cli/commands/persona",
+            "zh/cli/commands/llmstxt",
+            "zh/cli/commands/analytics",
+            "zh/cli/commands/council",
+            "zh/cli/commands/simulation-environments",
+            "zh/cli/commands/agent-experience"
+          ]
+        },
+        {
+          "group": "实用示例",
+          "pages": [
+            "zh/cli/recipes/competitive-position-by-topic"
+          ]
+        },
+        {
+          "group": "参考文档",
+          "pages": [
+            "zh/cli/troubleshooting"
+          ]
+        }
+      ],
+      "tab": "CLI"
+    },
+    {
+      "groups": [
+        {
+          "group": "快速入门",
+          "pages": [
+            "zh/api/overview",
+            "zh/api/quickstart",
+            "zh/api/authentication"
+          ]
+        },
+        {
+          "group": "基本概念",
+          "pages": [
+            "zh/api/scopes",
+            "zh/api/rate-limits",
+            "zh/api/idempotency",
+            "zh/api/errors",
+            "zh/api/audit-log"
+          ]
+        },
+        {
+          "group": "内容 API",
+          "pages": [
+            "zh/api/content/overview",
+            "zh/api/content/site-pages",
+            "zh/api/content/documents"
+          ]
+        },
+        {
+          "group": "API 参考文档",
+          "openapi": {
+            "directory": "zh/api/reference",
+            "source": "/zh/api-reference/openapi.json"
+          }
+        }
+      ],
+      "tab": "API"
+    },
+    {
+      "groups": [
+        {
+          "group": "快速入门",
+          "pages": [
+            "zh/ts-sdk/index"
+          ]
+        },
+        {
+          "group": "TypeScript",
+          "pages": [
+            "zh/ts-sdk/introduction",
+            "zh/ts-sdk/installation",
+            "zh/ts-sdk/quickstart",
+            "zh/ts-sdk/advanced-usage"
+          ]
+        }
+      ],
+      "tab": "SDK"
+    }
+  ]
+}

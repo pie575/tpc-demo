@@ -1,0 +1,63 @@
+---
+title: "Framer を接続する"
+description: "Framer の API キーを使って、TPC の下書きを Framer CMS コレクションに公開します"
+---
+
+The Prompting Company は、Framer API 経由で Framer CMS コレクションにコンテンツを書き込みます。
+
+<Note>
+  Framer CMS API を利用するには、**Framer Pro プラン以上**が必要です。
+</Note>
+
+## 始める前に {#before-you-start}
+
+* Framer プロジェクトの管理者権限
+* プロジェクト内で作成済みの CMS コレクション
+
+## APIキーを生成する {#generate-an-api-key}
+
+1. Framerでプロジェクトを開きます。
+2. 左上のプロジェクト名をクリックし、**Settings** を開きます。
+3. **API** タブを開きます。
+4. **Generate API key** をクリックします。
+5. **CMS write** スコープを付与します。
+6. キーをコピーします。キーは一度しか表示されないため、必ずこの時点でコピーしてください。
+
+## プロジェクト URL とコレクション ID をコピーする {#copy-your-project-url-and-collection-id}
+
+* **プロジェクト URL** は、プロジェクトの `framer.com` の URL です。
+* **コレクション ID** は、Framer エディターで CMS コレクションを選択すると表示されます。URL またはコレクションの設定パネルからコピーしてください。
+
+## フィールド名を一致させる {#match-field-names}
+
+デフォルトのフィールドは次のとおりです。
+
+* `title`
+* `body`
+
+コレクションのフィールド名を変更している場合は、表示ラベルではなく、フィールドの slug を正確に貼り付けてください。
+
+## TPC で接続する {#connect-in-tpc}
+
+1. TPC のプロダクトワークスペースで **Settings → Integrations** を開きます。
+2. **Framer** を選択します。
+3. API キー、プロジェクト URL、コレクション ID を入力し、必要に応じてカスタムフィールドのslugも入力します。
+4. **Save** をクリックしてから、**Test connection** をクリックします。
+
+## トラブルシューティング {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+ご利用のプランに CMS API へのアクセスが含まれていないか、トークンが取り消されています。Pro 以上のプランをご利用であることを確認し、キーを再生成してください。
+
+### 404 collection not found {#404-collection-not-found}
+
+このコレクション ID は、入力したプロジェクト URL のものではありません。Framer で両方の値を再確認してください。
+
+### フィールドが空のまま保存される {#fields-save-empty}
+
+フィールドの slug は大文字と小文字が区別されるため、コレクションのスキーマと完全に一致させる必要があります。
+
+## 関連リンク {#related-links}
+
+* [Framer 開発者向けドキュメント](https://www.framer.com/developers/)

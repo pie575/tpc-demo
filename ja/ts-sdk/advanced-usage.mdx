@@ -1,0 +1,495 @@
+---
+title: "高度な使い方"
+description: "The Prompting Company TypeScript SDK を活用するための高度なパターンとテクニック"
+---
+
+# 高度な使い方 {#advanced-usage}
+
+The Prompting Company TypeScript SDK の高度な使用パターン、エラー処理、最適化の手法について説明します。
+
+## エラー処理 {#error-handling}
+
+SDK は、成功か失敗かを示す `ok` プロパティを含む構造化レスポンスを返します。データにアクセスする前に、必ずこのプロパティを確認してください。
+
+```typescript
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: "your-product",
+  organizationSlug: "your-org",
+});
+
+async function getDocumentSafely(path: string) {
+  try {
+    const result = await client.document.getByPath(path);
+    
+    if (!result.ok) {
+      // API エラーを処理
+      console.error('API Error:', result.error);
+      throw new Error(`Failed to fetch document: ${result.error?.message || 'Unknown error'}`);
+    }
+    
+    return result.data;
+  } catch (error) {
+    // ネットワークエラーや SDK エラーなどを処理
+    console.error('SDK Error:', error);
+    throw error;
+  }
+}
+```
+
+## クライアントの設定 {#client-configuration}
+
+### 環境ごとの設定 {#environment-based-configuration}
+
+環境ごとに異なる設定を作成します。
+
+```typescript
+// lib/sdk-config.ts
+import tpc from "@promptingcompany/sdk";
+
+interface SDKConfig {
+  productSlug: string;
+  organizationSlug: string;
+}
+
+function getSDKConfig(): SDKConfig {
+  return {
+    productSlug: process.env.TPC_PRODUCT_SLUG!,
+    organizationSlug: process.env.TPC_ORG_SLUG!,
+  };
+}
+
+export const client = new tpc(getSDKConfig());
+```
+
+### 複数のクライアントインスタンス {#multiple-client-instances}
+
+複数のプロダクトや組織にアクセスする必要がある場合は、次のようにします。
+
+```typescript
+// lib/multi-client.ts
+import tpc from "@promptingcompany/sdk";
+
+export const clients = {
+  mainProduct: new tpc({
+    productSlug: "main-product",
+    organizationSlug: "your-org",
+  }),
+  
+  docsProduct: new tpc({
+    productSlug: "documentation",
+    organizationSlug: "your-org",
+  }),
+  
+  partnerOrg: new tpc({
+    productSlug: "shared-docs",
+    organizationSlug: "partner-org",
+  }),
+};
+
+// 使用例
+const mainDoc = await clients.mainProduct.document.getByPath("guide/intro");
+const partnerdoc = await clients.partnerOrg.document.getByPath("api/reference");
+```
+
+## キャッシュ戦略 {#caching-strategies}
+
+### シンプルなインメモリキャッシュ {#simple-in-memory-cache}
+
+キャッシュを実装すると、API 呼び出しを削減できます。
+
+```typescript
+// lib/cached-client.ts
+import tpc from "@promptingcompany/sdk";
+
+class CachedSDKClient {
+  private client: tpc;
+  private cache = new Map<string, any>();
+  private ttl = 5 * 60 * 1000; // 5分
+
+  constructor(config: { productSlug: string; organizationSlug: string }) {
+    this.client = new tpc(config);
+  }
+
+  async getDocumentByPath(path: string, useCache = true) {
+    const cacheKey = `doc:${path}`;
+    
+    if (useCache && this.cache.has(cacheKey)) {
+      const cached = this.cache.get(cacheKey);
+      if (Date.now() - cached.timestamp < this.ttl) {
+        return cached.data;
+      }
+    }
+
+    const result = await this.client.document.getByPath(path);
+    
+    if (result.ok && useCache) {
+      this.cache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+      });
+    }
+    
+    return result;
+  }
+
+  clearCache() {
+    this.cache.clear();
+  }
+}
+
+export const cachedClient = new CachedSDKClient({
+  productSlug: process.env.PROMPTING_COMPANY_PRODUCT_SLUG!,
+  organizationSlug: process.env.PROMPTING_COMPANY_ORG_SLUG!,
+});
+```
+
+### Next.js App Router でのキャッシュ {#nextjs-app-router-with-caching}
+
+`unstable_cache` を使って、Next.js の組み込みキャッシュを活用します。
+
+```typescript
+// lib/cached-documents.ts
+import { unstable_cache } from 'next/cache';
+import { client } from './prompting-company';
+
+export const getCachedDocument = unstable_cache(
+  async (path: string) => {
+    const result = await client.document.getByPath(path);
+    
+    if (!result.ok) {
+      throw new Error(`Failed to fetch document: ${path}`);
+    }
+    
+    return result.data;
+  },
+  ['document-by-path'],
+  {
+    revalidate: 300, // 5分
+    tags: ['documents'],
+  }
+);
+
+// Server Components での使用例
+export default async function DocumentPage({ params }: { params: { path: string } }) {
+  const document = await getCachedDocument(params.path);
+  
+  return (
+    <div>
+      <h1>Document: {params.path}</h1>
+      <div>{document.content}</div>
+    </div>
+  );
+}
+```
+
+## バッチ処理 {#batch-operations}
+
+複数のドキュメントを効率よく取得したい場合は、次のようにします。
+
+```typescript
+// lib/batch-operations.ts
+import { client } from './prompting-company';
+
+export async function getMultipleDocuments(paths: string[]) {
+  const results = await Promise.allSettled(
+    paths.map(path => client.document.getByPath(path))
+  );
+
+  return results.map((result, index) => ({
+    path: paths[index],
+    success: result.status === 'fulfilled' && result.value.ok,
+    data: result.status === 'fulfilled' && result.value.ok ? result.value.data : null,
+    error: result.status === 'rejected' 
+      ? result.reason 
+      : result.status === 'fulfilled' && !result.value.ok 
+        ? result.value.error 
+        : null,
+  }));
+}
+
+// 使用例
+const documents = await getMultipleDocuments([
+  'en-us/contact',
+  'en-us/about',
+  'en-us/pricing',
+]);
+
+documents.forEach(({ path, success, data, error }) => {
+  if (success && data) {
+    console.log(`✅ ${path}: ${data.content.substring(0, 50)}...`);
+  } else {
+    console.error(`❌ ${path}: ${error}`);
+  }
+});
+```
+
+## React Hooks {#react-hooks}
+
+よく使うパターンに合わせてカスタムフックを作成しましょう：
+
+```typescript
+// hooks/use-document.ts
+import { useState, useEffect } from 'react';
+import { client } from '@/lib/prompting-company';
+
+interface UseDocumentResult {
+  document: any | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export function useDocument(path: string): UseDocumentResult {
+  const [document, setDocument] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDocument = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await client.document.getByPath(path);
+      
+      if (result.ok) {
+        setDocument(result.data);
+      } else {
+        setError('Failed to fetch document');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (path) {
+      fetchDocument();
+    }
+  }, [path]);
+
+  return {
+    document,
+    loading,
+    error,
+    refetch: fetchDocument,
+  };
+}
+
+// コンポーネントでの使用例
+export function DocumentViewer({ path }: { path: string }) {
+  const { document, loading, error, refetch } = useDocument(path);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!document) return <div>Document not found</div>;
+
+  return (
+    <div>
+      <button onClick={refetch}>Refresh</button>
+      <div>{document.content}</div>
+    </div>
+  );
+}
+```
+
+## TypeScript ユーティリティ {#typescript-utilities}
+
+型安全性を高めるユーティリティ型を作成します：
+
+```typescript
+// types/sdk.ts
+import tpc from "@promptingcompany/sdk";
+
+// クライアントの型を抽出
+export type TPCClient = InstanceType<typeof tpc>;
+
+// API レスポンス用のユーティリティ型を作成
+export type APIResponse<T> = {
+  ok: true;
+  data: T;
+} | {
+  ok: false;
+  error: {
+    message: string;
+    code?: string;
+  };
+};
+
+// Document 型（実際の SDK レスポンスに合わせて調整してください）
+export interface Document {
+  content: string;
+  path: string;
+  title?: string;
+  lastModified?: string;
+  metadata?: Record<string, any>;
+}
+
+// 適切な型付けを施したヘルパー関数
+export async function safeAPICall<T>(
+  apiCall: () => Promise<APIResponse<T>>
+): Promise<T> {
+  const result = await apiCall();
+  
+  if (!result.ok) {
+    throw new Error(result.error.message);
+  }
+  
+  return result.data;
+}
+
+// 使用例
+const document = await safeAPICall(() => 
+  client.document.getByPath("en-us/contact")
+);
+```
+
+## 開発とデバッグ {#development-and-debugging}
+
+### デバッグモード {#debug-mode}
+
+開発中はデバッグログを追加します。
+
+```typescript
+// lib/debug-client.ts
+import tpc from "@promptingcompany/sdk";
+
+class DebugSDKClient {
+  private client: tpc;
+  private debug: boolean;
+
+  constructor(config: { productSlug: string; organizationSlug: string }, debug = false) {
+    this.client = new tpc(config);
+    this.debug = debug || process.env.NODE_ENV === 'development';
+  }
+
+  async getDocumentByPath(path: string) {
+    if (this.debug) {
+      console.log(`[SDK] Fetching document: ${path}`);
+      console.time(`[SDK] ${path}`);
+    }
+
+    try {
+      const result = await this.client.document.getByPath(path);
+      
+      if (this.debug) {
+        console.timeEnd(`[SDK] ${path}`);
+        console.log(`[SDK] Result for ${path}:`, result.ok ? 'SUCCESS' : 'ERROR');
+        if (!result.ok) {
+          console.error(`[SDK] Error:`, result.error);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      if (this.debug) {
+        console.timeEnd(`[SDK] ${path}`);
+        console.error(`[SDK] Exception for ${path}:`, error);
+      }
+      throw error;
+    }
+  }
+}
+
+export const debugClient = new DebugSDKClient({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+});
+```
+
+## パフォーマンスの最適化 {#performance-optimization}
+
+### ドキュメントの並列読み込み {#parallel-document-loading}
+
+複数のドキュメントを並列で読み込むと、パフォーマンスが向上します。
+
+```typescript
+// components/multi-document-viewer.tsx
+import { useState, useEffect } from 'react';
+import { getMultipleDocuments } from '@/lib/batch-operations';
+
+interface MultiDocumentViewerProps {
+  paths: string[];
+}
+
+export function MultiDocumentViewer({ paths }: MultiDocumentViewerProps) {
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadDocuments() {
+      setLoading(true);
+      const results = await getMultipleDocuments(paths);
+      setDocuments(results);
+      setLoading(false);
+    }
+
+    loadDocuments();
+  }, [paths]);
+
+  if (loading) {
+    return <div>Loading {paths.length} documents...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {documents.map(({ path, success, data, error }) => (
+        <div key={path} className="border rounded-lg p-4">
+          <h3 className="font-semibold mb-2">{path}</h3>
+          {success && data ? (
+            <div className="prose">
+              {data.content.substring(0, 200)}...
+            </div>
+          ) : (
+            <div className="text-red-600">
+              Error: {error}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## ベストプラクティス {#best-practices}
+
+1. レスポンスデータにアクセスする前に、**必ず `ok` プロパティを確認してください**
+2. 開発体験の向上とエラーの早期検出のために、**TypeScript を使用してください**
+3. 頻繁にアクセスするドキュメントには**キャッシュを実装してください**
+4. ユーザーにわかりやすいエラーメッセージを表示するなど、**エラーを適切に処理してください**
+5. 設定には**環境変数を使用してください**
+6. API を頻繁に呼び出す場合は、**レート制限を考慮してください**
+7. ネットワーク障害に備えて**リトライ処理を実装してください**
+8. API 呼び出しの回数を減らすため、可能な場合は**バッチ処理を使用してください**
+
+## トラブルシューティング {#troubleshooting}
+
+### よくある問題 {#common-issues}
+
+**ドキュメントが見つからないエラー:**
+
+* 指定したドキュメントのパスが organization 内に存在するか確認してください
+* product の slug が正しいか確認してください
+* API key にそのドキュメントへのアクセス権限があるか確認してください
+
+**ネットワークのタイムアウト:**
+
+* 指数バックオフによるリトライ処理を実装してください
+* UX 向上のため、タイムアウトを短めに設定することを検討してください
+* ローディング状態を表示して、体感パフォーマンスを改善してください
+
+**大きなドキュメントでのメモリの問題:**
+
+* 利用可能であればページネーションを実装してください
+* サポートされていればストリーミングレスポンスを使用してください
+* 大量のドキュメントを扱う場合は、遅延読み込みを検討してください
+
+**TypeScript のエラー:**
+
+* 最新バージョンの SDK を使用しているか確認してください
+* TypeScript の設定に互換性があるか確認してください
+* レスポンスオブジェクトをチェックする際は、適切な型ガードを使用してください

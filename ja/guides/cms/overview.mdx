@@ -1,0 +1,30 @@
+---
+title: "CMS 連携"
+description: "The Prompting Company を CMS に接続し、生成したコンテンツを下書きとして公開します"
+---
+
+The Prompting Company は、生成したコンテンツを下書きとして CMS に直接公開します。CMS の接続はプロダクトごとに 1 回行うだけで、以降の公開操作はすべてその接続先に反映されます。
+
+## 対応CMS {#supported-cms}
+
+* [WordPress](/ja/guides/cms/wordpress) — セルフホスト版、またはWordPress.com Business+以上 (TPCコネクタプラグイン経由)
+* [Sanity](/ja/guides/cms/sanity) — プロジェクトスコープのAPIトークンを使用してデータセットに書き込み
+* [Webflow](/ja/guides/cms/webflow) — サイトAPIトークンを使用してCMSコレクションに書き込み
+* [Ghost](/ja/guides/cms/ghost) — Admin APIのカスタムインテグレーション
+* [Framer](/ja/guides/cms/framer) — Framer APIキーを使用してCMSコレクションに書き込み (Proプラン以上)
+* [Prismic](/ja/guides/cms/prismic) — 永続アクセストークンを使用してリポジトリに書き込み
+* [カスタムエンドポイント](/ja/guides/cms/custom) — Bearerトークンを使用して独自サーバーにJSONをPOST
+
+## 接続先 {#where-to-connect}
+
+CMSはすべて、プロダクトワークスペース内の **Settings → Integrations** からプロダクトごとに設定します。各コネクタでは認証情報を入力でき、保存時に検証が行われます。また、**Test connection** ボタンも用意されています。
+
+<Note>
+  TPCは常に下書きとして投稿します。CMS上で承認するまで、コンテンツが公開されることはありません。
+</Note>
+
+## 始める前に {#before-you-start}
+
+* 対象の CMS サイトの管理者である必要があります。API トークンの生成には、通常は管理者権限が求められます。
+* 他と切り分けて失効できるよう、`TPC publisher` というラベルを付けた専用の連携ユーザーまたはトークンを用意してください。
+* CMS がスコープ付きトークンに対応している場合 (Sanity、Webflow、Ghost など) は、下書きの作成に必要な最小限のスコープのみを付与してください。

@@ -1,0 +1,30 @@
+---
+title: "Integraciones con CMS"
+description: "Conecta The Prompting Company a tu CMS para publicar el contenido generado como borradores"
+---
+
+The Prompting Company publica el contenido generado directamente en tu CMS como borradores. Solo tienes que conectar un CMS una vez por producto y, a partir de entonces, cada publicación se enviará a ese destino.
+
+## CMS compatibles {#supported-cms}
+
+* [WordPress](/es/guides/cms/wordpress) — autoalojado o WordPress.com Business+ mediante el plugin conector de TPC
+* [Sanity](/es/guides/cms/sanity) — escritura en el dataset mediante un token de API con alcance de proyecto
+* [Webflow](/es/guides/cms/webflow) — escritura en colecciones del CMS mediante un token de API del sitio
+* [Ghost](/es/guides/cms/ghost) — integración personalizada con la Admin API
+* [Framer](/es/guides/cms/framer) — escritura en colecciones del CMS mediante una clave de API de Framer (plan Pro o superior)
+* [Prismic](/es/guides/cms/prismic) — escritura en el repositorio mediante un token de acceso permanente
+* [Endpoint personalizado](/es/guides/cms/custom) — envío de JSON mediante POST a tu propio servidor con un token bearer
+
+## Dónde conectar {#where-to-connect}
+
+Cada CMS se configura por producto desde **Settings → Integrations**, dentro del espacio de trabajo de tu producto. Cada conector acepta credenciales, las valida al guardarlas y ofrece un botón **Test connection**.
+
+<Note>
+  TPC siempre publica el contenido como borrador. Nada se publica hasta que lo apruebes en tu CMS.
+</Note>
+
+## Antes de empezar {#before-you-start}
+
+* Debes ser administrador del sitio del CMS de destino, ya que generar tokens de API suele requerir este rol.
+* Prepara un usuario de integración o un token dedicado con la etiqueta `TPC publisher` para poder revocarlo de forma independiente.
+* Si tu CMS admite tokens con alcance limitado (Sanity, Webflow, Ghost), concede solo el alcance mínimo necesario para crear borradores.

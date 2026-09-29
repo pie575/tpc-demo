@@ -1,0 +1,92 @@
+---
+title: "Integración con Cloudflare"
+description: "Registra las visitas a páginas en el edge desplegando un Cloudflare Worker que reenvía eventos page_visit a The Prompting Company"
+---
+
+El recopilador de Cloudflare Worker registra las visitas a páginas **en el edge**,
+antes de que las solicitudes lleguen a tu servidor de origen. El worker se coloca delante de tu sitio actual,
+actúa como proxy transparente para cada solicitud que coincida y reenvía los eventos de visita a The Prompting Company, sin
+modificar tu servidor de origen ni añadir JavaScript en el cliente.
+
+En esta guía verás cómo configurar el Cloudflare Worker en tu despliegue.
+
+## Cómo funciona {#how-it-works}
+
+El worker se vincula a una o varias rutas y actúa como un proxy transparente:
+
+1. Un visitante solicita una página que coincide con una ruta configurada (por ejemplo, `example.com/*`).
+2. El worker reenvía la solicitud original a tu servidor de origen y devuelve la respuesta de inmediato.
+3. Al mismo tiempo, el worker envía un evento de visita de página a The Prompting Company. Esto ocurre en segundo plano, por lo que nunca retrasa la respuesta al visitante.
+
+## Antes de empezar {#before-you-start}
+
+Necesitarás:
+
+* Una **cuenta de Cloudflare** con el dominio que quieres rastrear añadido como zona.
+* Una **clave de API de TPC** con el alcance `analytics:write`. Para crearla, ve a la configuración de tu organización (Organization Settings) y selecciona API Keys. Ten en cuenta que para crear una clave de API necesitas una cuenta con el plan Enterprise.
+* La carpeta `cf-collector` del [repositorio de ejemplos](https://github.com/promptingcompany/samples/)
+
+## Paso 1: Instalar las dependencias {#step-1-install-dependencies}
+
+Desde el directorio `cf-collector`, instala las dependencias:
+
+```bash
+npm ci
+```
+
+## Paso 2: Configura tu clave de API {#step-2-set-your-api-key}
+
+La clave de API se almacena como un [secreto de Wrangler](https://developers.cloudflare.com/workers/configuration/secrets/) cifrado, no en el archivo de configuración. Para configurarla, ejecuta:
+
+```bash
+npx wrangler secret put TPC_API_KEY
+```
+
+Pega tu clave cuando se te solicite.
+
+<Warning>
+  Nunca subas tu clave de API al repositorio ni la incluyas en `wrangler.jsonc`. Guárdala siempre como secreto.
+</Warning>
+
+## Paso 3: Configura tus rutas {#step-3-configure-your-routes}
+
+Edita el array `routes` en `wrangler.jsonc` para que coincida con las páginas que quieres monitorizar. Asigna a `pattern` tu dominio y a `zone_name` la zona de Cloudflare correspondiente:
+
+```jsonc wrangler.jsonc
+{
+  "routes": [
+    {
+      "pattern": "example.com/*",
+      "zone_name": "example.com"
+    }
+  ]
+}
+```
+
+Puedes añadir más entradas al array para monitorizar otros dominios o patrones de ruta.
+
+## Paso 4: Desplegar {#step-4-deploy}
+
+Para desplegar el worker en Cloudflare, ejecuta:
+
+```bash
+npm run wrangler:deploy
+```
+
+Una vez implementado el worker, Cloudflare enrutará todo el tráfico que coincida con tus patrones a través de él, y las visitas a las páginas deberían empezar a aparecer en tu página de analíticas.
+
+## Solución de problemas {#troubleshooting}
+
+### Los eventos no aparecen {#events-are-not-appearing}
+
+* Confirma que la URL de la solicitud coincida con un `pattern` de tu array `routes`, incluido el `zone_name` correcto.
+* Asegúrate de que el secreto `TPC_API_KEY` esté configurado en el entorno donde hiciste el despliegue (`npx wrangler secret list`).
+* Comprueba que el worker esté desplegado y vinculado a la ruta en el panel de Cloudflare, en **Workers &amp; Pages**.
+
+### Inspeccionar los registros en vivo {#inspect-live-logs}
+
+Transmite en directo los registros del worker desplegado para ver en tiempo real la entrega de eventos y los posibles errores:
+
+```bash
+npm run tail
+```

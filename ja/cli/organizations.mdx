@@ -1,0 +1,26 @@
+---
+title: "組織"
+description: "組織を一覧表示し、TPC CLI コマンドで --scope を指定します。"
+---
+
+# 組織 {#organizations}
+
+アカウントで利用できる組織を一覧表示します。
+
+```bash
+tpc org list
+```
+
+CLI はアクティブな組織やプロダクトを保存しません。組織またはプロダクト単位のコマンドを実行する際は、毎回 `--scope` を指定してください。
+
+```bash
+tpc product list --scope prompting-co
+tpc sim experiment list --scope cloudflare-dev/browser-run
+tpc analytics sov --scope nvidia-com/nvidia-dgx-spark --last 30d
+```
+
+形式は `<org-slug>/<product-slug>` で、ダッシュボードの URL (`https://app.promptingco.com/<org-slug>/p/<product-slug>/...`) と同じ順序です。この URL をそのまま `--scope` に貼り付けることもできます。組織のみを対象とするコマンドでは、プロダクトを省略して `--scope <org-slug>` と指定できます。
+
+従来の `<product-slug>/<org-slug>` の順序も移行期間中は引き続き使用できますが、警告が表示されます。
+
+`--scope` は永続フラグなので、サブコマンドの前後どちらに指定しても機能します。たとえば `tpc --scope pro-org/my-product content list` と `tpc content list --scope pro-org/my-product` は同じ動作になります。Cobra のフラグ解析を無効にしているコマンド (`tpc alpha …`) でも、サブコマンドの前であれば `--scope` を指定できます。

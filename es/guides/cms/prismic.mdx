@@ -1,0 +1,55 @@
+---
+title: "Conectar Prismic"
+description: "Publica borradores de TPC en un repositorio de Prismic con un token de acceso permanente"
+---
+
+The Prompting Company escribe documentos en tu repositorio de Prismic con un token de acceso permanente con permisos de escritura.
+
+## Antes de empezar {#before-you-start}
+
+* Rol de Owner o Administrator en el repositorio de Prismic.
+* Tus tipos personalizados desplegados en el repositorio.
+
+## Encuentra el nombre de tu repositorio {#find-your-repository-name}
+
+El nombre de tu repositorio de Prismic es el subdominio de tu URL de Prismic. Por ejemplo, si tu URL es `myblog.prismic.io`, el nombre del repositorio es `myblog`.
+
+## Generar un token de acceso permanente {#generate-a-permanent-access-token}
+
+1. Abre tu repositorio de Prismic.
+2. Ve a **Settings → API &amp; Security**.
+3. Desplázate hasta **Permanent access tokens**.
+4. Haz clic en **Create new** y concede acceso de **Write**.
+5. Copia el token de inmediato, ya que Prismic solo lo muestra una vez.
+
+## Conectar en TPC {#connect-in-tpc}
+
+1. Abre **Settings → Integrations** en el espacio de trabajo de tu producto en TPC.
+2. Selecciona **Prismic**.
+3. Introduce lo siguiente:
+   * **Repository name**: el subdominio (p. ej., `myblog`)
+   * **Access token**: el token que copiaste
+   * **Custom type**: el API ID del tipo personalizado en el que quieres escribir
+4. Haz clic en **Save** y, después, en **Test connection**.
+
+<Note>
+  Si tu repositorio es público y solo necesitas acceso de lectura, puedes dejar **Access token** en blanco. Sin embargo, TPC necesita acceso de escritura para publicar borradores.
+</Note>
+
+## Solución de problemas {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+El token es de solo lectura. Vuelve a generarlo con acceso **Write**.
+
+### 400 &quot;unknown type&quot; {#400-unknown-type}
+
+El valor de **Custom type** no coincide con ningún API ID desplegado. Consulta **Custom Types** en el dashboard de Prismic: el API ID aparece junto al nombre visible.
+
+### Los campos se guardan vacíos {#fields-save-empty}
+
+El contenido de Prismic basado en slices requiere que las rutas de los campos coincidan con el esquema de tu tipo personalizado. Verifica los API IDs de los campos y la estructura del texto enriquecido.
+
+## Enlaces relacionados {#related-links}
+
+* [Documentación de Prismic sobre tokens de acceso](https://prismic.io/docs/access-token)

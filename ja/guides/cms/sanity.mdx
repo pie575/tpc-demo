@@ -1,0 +1,60 @@
+---
+title: "Sanity を接続する"
+description: "プロジェクトスコープの API トークンを使って、TPC の下書きを Sanity に公開します"
+---
+
+The Prompting Company は、Editor または Maintainer 権限を持つプロジェクトスコープの API トークンを使用して、お使いの Sanity データセットにドキュメントを書き込みます。
+
+## 始める前に {#before-you-start}
+
+* 対象の Sanity プロジェクトで Admin または Developer ロールが付与されていること。
+* 書き込み先のデータセットにドキュメントスキーマがデプロイ済みであること。
+
+## API トークンを生成する {#generate-an-api-token}
+
+1. [sanity.io/manage](https://sanity.io/manage) にアクセスし、プロジェクトを開きます。
+2. **API** タブを開き、**Tokens** に移動します。
+3. **Add API token** をクリックします。
+4. 名前を `TPC publisher` とし、権限として **Editor** または **Maintainer** を選択します。
+5. トークンをコピーします。トークンは Sanity で一度しか表示されません。
+
+## プロジェクト ID とデータセットを確認する {#find-your-project-id-and-dataset}
+
+* **Project ID** は、`sanity.io/manage` のプロジェクトページ上部に表示されています。
+* **Dataset** は通常 `production` です。データセット名は正確に一致させてください。
+* **API バージョン** のデフォルトは `v2025-03-01` です。新しい機能が必要な場合にのみ、バージョンを上げてください。
+
+## スキーマのフィールドを合わせる {#match-your-schema-fields}
+
+TPC は 1 つのドキュメントタイプにのみ書き込みます。デフォルト値は次のとおりです。
+
+* **ドキュメントタイプ** — `post`
+* **フィールド** — `title`、`content`、`slug`、`excerpt`
+* **画像フィールド** — `thumbnail`、`hero` (任意) 
+
+スキーマで別の名前を使用している場合は、連携フォームにそのフィールド名を正確に貼り付けてください。画像フィールドは任意です。スキーマに画像参照がない場合は空欄のままにしてください。
+
+## TPC で接続する {#connect-in-tpc}
+
+1. TPC のプロダクトワークスペースで **Settings → Integrations** を開きます。
+2. **Sanity** を選択します。
+3. プロジェクト ID、データセット、API バージョン、ドキュメントタイプ、フィールド名、API トークンを入力します。
+4. **Save** をクリックしてから、**Test connection** をクリックします。
+
+## トラブルシューティング {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+トークンに書き込み権限がありません。**Editor** または **Maintainer** スコープでトークンを再生成してください。
+
+### 404 または「unknown type」 {#404-or-unknown-type}
+
+TPC で指定した **ドキュメントタイプ** が、デプロイ済みのスキーマに存在しません。スキーマをデプロイするか、スキーマと一致するようにタイプ名を修正してください。
+
+### フィールドが `null` として保存される {#fields-save-as-null}
+
+フィールド名は大文字と小文字が区別されます。表示ラベルではなく、スキーマキーと完全に一致させる必要があります。
+
+## 関連リンク {#related-links}
+
+* [Sanity API トークンのドキュメント](https://www.sanity.io/docs/http-auth)

@@ -1,0 +1,92 @@
+---
+title: "Cloudflare との連携"
+description: "Cloudflare Worker をデプロイして page_visit イベントを The Prompting Company に転送し、エッジでページ訪問を追跡します"
+---
+
+Cloudflare Worker コレクターは、リクエストがオリジンに到達する前に、**エッジで**
+ページ訪問を追跡します。Worker は既存サイトの前段に配置され、
+条件に一致するすべてのリクエストを透過的にプロキシしながら、ページ訪問イベントを The Prompting Company に転送します。
+オリジンサーバーの変更や、クライアント側 JavaScript の追加は一切不要です。
+
+このガイドでは、お使いのデプロイ環境に Cloudflare Worker をセットアップする手順を説明します。
+
+## 仕組み {#how-it-works}
+
+Worker は 1 つ以上のルートに紐付けられ、パススループロキシとして動作します。
+
+1. 訪問者が、設定済みのルート (例: `example.com/*`) に一致するページをリクエストします。
+2. Worker は元のリクエストをオリジンに転送し、そのレスポンスをすぐに返します。
+3. これと並行して、Worker はページ訪問イベントを The Prompting Company に送信します。この処理はバックグラウンドで行われるため、訪問者へのレスポンスが遅れることはありません。
+
+## 始める前に {#before-you-start}
+
+以下のものが必要です。
+
+* 追跡対象のドメインをゾーンとして追加済みの **Cloudflare アカウント**
+* `analytics:write` スコープを持つ **TPC API キー**。このキーは、Organization Settings を開き、API Keys を選択して作成できます。なお、API キーの作成には Enterprise Plan のアカウントが必要です。
+* [サンプルリポジトリ](https://github.com/promptingcompany/samples/)内の `cf-collector` フォルダー
+
+## ステップ 1: 依存関係をインストールする {#step-1-install-dependencies}
+
+`cf-collector` ディレクトリで、依存関係をインストールします。
+
+```bash
+npm ci
+```
+
+## ステップ 2：API キーを設定する {#step-2-set-your-api-key}
+
+API キーは設定ファイルではなく、暗号化された [Wrangler シークレット](https://developers.cloudflare.com/workers/configuration/secrets/)として保存されます。次のコマンドを実行して設定してください。
+
+```bash
+npx wrangler secret put TPC_API_KEY
+```
+
+入力を求められたら、キーを貼り付けてください。
+
+<Warning>
+  API キーをコミットしたり、`wrangler.jsonc` に記述したりしないでください。必ずシークレットとして保存してください。
+</Warning>
+
+## ステップ 3: ルートを設定する {#step-3-configure-your-routes}
+
+トラッキングしたいページに合わせて、`wrangler.jsonc` の `routes` 配列を編集します。`pattern` にはご自身のドメインを、`zone_name` には対応する Cloudflare ゾーンを設定してください。
+
+```jsonc wrangler.jsonc
+{
+  "routes": [
+    {
+      "pattern": "example.com/*",
+      "zone_name": "example.com"
+    }
+  ]
+}
+```
+
+配列にエントリを追加すれば、ほかのドメインやパスパターンも追跡できます。
+
+## ステップ 4: デプロイ {#step-4-deploy}
+
+Worker を Cloudflare にデプロイするには、次のコマンドを実行します。
+
+```bash
+npm run wrangler:deploy
+```
+
+デプロイが完了すると、設定したパターンに一致するすべてのトラフィックが Cloudflare によって Worker 経由でルーティングされ、アナリティクスページにページ訪問が表示されるようになります。
+
+## トラブルシューティング {#troubleshooting}
+
+### イベントが表示されない {#events-are-not-appearing}
+
+* リクエスト URL が `routes` 配列内のいずれかの `pattern` に一致していること、また `zone_name` が正しいことを確認してください。
+* デプロイ先の環境に `TPC_API_KEY` シークレットが設定されていることを確認してください (`npx wrangler secret list` で確認できます) 。
+* Cloudflare ダッシュボードの **Workers &amp; Pages** で、Worker がデプロイされ、ルートにバインドされていることを確認してください。
+
+### ライブログを確認する {#inspect-live-logs}
+
+デプロイ済みのWorkerからログをストリーミングすると、イベントの配信状況やエラーをリアルタイムで確認できます。
+
+```bash
+npm run tail
+```

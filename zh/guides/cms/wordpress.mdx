@@ -1,0 +1,67 @@
+---
+title: "连接 WordPress"
+description: "使用 TPC 连接器插件将 TPC 草稿发布到 WordPress"
+---
+
+The Prompting Company 借助一个轻量的连接器插件将草稿发布到 WordPress，该插件会提供一个通过令牌认证的端点。此方式适用于自托管的 WordPress，以及 WordPress.com Business 及更高级别的套餐 (即支持安装自定义插件的套餐) 。
+
+## 开始之前 {#before-you-start}
+
+* 拥有 WordPress 站点的管理员权限。
+* 具备上传和启用插件的权限。
+
+## 安装连接器 {#install-the-connector}
+
+1. 下载连接器插件：
+
+```text
+https://r2-assets.promptingco.com/tpc-wordpress-connector.php.zip
+```
+
+2. 在 WordPress 管理后台中，前往 **Plugins → Add New → Upload Plugin**。
+3. 上传 `tpc-wordpress-connector.php.zip`，然后点击 **Install Now**。
+4. 点击 **Activate**。菜单中随即会新增 **Settings → TPC Connector** 一项。
+
+## 生成连接器令牌 {#generate-a-connector-token}
+
+1. 打开 **Settings → TPC Connector**。
+2. 点击 **Generate Token**。
+3. 请立即复制令牌，该令牌仅显示一次。
+
+<Warning>
+  如果丢失了令牌，请重新生成。新令牌一经生成，旧令牌即刻失效。
+</Warning>
+
+## 在 TPC 中连接 {#connect-in-tpc}
+
+1. 在您的 TPC 产品工作区中，打开 **Settings → Integrations**。
+2. 选择 **WordPress**。
+3. 填写以下内容：
+   * **Site URL** — 您的 WordPress 站点根地址，例如 `https://blog.example.com`
+   * **Connector token** — 您在上文中复制的令牌
+4. 点击 **Save**，然后点击 **Test connection**。
+
+## Meta 标题和描述 {#meta-title-and-description}
+
+每篇发布的文章都会带上 TPC 中该文档的 meta 标题和 meta 描述。连接器会将它们写入当前启用的 SEO 插件，使其显示在该插件的文章设置中，并呈现在渲染后的页面上：
+
+* Yoast SEO
+* Rank Math
+* All in One SEO
+* SEOPress
+
+如果以上插件均未启用，连接器会直接在文章页面上设置 `<title>` 和 `<meta name="description">` 标签。此功能需要 0.4.0 或更高版本的连接器；旧版本会忽略这些字段。
+
+## 故障排除 {#troubleshooting}
+
+### 测试连接失败，返回 401 {#test-connection-fails-with-401}
+
+TPC 中的令牌与 WordPress 中的令牌不一致。请在 **Settings → TPC Connector** 中重新生成令牌，然后将新令牌粘贴到 TPC 中。
+
+### 测试连接失败，返回 404 {#test-connection-fails-with-404}
+
+原因是插件未激活，或站点 URL 有误。请确认该插件在 **Plugins → Installed Plugins** 中显示为已激活，且站点 URL 末尾不带任何路径。
+
+### 草稿已生成但图片无法显示 {#draft-appears-but-images-are-broken}
+
+向 WordPress 上传内容时，连接器需要能够访问你的媒体库。请确认该 WordPress 站点可以公开访问——TPC 通过 URL 上传图片，而非以二进制方式传输。

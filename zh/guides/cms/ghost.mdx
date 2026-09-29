@@ -1,0 +1,57 @@
+---
+title: "连接 Ghost"
+description: "使用自定义集成的 Admin API 密钥将 TPC 草稿发布到 Ghost"
+---
+
+The Prompting Company 通过自定义集成 (Custom Integration) 的 Admin API 密钥将内容发布到 Ghost。
+
+## 开始之前 {#before-you-start}
+
+* 拥有 Ghost 站点的 Owner 或 Administrator 角色。
+* Ghost 4.0 或更高版本。
+
+## 创建自定义集成 {#create-a-custom-integration}
+
+1. 在 Ghost 管理后台中，点击齿轮图标 (**Settings**) 。
+2. 打开 **Integrations**。
+3. 向下滚动到 **Custom integrations**，然后点击 **Add custom integration**。
+4. 将其命名为 `TPC publisher`，然后点击 **Create**。
+
+## 复制 Admin API 密钥 {#copy-the-admin-api-key}
+
+在集成页面中，复制 **Admin API 密钥**，格式如下：
+
+```text
+xxxxxxxxxxxxxxxxxxxxxxxx:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+```
+
+<Warning>
+  请复制 **Admin API 密钥**，而不是 Content API Key。TPC 需要写入权限，而只有 Admin 密钥才能创建草稿。
+</Warning>
+
+## 在 TPC 中连接 {#connect-in-tpc}
+
+1. 在 TPC 产品工作区中打开 **Settings → Integrations**。
+2. 选择 **Ghost**。
+3. 填写以下信息：
+   * **Site URL** — 你的 Ghost 博客根地址，例如 `https://blog.example.com`
+   * **Admin API key** — 你之前复制的密钥
+4. 点击 **Save**，然后点击 **Test connection**。
+
+## 故障排除 {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+密钥类型错误——Content API 密钥为只读密钥。请重新生成一个自定义集成，然后复制 Admin API Key。
+
+### 403 Forbidden {#403-forbidden}
+
+该 Ghost 站点对自定义集成设有限制。请确认你的角色是 Owner 或 Administrator。
+
+### 草稿已生成但图片缺失 {#draft-appears-but-images-are-missing}
+
+Ghost 通过 URL 获取图片。如果你的 Ghost 网络策略拦截了 TPC 托管的图片 URL，草稿仍会保存，但图片将显示为损坏状态。
+
+## 相关链接 {#related-links}
+
+* [Ghost Admin API 文档](https://ghost.org/docs/admin-api/)

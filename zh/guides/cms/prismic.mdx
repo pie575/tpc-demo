@@ -1,0 +1,55 @@
+---
+title: "连接 Prismic"
+description: "使用永久访问令牌将 TPC 草稿发布到 Prismic 仓库"
+---
+
+The Prompting Company 通过具有写入权限的永久访问令牌，将文档写入您的 Prismic 仓库。
+
+## 开始之前 {#before-you-start}
+
+* 拥有 Prismic 仓库的 Owner 或 Administrator 角色。
+* 已将自定义类型部署到该仓库。
+
+## 查找仓库名称 {#find-your-repository-name}
+
+Prismic 仓库名称就是 Prismic URL 中的子域名。例如，`myblog.prismic.io` 的仓库名称为 `myblog`。
+
+## 生成永久访问令牌 {#generate-a-permanent-access-token}
+
+1. 打开您的 Prismic 仓库。
+2. 前往 **Settings → API &amp; Security**。
+3. 向下滚动到 **Permanent access tokens**。
+4. 点击 **Create new**，并授予 **Write** 权限。
+5. 请立即复制该令牌，因为 Prismic 只会显示一次。
+
+## 在 TPC 中连接 {#connect-in-tpc}
+
+1. 在 TPC 产品工作区中打开 **Settings → Integrations**。
+2. 选择 **Prismic**。
+3. 填写以下信息：
+   * **Repository name** — 子域名 (例如 `myblog`) 
+   * **Access token** — 您刚才复制的令牌
+   * **Custom type** — 要写入的自定义类型的 API ID
+4. 点击 **Save**，然后点击 **Test connection**。
+
+<Note>
+  如果您的仓库是公开的，且只需要读取权限，可以将 **Access token** 留空。但 TPC 需要写入权限才能发布草稿。
+</Note>
+
+## 故障排除 {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+该令牌仅有只读权限。请重新生成一个具有 **Write** 权限的令牌。
+
+### 400 &quot;unknown type&quot; {#400-unknown-type}
+
+**Custom type** 的值与任何已部署的 API ID 都不匹配。请前往 Prismic 控制台查看 **Custom Types**，API ID 就显示在显示名称旁边。
+
+### 字段保存后为空 {#fields-save-empty}
+
+Prismic 基于切片 (slice) 的内容要求字段路径与你的自定义类型 schema 一致。请检查字段的 API ID 和富文本结构。
+
+## 相关链接 {#related-links}
+
+* [Prismic 访问令牌文档](https://prismic.io/docs/access-token)

@@ -1,0 +1,223 @@
+---
+title: "MCP 服务器"
+description: "在 Claude、Codex、Cursor、VS Code 及其他 MCP 客户端中安装 The Prompting Company MCP 服务器"
+---
+
+The Prompting Company 托管的远程 MCP 服务器地址为：
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+此服务器使用 Streamable HTTP 和 OAuth 2.1。在原生支持远程 MCP 的客户端中，通常只需提供服务器 URL 即可。客户端会自动完成动态客户端注册，并打开浏览器进行身份验证。
+
+<Note>
+  在常规的 MCP 客户端配置中，您无需手动创建或粘贴 OAuth 客户端 ID 或客户端密钥。原生远程 MCP 客户端会在 OAuth 流程中自动完成注册。
+</Note>
+
+<Note>
+  托管 OAuth 回调允许列表目前支持 Claude、ChatGPT 和
+  MCPJam。其他托管客户端的回调在通过审核并加入列表之前，应使用本地回环回调或 stdio
+  桥接工具 (例如 `mcp-remote`) 。
+</Note>
+
+## 服务器详情 {#server-details}
+
+* **MCP 传输 URL**：`https://app.promptingco.com/api/mcp`
+* **受保护资源元数据**：`https://app.promptingco.com/.well-known/oauth-protected-resource/api/mcp`
+* **授权服务器元数据**：`https://app.promptingco.com/.well-known/oauth-authorization-server/api/auth`
+
+## 开始之前 {#before-you-start}
+
+请确保你使用的客户端能够通过公网访问 `https://app.promptingco.com`。
+
+身份验证流程如下：
+
+1. MCP 客户端打开浏览器。
+2. 如有需要，登录 The Prompting Company。
+3. 在授权同意页面上点击同意。
+4. 浏览器将控制权交还给 MCP 客户端。
+
+## Claude {#claude}
+
+### Claude.ai / Claude Desktop {#claudeai-claude-desktop}
+
+1. 打开 **Settings** -&gt; **Connectors**。
+2. 添加自定义 MCP 服务器。
+3. 输入以下服务器 URL：
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+4. 启动连接流程。
+5. 在浏览器中完成登录和授权。
+6. 待浏览器完成重定向后，返回 Claude。
+
+<Warning>
+  Claude 通过 Anthropic 托管的基础设施发起连接。如果你在非生产环境中测试，MCP 端点必须能够公开访问，且 OAuth 元数据中声明的公共主机名必须与客户端所用的主机名一致。
+</Warning>
+
+## Claude Code {#claude-code}
+
+运行：
+
+```bash
+claude mcp add --transport http tpc https://app.promptingco.com/api/mcp
+```
+
+然后，在 Claude Code 中运行：
+
+```text
+/mcp
+```
+
+Claude Code 会在浏览器中启动 OAuth 流程。
+
+## Codex {#codex}
+
+运行：
+
+```bash
+codex mcp add tpc --url https://app.promptingco.com/api/mcp
+```
+
+如果这是您在 Codex 中添加的第一个远程 MCP 服务器，请在 `~/.codex/config.toml` 中启用 RMCP 客户端：
+
+```toml
+[features]
+experimental_use_rmcp_client = true
+```
+
+然后登录：
+
+```bash
+codex mcp login tpc
+```
+
+你也可以直接在 `~/.codex/config.toml` 中进行配置：
+
+```toml
+[features]
+experimental_use_rmcp_client = true
+
+[mcp_servers.tpc]
+url = "https://app.promptingco.com/api/mcp"
+```
+
+## Cursor {#cursor}
+
+如果你使用的 Cursor 版本直接支持远程 MCP URL，请使用以下配置：
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+如果你需要改用 stdio 桥接，请按如下方式配置：
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+## Visual Studio Code {#visual-studio-code}
+
+通过 `mcp-remote` 使用 stdio 桥接：
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+你也可以通过命令面板 (Command Palette) 添加：
+
+1. 运行 **MCP: Add Server**
+2. 选择 **Command (stdio)**
+3. 输入：
+
+```text
+npx -y mcp-remote https://app.promptingco.com/api/mcp
+```
+
+4. 将其命名为 `tpc`
+5. 在 **MCP: List Servers** 中启动服务器
+
+## Windsurf {#windsurf}
+
+将以下内容添加到你的 MCP 服务器配置中：
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+## Zed {#zed}
+
+将以下内容添加到你的设置中：
+
+```json
+{
+  "context_servers": {
+    "tpc": {
+      "source": "custom",
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"],
+      "env": {}
+    }
+  }
+}
+```
+
+## 其他客户端 {#other-clients}
+
+如果客户端不原生支持通过 OAuth 连接远程 MCP，请使用以下配置：
+
+* **命令**：`npx`
+* **参数**：`-y mcp-remote https://app.promptingco.com/api/mcp`
+
+## 故障排除 {#troubleshooting}
+
+### 浏览器认证成功，但客户端无法连接 {#browser-auth-succeeds-but-the-client-does-not-connect}
+
+* 关闭 MCP 客户端后重新打开。
+* 删除现有的 MCP 连接，然后重新添加。
+* 确保服务器 URL 与 `https://app.promptingco.com/api/mcp` 完全一致。
+
+### 授权同意页面卡住 {#consent-screen-gets-stuck}
+
+* 如果客户端提供了相应选项，请改用普通浏览器窗口完成授权，而不要在内嵌浏览器中操作。
+* 重新发起连接，以获取新签名的 OAuth URL。
+* 如果你通过代理或隧道进行测试，请确保 OAuth 元数据和 MCP 传输使用同一个公共主机名。
+
+### 客户端无法发现服务器 {#client-cannot-discover-the-server}
+
+请确认以下 URL 可以正常加载：
+
+```text
+https://app.promptingco.com/api/mcp
+https://app.promptingco.com/.well-known/oauth-protected-resource/api/mcp
+https://app.promptingco.com/.well-known/oauth-authorization-server/api/auth
+```
+
+预期行为：
+
+* 尚未完成身份验证时，`/api/mcp` 返回 `401`
+* 两个 well-known 端点均返回 `200`

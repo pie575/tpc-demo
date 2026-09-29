@@ -1,0 +1,416 @@
+---
+title: "Exportar el tráfico de rastreadores de IA desde Cloudflare"
+description: "Extrae a un CSV el tráfico de agentes y rastreadores de IA de tu dominio con proxy de Cloudflare para compartirlo con The Prompting Company"
+---
+
+Extrae a un CSV el tráfico de agentes y rastreadores de IA de tu dominio con proxy de Cloudflare para compartirlo con The Prompting Company. La métrica de [tráfico de IA](/es/guides/metrics#ai-traffic) muestra en tiempo real las visitas de IA a tu **dominio personalizado**. Si quieres obtener el tráfico de rastreadores de IA de un dominio que aún no está conectado a TPC, o el historial de tráfico anterior a la conexión, puedes extraerlo directamente de la GraphQL Analytics API de Cloudflare. Si prefieres un flujo continuo en lugar de una exportación puntual, consulta [Cloudflare Logpush](/es/guides/analytics/log-exporters/cloudflare-logpush) o la [API de eventos sin procesar](/es/guides/analytics/log-exporters/raw-events).
+
+En esta guía se explica cómo exportar el tráfico de rastreadores y agentes de IA (ChatGPT, GPTBot, OAI SearchBot, Claude, Perplexity, Applebot, Amazonbot, Meta, Bytespider, DuckAssistBot, MistralAI, entre otros) a un CSV con las columnas `date_range`, `path`, `host`, `userAgent` y `requests`.
+
+## Antes de empezar {#before-you-start}
+
+* Tu dominio debe estar **en modo proxy a través de Cloudflare** (el icono de nube del registro DNS aparece en naranja, no en gris).
+* Para crear un token de API con el método 1, necesitas acceso de **Super Administrator** o **Administrator** en la cuenta de Cloudflare.
+* Para crear un token de API con el método 2, necesitas acceso a la política **Permission group: &quot;Analytics Read&quot;** en la cuenta de Cloudflare.
+* Necesitas tener `python3` instalado; ejecuta `python3 --version` para comprobarlo.
+
+## Parte 1: Crear un token de API de Cloudflare {#part-1-create-a-cloudflare-api-token}
+
+Tanto los Account API Tokens como los User API Tokens funcionan con la GraphQL Analytics API. Elige el que mejor se adapte a tu caso:
+
+|                 | Account API Token                                              | User API Token                                       |
+| --------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
+| **Ubicación**   | Manage Account → Account API Tokens                            | My Profile → API Tokens                              |
+| **Ideal para**  | Configuraciones de equipo, automatización, scripts de servicio | Exportaciones puntuales individuales                 |
+| **Titularidad** | Pertenece a la cuenta de Cloudflare                            | Vinculado a tu cuenta de usuario personal            |
+| **Continuidad** | Sigue funcionando aunque un usuario deje la organización       | Deja de funcionar si se elimina tu cuenta de usuario |
+
+### Paso 1: Inicia sesión en Cloudflare {#step-1-log-in-to-cloudflare}
+
+Inicia sesión en el panel de Cloudflare. A continuación, sigue **uno** de los dos métodos que se describen más abajo.
+
+### Método 1: token de API de la cuenta {#method-1-account-api-token}
+
+1. En la barra lateral izquierda, haz clic en **Manage Account**.
+2. Haz clic en **Account API Tokens** (o ve a `https://dash.cloudflare.com/{Account ID}/api-tokens`).
+3. Haz clic en **Create Token**.
+4. Ponle al token un nombre como `AI traffic GraphQL read`.
+5. De forma predeterminada, la sección Permission policies debería mostrar un alcance personalizado a nivel de cuenta. Agrega la primera política:
+   * **Analytics &amp; Logs → Account Analytics → Read**
+6. Haz clic en **+ Add policy** para agregar una política a nivel de zona con los siguientes permisos:
+   * **DNS &amp; Zones → Zone → Read**
+   * **Analytics &amp; Logs → Zone Analytics → Read**
+7. Haz clic en **Review Token** y luego en **Create Token**.
+8. Copia el token y guárdalo en un lugar seguro.
+
+### Método 2: Token de API de usuario {#method-2-user-api-token}
+
+1. Ve a la página de resumen de tu dominio, desplázate hasta la sección API y haz clic en **Get your API token** (o ve a `https://dash.cloudflare.com/profile/api-tokens`).
+2. Haz clic en **+ Create Token**.
+3. Haz clic en **Get started** junto a &quot;Create Custom Token&quot;.
+4. Asigna un nombre al token (p. ej., `AI traffic GraphQL read`).
+5. Para el permiso 1: **Account → Account Analytics → Read**.
+6. Haz clic en **Add more**. Para el permiso 2: **Zone → Zone → Read**.
+7. Haz clic en **Add more**. Para el permiso 3: **Zone → Zone Analytics → Read**.
+8. Desplázate hasta **Zone Resources** y configúralo así: Include → Specific zone → `yourdomain.com`.
+9. Si quieres, establece un TTL para definir cuándo caduca el token.
+10. Haz clic en **Continue to summary** y, después, en **Create Token**.
+11. Guarda una copia del token en un lugar seguro.
+
+<Warning>
+  Trata este token como si fuera una contraseña: cualquiera que lo tenga puede leer las analíticas de tu cuenta. No lo compartas ni lo subas (commit) a ningún sitio público.
+</Warning>
+
+## Parte 2: Obtén tu Zone ID {#part-2-get-your-zone-id}
+
+1. En Cloudflare, ve a **Websites** y haz clic en tu dominio.
+2. Ve a **Overview**.
+3. En la parte derecha, busca **Zone ID** y cópialo. Lo necesitarás en la consulta de más abajo.
+
+## Parte 3: Abrir Cloudflare GraphQL Explorer {#part-3-open-cloudflare-graphql-explorer}
+
+1. Abre [https://graphql.cloudflare.com/explorer](https://graphql.cloudflare.com/explorer).
+2. Concede el acceso cuando se te solicite y revisa los permisos.
+3. Pega tu token de API en el campo **API Token** y haz clic en **Save**.
+
+## Parte 4: Ejecuta la consulta {#part-4-run-the-query}
+
+Cloudflare limita cada bloque `httpRequestsAdaptiveGroups` a una **ventana de 24 horas**, y la antigüedad máxima de los datos que puedes consultar depende de tu plan de Cloudflare (los planes Free y Pro normalmente solo muestran los últimos días). Comprueba cuántos días de historial ofrece tu plan antes de elegir un intervalo de fechas. Si prefieres no elegir las fechas a mano, ve directamente a [Generar automáticamente la consulta de varios días](#auto-generate-the-multi-day-query-optional): el script calcula una ventana móvil por ti.
+
+Pega la siguiente consulta en el explorador y haz estos reemplazos:
+
+* `REPLACE_WITH_ZONE_ID` → el Zone ID de la Parte 2.
+* `REPLACE_WITH_YOUR_DOMAIN` → tu dominio sin prefijos (p. ej., `example.com`, sin `https://` ni barra final).
+* `datetime_geq` / `datetime_lt` → una ventana de 24 horas dentro del intervalo que permite tu plan.
+
+### Cubrir varios días {#covering-multiple-days}
+
+<Note>
+  **Por qué la consulta se alarga tanto:** Cloudflare limita cada bloque `httpRequestsAdaptiveGroups` a una única ventana de 24 horas; no existe un parámetro del tipo &quot;dame del 6 al 13 de julio&quot;. Para cubrir N días, tienes que copiar y pegar el bloque completo (incluida la lista OR de `userAgent_like`, de unas 14 líneas) N veces, cada una con un alias único y con la ventana de fechas desplazada 24 horas. Una extracción de 8 días no es más que el mismo bloque repetido 8 veces. Ese es el único motivo por el que la consulta se vuelve tan larga.
+</Note>
+
+Para cubrir más de un día, duplica el bloque `httpRequestsAdaptiveGroups(...)` completo una vez por día. Asigna a cada bloque un **alias** único (la etiqueta que va antes de los dos puntos; p. ej., `d20260706`, `d20260707`) y desplaza su ventana de fechas 24 horas. Todos los bloques van dentro del mismo contenedor `zones(...)` y se ejecutan en una sola solicitud.
+
+Este es un ejemplo de **un solo día**:
+
+```graphql
+{
+  viewer {
+    zones(filter: { zoneTag: "REPLACE_WITH_ZONE_ID" }) {
+
+      d20260706: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-06T00:00:00Z"
+          datetime_lt: "2026-07-07T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+    }
+  }
+}
+```
+
+Y aquí tienes un ejemplo de **dos días** que muestra cómo se apilan los bloques:
+
+```graphql
+{
+  viewer {
+    zones(filter: { zoneTag: "REPLACE_WITH_ZONE_ID" }) {
+
+      d20260706: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-06T00:00:00Z"
+          datetime_lt: "2026-07-07T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+      d20260707: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-07T00:00:00Z"
+          datetime_lt: "2026-07-08T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+    }
+  }
+}
+```
+
+<Warning>
+  **Ten cuidado al copiar y pegar bloques:**
+
+  * Cada bloque necesita un **alias único** (`d20260706`, `d20260707`, etc.): los alias duplicados provocan un error de GraphQL.
+  * Asegúrate de que las **llaves estén emparejadas**. Cada `{` dentro de un bloque necesita su `}` de cierre. La forma más sencilla de comprobarlo: la apertura `d20260706: httpRequestsAdaptiveGroups(` y la `}` de cierre al final de la sección `dimensions` de ese bloque deben tener el mismo nivel de sangría.
+  * **Elimina cualquier texto sobrante** (como encabezados de página o títulos de pestañas) que se cuele al copiar desde un navegador o un PDF: cualquier cadena suelta dentro de la consulta provocará errores de sintaxis.
+</Warning>
+
+### Genera automáticamente la consulta de varios días (opcional) {#auto-generate-the-multi-day-query-optional}
+
+Si vas a extraer más de unos pocos días, copiar bloques a mano resulta tedioso. El siguiente script genera la consulta completa por ti y **desplaza automáticamente la ventana de fechas**: siempre extrae los últimos `NUM_DAYS` días hasta la medianoche UTC de hoy, así que nunca tendrás que editar ninguna fecha. Ejecútalo cada semana (o prográmalo con cron) y funcionará sin más.
+
+Guarda esto como `generate_ai_traffic_query.py`:
+
+```python
+from datetime import datetime, timedelta, timezone
+
+# ---- Configura estos valores ----
+ZONE_ID = "REPLACE_WITH_ZONE_ID"
+DOMAIN = "REPLACE_WITH_YOUR_DOMAIN"
+NUM_DAYS = 7   # últimos días que se obtendrán/cuántos bloques de 24 horas se generarán (el plan Free conserva ~7; auméntalo en los planes de pago)
+# --------------------------
+
+# Desplaza la ventana automáticamente: termina al inicio del día de hoy (UTC) y retrocede NUM_DAYS días.
+# El día de hoy está incompleto, así que el último bloque COMPLETO de 24 horas termina hoy a las 00:00Z.
+# Al anclarla aquí, se obtienen NUM_DAYS días completos que empiezan y terminan exactamente a medianoche, sin editar nada a mano.
+today_utc = datetime.now(timezone.utc).replace(
+    hour=0, minute=0, second=0, microsecond=0
+)
+start = today_utc - timedelta(days=NUM_DAYS)
+
+BOTS = [
+    "ChatGPT-User", "GPTBot", "OAI-SearchBot", "Claude-User",
+    "claude-code", "ClaudeBot", "PerplexityBot", "Applebot",
+    "Amazonbot", "Amazonbot-Video", "meta-externalagent",
+    "Bytespider", "DuckAssistBot", "MistralAI-User",
+]
+
+or_block = "\n".join(
+    f'            {{ userAgent_like: "%{bot}%" }}' for bot in BOTS
+)
+
+blocks = []
+for i in range(NUM_DAYS):
+    day = start + timedelta(days=i)
+    next_day = day + timedelta(days=1)
+    alias = f"d{day.strftime('%Y%m%d')}"
+    blocks.append(f"""      {alias}: httpRequestsAdaptiveGroups(
+        filter: {{
+          datetime_geq: "{day.strftime('%Y-%m-%d')}T00:00:00Z"
+          datetime_lt: "{next_day.strftime('%Y-%m-%d')}T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "{DOMAIN}"
+          OR: [
+{or_block}
+          ]
+        }}
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {{
+        count
+        dimensions {{
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }}
+      }}""")
+
+query = "{\n  viewer {\n" + f'    zones(filter: {{ zoneTag: "{ZONE_ID}" }}) {{\n\n'
+query += "\n\n".join(blocks)
+query += "\n\n    }\n  }\n}"
+
+print(query)
+```
+
+Ejecútala:
+
+```bash
+python3 generate_ai_traffic_query.py
+```
+
+Copia la salida impresa y pégala directamente en el GraphQL Explorer.
+
+<Note>
+  **Define la ventana una sola vez con `NUM_DAYS`.** Déjala en `7` para ajustarte al límite de retención del plan Free. Si tienes un plan de pago con mayor retención, basta con aumentar este número; no hay que cambiar nada más. Como la ventana toma &quot;hoy&quot; como referencia, el mismo script obtiene los datos de los últimos días cada vez que lo ejecutas, sin necesidad de editar fechas.
+</Note>
+
+<Note>
+  La lista de agentes de usuario anterior incluye los principales rastreadores y agentes de IA en el momento de redactar este documento. Añade o elimina entradas `userAgent_like` para hacer seguimiento de bots que no aparezcan en la lista.
+</Note>
+
+Haz clic en el botón rosa **Run** para ejecutar la consulta.
+
+## Parte 5: Guarda la respuesta como JSON {#part-5-save-the-response-as-json}
+
+1. Copia la respuesta completa del panel derecho del explorador.
+2. Abre un editor de **texto sin formato** (no uno de texto enriquecido).
+3. Pega la respuesta y guarda el archivo como `cloudflare_ai_traffic_response.json` en tu carpeta Descargas.
+
+<Warning>
+  El archivo debe guardarse como JSON en texto sin formato, no como texto enriquecido. Si usas TextEdit en Mac, consulta la sección Solución de problemas más abajo.
+</Warning>
+
+**Usuarios de Mac (TextEdit):**
+
+1. Abre TextEdit.
+2. Haz clic en **Format → Make Plain Text**.
+3. Pega la respuesta.
+4. Guarda el archivo como `cloudflare_ai_traffic_response.json`.
+
+Para comprobar el formato del archivo en Terminal:
+
+```bash
+cd ~/Downloads
+file cloudflare_ai_traffic_response.json
+```
+
+Si todo está bien, la salida mostrará `JSON data` o `ASCII text`. Si muestra `Rich Text Format`, vuelve a abrir el archivo en TextEdit, haz clic en **Format → Make Plain Text** y guárdalo de nuevo.
+
+## Parte 6: Convertir el JSON a CSV {#part-6-convert-the-json-to-csv}
+
+En la Terminal:
+
+```bash
+cd ~/Downloads
+nano convert_ai_traffic_json_to_csv.py
+```
+
+Pega este script:
+
+```python
+import json
+import csv
+
+input_file = "cloudflare_ai_traffic_response.json"
+output_file = "ai_traffic_export.csv"
+
+with open(input_file, "r") as f:
+    data = json.load(f)
+
+zone = data["data"]["viewer"]["zones"][0]
+
+with open(output_file, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["date_range", "path", "host", "userAgent", "requests"])
+
+    def sanitize_cell(value):
+            """Prefix cells that start with formula-trigger characters to prevent
+            spreadsheet formula injection when the CSV is opened in Excel/Sheets."""
+            s = str(value)
+            if s and s[0] in ('=', '+', '-', '@', '\t', '\r', '\n'):
+                return "'" + s
+            return s
+
+    for date_range, rows in zone.items():
+        for row in rows:
+            dims = row["dimensions"]
+            writer.writerow([
+                date_range,
+                sanitize_cell(dims["clientRequestPath"]),
+                sanitize_cell(dims["clientRequestHTTPHost"]),
+                sanitize_cell(dims["userAgent"]),
+                row["count"]
+            ])
+
+print(f"Saved to {output_file}")
+```
+
+Guarda el archivo (`Ctrl + O`, `Enter`, `Ctrl + X`) y ejecútalo:
+
+```bash
+python3 convert_ai_traffic_json_to_csv.py
+```
+
+Deberías ver `Saved to ai_traffic_export.csv`. El archivo CSV estará en tu carpeta de Descargas.
+
+## Parte 7: Envía el CSV a The Prompting Company {#part-7-send-the-csv-to-the-prompting-company}
+
+Envía `ai_traffic_export.csv` a tu contacto de TPC o escríbenos a [support@promptingco.com](mailto:support@promptingco.com) con el archivo adjunto para que podamos incorporarlo a tu dashboard de tráfico de IA.
+
+## Solución de problemas {#troubleshooting}
+
+### La consulta falla con un error de permisos {#the-query-fails-with-a-permissions-error}
+
+A tu token de API le falta un alcance. Revisa de nuevo la Parte 1: necesitas **Account Analytics → Read**, **Zone → Read** y **Zone Analytics → Read**, con el recurso de zona limitado a tu dominio.
+
+### `file` indica &quot;Rich Text Format&quot; en lugar de JSON {#file-reports-rich-text-format-instead-of-json}
+
+TextEdit usa texto enriquecido de forma predeterminada. Vuelve a abrir el archivo, haz clic en **Format → Make Plain Text**, vuelve a pegar la respuesta y guarda el archivo.
+
+### La consulta de GraphQL devuelve un resultado vacío {#the-graphql-query-returns-an-empty-result}
+
+Es probable que tu ventana de fechas quede fuera del período de retención de tu plan de Cloudflare, o que `REPLACE_WITH_YOUR_DOMAIN` no coincida exactamente con el valor de `clientRequestHTTPHost` de tu zona (sin `https://` ni barra final). Si usas el script con ventana de fechas automática, asegúrate de que `NUM_DAYS` no supere el período de retención de tu plan.
+
+### `python3: command not found` {#python3-command-not-found}
+
+Instala Python 3 (por ejemplo, con `brew install python3` en Mac) y vuelve a ejecutar el script.

@@ -1,0 +1,83 @@
+---
+title: "カスタムエンドポイントを接続する"
+description: "bearer 認証付きの JSON POST エンドポイントを介して、TPC の下書きを自社サーバーに公開します"
+---
+
+お使いの CMS がネイティブでサポートされていない場合は、カスタムエンドポイント連携を使用してください。The Prompting Company は、bearer トークンを付与して、お使いのエンドポイントに JSON を POST します。
+
+## エンドポイントの要件 {#endpoint-requirements}
+
+サーバーは次の要件を満たす必要があります。
+
+* `Content-Type: application/json` の `POST` リクエストを受け付けること
+* `Authorization: Bearer <token>` ヘッダーを検証すること
+* 成功時に `2xx` ステータスコードを返すこと
+
+レスポンスボディは TPC にログとして記録されますが、解析はされません。
+
+## Bearer トークン認証 {#bearer-token-authentication}
+
+TPC は、連携フォームに貼り付けたトークンを次の形式で送信します。
+
+```text
+Authorization: Bearer <token>
+```
+
+リクエストを処理する前に、エンドポイント側でこれを検証してください。有効な bearer トークンが含まれていないリクエストは、すべて `401` で拒否してください。
+
+## ボディテンプレート {#body-template}
+
+プレースホルダーを使って、TPC のフィールドをエンドポイントが期待する形式にマッピングします。使用できるプレースホルダーは次のとおりです。
+
+* `{{title}}`
+* `{{content}}`
+* `{{excerpt}}`
+* `{{platform}}`
+* `{{status}}`
+* `{{thumbnailUrl}}`
+* `{{heroImageUrl}}`
+
+ボディテンプレートの例:
+
+```json
+{
+  "title": "{{title}}",
+  "html": "{{content}}",
+  "cover": "{{heroImageUrl}}"
+}
+```
+
+TPC は送信前にプレースホルダーを値に置き換えます。値が設定されていないプレースホルダーは空文字列になります。
+
+## カスタムヘッダー (任意) {#optional-custom-headers} 
+
+エンドポイントで追加のヘッダー (API キー、テナント ID など) が必要な場合は、JSON オブジェクト形式で連携フォームに貼り付けてください。
+
+```json
+{ "X-Tenant-Id": "abc123" }
+```
+
+## TPC で接続する {#connect-in-tpc}
+
+1. TPC のプロダクトワークスペースで **Settings → Integrations** を開きます。
+2. **Custom endpoint** を選択します。
+3. 次の項目を入力します。
+   * **Endpoint URL** — TPC の POST 送信先となる完全修飾 URL
+   * **Bearer token** — サーバー側で検証するトークン
+   * **Body template** — プレースホルダーを含む JSON
+   * **Custom headers** — JSON オブジェクト(任意)
+4. **Save** をクリックしてから、**Test connection** をクリックします。
+
+## トラブルシューティング {#troubleshooting}
+
+### 接続テストがタイムアウトする {#test-connection-times-out}
+
+TPC は応答を最大 30 秒間待ちます。エンドポイントがインターネットから公開アクセスでき、この時間内に応答することを確認してください。
+
+### 401 または 403 {#401-or-403}
+
+エンドポイントが bearer トークンを拒否しています。サーバーに保存されているトークンと、TPC に貼り付けたトークンが一致しているか確認してください。
+
+### 2xx 以外のステータスが返されたのにコンテンツが保存されている {#non-2xx-status-but-content-saved}
+
+`2xx` ステータスは、書き込みが永続化されてから返してください。2xx 以外のレスポンスはすべて失敗として扱われ、公開ログにエラーとして表示されます。

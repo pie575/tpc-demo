@@ -1,0 +1,65 @@
+---
+title: "智能体文档"
+description: "使用 TPC 文档端点处理生成的内容及草稿工作流。"
+---
+
+# 智能体文档 {#agentic-documents}
+
+智能体文档是挂靠在某个产品下、经过生成或审阅的内容记录。它与站点页面有所不同：站点页面是用于内容同步的稳定载体，而智能体文档则负责支撑生成内容、草稿、元数据建议和审阅流程。
+
+## 读取文档 {#read-a-document}
+
+需要 `content:read` 权限。
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+## 按路径查找文档 {#find-a-document-by-path}
+
+如果源系统只知道 product 路径，而不知道文档 ID，可以使用路径查找：
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/by-path?brandId=$TPC_PRODUCT_ID&path=docs/install" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+此旧版端点的查询参数仍名为 `brandId`，请传入 product ID。
+
+## 更新文档 {#update-a-document}
+
+需要 `content:write` 权限。
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -X PUT \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: document-update-$DOCUMENT_ID" \
+  --data '{
+    "title": "Install The Prompting Company",
+    "content": "# Install The Prompting Company\n\nSet up TPC and publish content.",
+    "metaTitle": "Install The Prompting Company",
+    "metaDescription": "Set up TPC and publish content."
+  }'
+```
+
+## 更新优先级 {#update-priority}
+
+如果只需修改文档优先级，请使用 `PATCH`：
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -X PATCH \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: document-priority-$DOCUMENT_ID" \
+  --data '{
+    "priority": 80
+  }'
+```
+
+## 审阅工作流 {#review-workflows}
+
+草稿创建、元数据建议和域名关联等端点目前仅供控制台/内部使用。使用 API key 调用某个路由前，请先查阅自动生成的 Reference 部分，确认该路由是否公开。

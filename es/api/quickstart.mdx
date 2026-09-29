@@ -1,0 +1,198 @@
+---
+title: "Inicio rápido"
+description: "Realiza tu primera solicitud correcta a la API de TPC con una clave de API."
+---
+
+# Inicio rápido {#quickstart}
+
+Si ya tienes acceso a una organización de TPC, puedes hacer tu primera solicitud de contenido en menos de cinco minutos.
+
+## Paso 1: Crea una clave de API {#step-1-create-an-api-key}
+
+Abre la configuración de claves de API de tu organización:
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+Crea una clave con estos alcances:
+
+```text
+content:read
+content:write
+```
+
+Copia la clave de inmediato. TPC muestra el secreto una sola vez.
+
+<Note>
+  Usa una clave de solo lectura con únicamente el alcance `content:read` hasta que tu integración necesite
+  crear, actualizar o eliminar contenido.
+</Note>
+
+## Paso 2: Haz tu primera solicitud {#step-2-make-your-first-request}
+
+Exporta tu clave y el ID de tu producto:
+
+```bash
+export TPC_API_KEY="tpc_api_key_here"
+export TPC_PRODUCT_ID="product_123"
+```
+
+Lista el contenido publicado del producto:
+
+```bash
+curl "https://app.promptingco.com/api/v1/content?productId=$TPC_PRODUCT_ID&page=1&pageSize=10" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+Si la solicitud se completa correctamente, la respuesta devuelve `ok: true`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "scope": {
+      "product": {
+        "id": "product_123",
+        "name": "Example Product",
+        "slug": "example"
+      },
+      "organization": {
+        "id": "org_123",
+        "name": "Example Org",
+        "slug": "example-org"
+      }
+    },
+    "page": 1,
+    "pageSize": 10,
+    "total": 1,
+    "totalPages": 1,
+    "items": [
+      {
+        "id": "page_123",
+        "title": "Pricing",
+        "filePath": "pricing",
+        "sourceUrl": "/pricing",
+        "status": "published",
+        "type": "manual",
+        "isManual": true,
+        "metaTitle": "Pricing",
+        "metaDescription": null,
+        "publishedAt": "2026-04-30T00:00:00.000Z",
+        "createdAt": "2026-04-30T00:00:00.000Z",
+        "updatedAt": "2026-04-30T00:00:00.000Z",
+        "domains": []
+      }
+    ]
+  }
+}
+```
+
+## Paso 3: Analiza el sobre de respuesta {#step-3-parse-the-envelope}
+
+Todos los endpoints JSON devuelven un `ApiResult<T>`:
+
+```ts
+type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; code: string; message: string; details?: unknown };
+```
+
+Gestiona ambas ramas de forma explícita:
+
+```ts
+const response = await fetch(
+  `https://app.promptingco.com/api/v1/content?productId=${productId}`,
+  {
+    headers: {
+      "x-api-key": process.env.TPC_API_KEY!,
+    },
+  },
+);
+
+const result = await response.json();
+
+if (!result.ok) {
+  throw new Error(`${result.code}: ${result.message}`);
+}
+
+console.log(result.data.items);
+```
+
+## Paso 4: Agregar paginación y filtros {#step-4-add-pagination-and-filters}
+
+El endpoint que lista el contenido acepta filtros como parámetros de la cadena de consulta:
+
+```bash
+curl "https://app.promptingco.com/api/v1/content?productId=$TPC_PRODUCT_ID&query=pricing&status=published&page=1&pageSize=25&orderBy=updatedAt&orderByDirection=desc" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+Filtros habituales:
+
+| Parámetro de consulta | Finalidad                                                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `query` o `q`         | Busca en el título de la página y en los metadatos del contenido.                                                                                                         |
+| `status`              | `published` (predeterminado) o `draft` para páginas publicadas; `pending_review`, `generating`, `failed`, `rejected` o `approved` para borradores en la cola de revisión. |
+| `pathPrefix`          | Devuelve las páginas que se encuentran en una ruta, como `blog/`.                                                                                                         |
+| `hasContent`          | Devuelve las páginas con o sin contenido almacenado.                                                                                                                      |
+| `page` y `pageSize`   | Permiten paginar los resultados, con hasta 100 elementos por solicitud.                                                                                                   |
+
+## Paso 5: Crear una página {#step-5-create-a-page}
+
+Crea una página con `content:write`:
+
+```bash
+curl "https://app.promptingco.com/api/v1/content" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: content-create-pricing-2026-04-30" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "slug": "docs/api-quickstart",
+        "title": "API quickstart",
+        "content": "# API quickstart\n\nCreated from the TPC API."
+      }
+    ]
+  }'
+```
+
+Respuesta esperada:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "createdCount": 1,
+    "failedCount": 0,
+    "created": [
+      {
+        "id": "page_456",
+        "slug": "docs/api-quickstart",
+        "title": "API quickstart",
+        "sourceUrl": null,
+        "status": "pending_review",
+        "domains": []
+      }
+    ],
+    "failed": []
+  }
+}
+```
+
+Las páginas creadas pasan a la cola de revisión. Apruébalas y publícalas con `POST /api/v1/content/{draftId}/review` (`{"action": "approve"}`) —al aprobarlas, su publicación se pone en cola automáticamente— o consulta la cola con `GET /api/v1/content?status=pending_review`.
+
+## Solución de problemas {#troubleshooting}
+
+| Estado | Error                | Qué comprobar                                                                               |
+| ------ | -------------------- | ------------------------------------------------------------------------------------------- |
+| `401`  | `UNAUTHORIZED`       | Falta la clave, se revocó, está mal escrita o se envió con un encabezado incorrecto.        |
+| `403`  | `insufficient_scope` | Añade el alcance que falta o usa una clave creada para este flujo de trabajo.               |
+| `404`  | `NOT_FOUND`          | Comprueba que el producto pertenece a la organización propietaria de la clave.              |
+| `409`  | `CONFLICT`           | Reutilizaste una `Idempotency-Key` con un cuerpo de solicitud distinto.                     |
+| `429`  | `TOO_MANY_REQUESTS`  | Espera el tiempo indicado en `Retry-After` y vuelve a intentarlo con retroceso exponencial. |
+
+Todas las respuestas incluyen `x-request-id`. Indica ese valor cuando te pongas en contacto con soporte.

@@ -1,0 +1,77 @@
+---
+title: "Prompts"
+description: "Lista, crea y revisa prompts y sugerencias de prompts desde la CLI de TPC."
+---
+
+# Prompts {#prompts}
+
+Administra los prompts con seguimiento, los clústeres de temas y las sugerencias de prompts generadas para un producto. Pasa `--scope <product-slug>/<org-slug>` para seleccionar el producto.
+
+```bash
+tpc --scope my-product/pro-org prompts list
+tpc --scope my-product/pro-org prompts topics list
+tpc --scope my-product/pro-org prompts suggestions list
+```
+
+## Sugerencias {#suggestions}
+
+Las sugerencias son candidatas generadas automáticamente. Al aprobar una, se crea un prompt con seguimiento y se inician consultas de conversación en los motores de respuesta seleccionados.
+
+```
+generate  →  list / update  →  approve or reject
+```
+
+### Listar sugerencias {#list-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions list
+tpc --scope my-product/pro-org prompts suggestions list --topic-id <topic-id>
+tpc --scope my-product/pro-org prompts suggestions list --view <view-id>
+tpc --scope my-product/pro-org prompts suggestions list --format json
+```
+
+Si omites `--view`, se devuelve la biblioteca del producto sin filtrar por ámbito.
+
+### Generar sugerencias {#generate-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions generate
+tpc --scope my-product/pro-org prompts suggestions generate --topic-id <topic-id>
+tpc --scope my-product/pro-org prompts suggestions generate --language es
+```
+
+Al generar sugerencias, se reemplaza la biblioteca de sugerencias actual del producto o tema seleccionado. El producto debe tener contexto disponible.
+
+### Actualizar una sugerencia {#update-a-suggestion}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions update <id> --message "Updated text"
+tpc --scope my-product/pro-org prompts suggestions update <id> --engine chatgpt --engine gemini
+tpc --scope my-product/pro-org prompts suggestions update <id> --persona-id <persona-id>
+```
+
+Debes indicar al menos una de las opciones `--message`, `--engine` o `--persona-id`. Estos valores se aplican cuando se aprueba la sugerencia.
+
+### Aprobar sugerencias {#approve-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions approve <id> --yes
+tpc --scope my-product/pro-org prompts suggestions approve <id> <id> --engine chatgpt --yes
+```
+
+La aprobación crea de inmediato prompts con seguimiento y consultas de conversación. Añadir prompts puede modificar los resultados futuros de Share of Voice. El Share of Voice a nivel de producto pondera cada prompt según el número de motores en los que se ejecuta. Confirma con `--yes` o escribe `yes` cuando se te solicite.
+
+### Rechazar sugerencias {#reject-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions reject <id>
+tpc --scope my-product/pro-org prompts suggestions reject <id> --feedback "off topic"
+```
+
+## Prompts con seguimiento {#tracked-prompts}
+
+```bash
+tpc --scope my-product/pro-org prompts list
+tpc --scope my-product/pro-org prompts create --message "What is the best pricing tool?"
+tpc --scope my-product/pro-org prompts topics list
+```

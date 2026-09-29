@@ -1,0 +1,26 @@
+---
+title: "シミュレーション環境"
+description: "TPC CLI を使って、エージェントのシミュレーション環境を作成・設定します。"
+---
+
+# シミュレーション環境コマンド {#simulation-environment-commands}
+
+シミュレーション環境を作成します：
+
+```bash
+tpc sim env create \
+  --name "My Environment" \
+  --agent-config '{"harness":"claude","model":"claude-sonnet-4-6"}'
+```
+
+タスクのリンクとスケジュールを指定して環境を作成します：
+
+```bash
+tpc sim env create \
+  --name "Test Env" \
+  --agent-config @examples/agent-config.json \
+  --task-ids task_123,task_456 \
+  --schedule 7d
+```
+
+サンドボックスプロバイダーは TPC が管理します。CLI では、エージェント設定やポータブル環境ファイルで `sandboxProvider` を指定することはできません。

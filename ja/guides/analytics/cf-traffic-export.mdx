@@ -1,0 +1,416 @@
+---
+title: "Cloudflare から AI クローラーのトラフィックをエクスポートする"
+description: "Cloudflare でプロキシしているドメインの AI エージェントおよびクローラーのトラフィックを CSV に書き出し、The Prompting Company と共有します"
+---
+
+Cloudflare でプロキシしているドメインの AI エージェントおよびクローラーのトラフィックを CSV に書き出し、The Prompting Company と共有します。[AI トラフィック](/ja/guides/metrics#ai-traffic)メトリクスでは、**カスタムドメイン**への AI からのアクセスをリアルタイムで可視化できます。まだ TPC に接続していないドメインの AI クローラートラフィックや、接続前のトラフィック履歴が必要な場合は、Cloudflare の GraphQL Analytics API から直接取得することもできます。一回限りのエクスポートではなく継続的にデータを受け取りたい場合は、[Cloudflare Logpush](/ja/guides/analytics/log-exporters/cloudflare-logpush) または [raw events API](/ja/guides/analytics/log-exporters/raw-events) を参照してください。
+
+このガイドでは、AI クローラーおよびエージェント (ChatGPT、GPTBot、OAI SearchBot、Claude、Perplexity、Applebot、Amazonbot、Meta、Bytespider、DuckAssistBot、MistralAI など) からのトラフィックを、`date_range`、`path`、`host`、`userAgent`、`requests` の各列を含む CSV にエクスポートする手順を説明します。
+
+## 始める前に {#before-you-start}
+
+* ドメインが **Cloudflare 経由でプロキシ**されている必要があります (DNS レコードの雲アイコンがグレーではなくオレンジ色になっていること) 。
+* 方法 1 で API トークンを作成するには、Cloudflare アカウントの **Super Administrator** または **Administrator** 権限が必要です。
+* 方法 2 で API トークンを作成するには、Cloudflare アカウントで **Permission group: &quot;Analytics Read&quot;** ポリシーへのアクセス権が必要です。
+* `python3` がインストールされている必要があります。`python3 --version` を実行して確認してください。
+
+## パート 1: Cloudflare API トークンを作成する {#part-1-create-a-cloudflare-api-token}
+
+GraphQL Analytics API では、Account API Tokens と User API Tokens のどちらも使用できます。状況に応じて選択してください。
+
+|           | Account API Token                   | User API Token          |
+| --------- | ----------------------------------- | ----------------------- |
+| **場所**    | Manage Account → Account API Tokens | My Profile → API Tokens |
+| **適した用途** | チームでの運用、自動化、サービス用スクリプト              | 個人による単発のエクスポート          |
+| **所有者**   | Cloudflare アカウントに帰属                 | 個人のユーザーアカウントに紐づく        |
+| **継続性**   | 個々のユーザーが退職・離任しても引き続き使用可能            | ユーザーアカウントが削除されると使用不可    |
+
+### ステップ 1: Cloudflare にログインする {#step-1-log-in-to-cloudflare}
+
+Cloudflare ダッシュボードにログインします。続いて、以下の 2 つの方法のうち**いずれか 1 つ**を実行してください。
+
+### 方法 1：アカウント API トークン {#method-1-account-api-token}
+
+1. 左側のサイドバーで **Manage Account** をクリックします。
+2. **Account API Tokens** をクリックします (または `https://dash.cloudflare.com/{Account ID}/api-tokens` にアクセスします) 。
+3. **Create Token** をクリックします。
+4. トークンに `AI traffic GraphQL read` などの名前を付けます。
+5. Permission policies セクションは、デフォルトでアカウントレベルのカスタムスコープが選択されています。1 つ目のポリシーを追加します：
+   * **Analytics &amp; Logs → Account Analytics → Read**
+6. **+ Add policy** をクリックし、以下の権限を持つゾーンレベルのポリシーを追加します：
+   * **DNS &amp; Zones → Zone → Read**
+   * **Analytics &amp; Logs → Zone Analytics → Read**
+7. **Review Token** をクリックし、続いて **Create Token** をクリックします。
+8. トークンをコピーし、安全な場所に保管します。
+
+### 方法 2: ユーザー API トークン {#method-2-user-api-token}
+
+1. ドメインの概要ページを開き、API セクションまでスクロールして **Get your API token** をクリックします (または `https://dash.cloudflare.com/profile/api-tokens` にアクセスします) 。
+2. **+ Create Token** をクリックします。
+3. 「Create Custom Token」の横にある **Get started** をクリックします。
+4. トークン名を入力します (例: `AI traffic GraphQL read`) 。
+5. 権限 1 に **Account → Account Analytics → Read** を設定します。
+6. **Add more** をクリックし、権限 2 に **Zone → Zone → Read** を設定します。
+7. **Add more** をクリックし、権限 3 に **Zone → Zone Analytics → Read** を設定します。
+8. **Zone Resources** までスクロールし、Include → Specific zone → `yourdomain.com` を設定します。
+9. 必要に応じて、トークンの有効期限 (TTL) を設定します。
+10. **Continue to summary** をクリックし、続けて **Create Token** をクリックします。
+11. トークンをコピーして、安全な場所に保管します。
+
+<Warning>
+  このトークンはパスワードと同じように扱ってください。トークンを入手した人は誰でも、アカウントのアナリティクスを閲覧できます。他人と共有したり、公開リポジトリなどにコミットしたりしないでください。
+</Warning>
+
+## パート 2: Zone ID を取得する {#part-2-get-your-zone-id}
+
+1. Cloudflare で **Websites** に移動し、対象のドメインをクリックします。
+2. **Overview** を開きます。
+3. 画面右側にある **Zone ID** をコピーします。この値は後述のクエリで使用します。
+
+## パート 3：Cloudflare GraphQL Explorer を開く {#part-3-open-cloudflare-graphql-explorer}
+
+1. [https://graphql.cloudflare.com/explorer](https://graphql.cloudflare.com/explorer) を開きます。
+2. アクセスを求められたら、権限の内容を確認して許可します。
+3. **API Token** フィールドに API トークンを貼り付け、**Save** をクリックします。
+
+## パート 4: クエリを実行する {#part-4-run-the-query}
+
+Cloudflare では、1 つの `httpRequestsAdaptiveGroups` ブロックで取得できる期間が **24 時間**に制限されています。また、どこまで過去に遡ってクエリできるかは Cloudflare のプランによって異なります (Free プランと Pro プランでは通常、直近数日分しか参照できません) 。日付範囲を決める前に、ご利用のプランで何日分の履歴を参照できるかを確認してください。日付を手動で指定したくない場合は、[複数日のクエリを自動生成する](#auto-generate-the-multi-day-query-optional)に進んでください。ローリング期間はスクリプトが自動で計算します。
+
+以下のクエリをエクスプローラーに貼り付け、次のように置き換えます。
+
+* `REPLACE_WITH_ZONE_ID` → パート 2 で取得した Zone ID。
+* `REPLACE_WITH_YOUR_DOMAIN` → ベアドメイン (例: `example.com`。`https://` や末尾のスラッシュは付けないでください) 。
+* `datetime_geq` / `datetime_lt` → プランで参照可能な範囲内の 24 時間の期間。
+
+### 複数日を対象にする {#covering-multiple-days}
+
+<Note>
+  **クエリが長くなる理由:** Cloudflare では、1 つの `httpRequestsAdaptiveGroups` ブロックで対象にできる期間が 24 時間に制限されており、「7 月 6 日から 13 日まで」のように期間をまとめて指定するパラメーターはありません。N 日分を対象にするには、ブロック全体 (約 14 行に及ぶ `userAgent_like` の OR リストもすべて含む) を N 回コピー＆ペーストし、それぞれに一意のエイリアスを付けたうえで、日付の範囲を 24 時間ずつ後ろにずらします。8 日分を取得するなら、同じブロックを 8 回繰り返すことになります。クエリが長大になるのは、ひとえにこのためです。
+</Note>
+
+複数日を対象にするには、`httpRequestsAdaptiveGroups(...)` ブロック全体を日数分だけ複製します。各ブロックには一意の**エイリアス** (コロンの前のラベル。例: `d20260706`、`d20260707`) を付け、日付の範囲を 24 時間ずつ後ろにずらします。すべてのブロックを同じ `zones(...)` ラッパー内に配置し、1 回のリクエストとして実行します。
+
+以下は**1 日分**の例です。
+
+```graphql
+{
+  viewer {
+    zones(filter: { zoneTag: "REPLACE_WITH_ZONE_ID" }) {
+
+      d20260706: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-06T00:00:00Z"
+          datetime_lt: "2026-07-07T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+    }
+  }
+}
+```
+
+次に、ブロックがどのように積み重なるかを**2 日分**の例で見てみましょう。
+
+```graphql
+{
+  viewer {
+    zones(filter: { zoneTag: "REPLACE_WITH_ZONE_ID" }) {
+
+      d20260706: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-06T00:00:00Z"
+          datetime_lt: "2026-07-07T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+      d20260707: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-07T00:00:00Z"
+          datetime_lt: "2026-07-08T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+    }
+  }
+}
+```
+
+<Warning>
+  **ブロックをコピー＆ペーストする際の注意点:**
+
+  * 各ブロックには**一意のエイリアス** (`d20260706`、`d20260707` など) が必要です。エイリアスが重複すると GraphQL エラーになります。
+  * **波括弧の対応**が崩れないようにしてください。ブロック内の `{` には、必ず対応する閉じ `}` が必要です。手軽な確認方法は、先頭の `d20260706: httpRequestsAdaptiveGroups(` と、そのブロックの `dimensions` セクション末尾にある閉じ `}` のインデントが揃っているかを見ることです。
+  * ブラウザや PDF からコピーした際に紛れ込んだ**余計なテキスト** (ページヘッダーやタブのタイトルなど) は**削除してください**。クエリ内に無関係な文字列が混じっていると、構文エラーの原因になります。
+</Warning>
+
+### 複数日分のクエリを自動生成する (任意) {#auto-generate-the-multi-day-query-optional}
+
+数日分を超えるデータを取得する場合、ブロックを手作業でコピーするのは手間がかかります。以下のスクリプトを使えばクエリ全体を自動生成でき、**日付の範囲も自動で更新されます**。常に本日の UTC 午前 0 時までの直近 `NUM_DAYS` 日分を取得するため、日付を編集する必要は一切ありません。毎週 (または cron で) 実行するだけで、手を加えずにそのまま使えます。
+
+次の内容を `generate_ai_traffic_query.py` として保存します。
+
+```python
+from datetime import datetime, timedelta, timezone
+
+# ---- ここを設定してください ----
+ZONE_ID = "REPLACE_WITH_ZONE_ID"
+DOMAIN = "REPLACE_WITH_YOUR_DOMAIN"
+NUM_DAYS = 7   # 取得する直近の日数 = 生成する24時間ブロックの数（Freeプランの保持期間は約7日。有料プランでは値を増やしてください）
+# --------------------------
+
+# 期間を自動でずらす：今日（UTC）の0時を終点として、NUM_DAYS 日分さかのぼります。
+# 今日はまだ終わっていないため、最後の完全な24時間ブロックは今日の 00:00Z で終わります。
+# ここを基準にすることで、0時ちょうどで区切られた丸 NUM_DAYS 日分のデータを取得でき、手動で日付を編集する必要はありません。
+today_utc = datetime.now(timezone.utc).replace(
+    hour=0, minute=0, second=0, microsecond=0
+)
+start = today_utc - timedelta(days=NUM_DAYS)
+
+BOTS = [
+    "ChatGPT-User", "GPTBot", "OAI-SearchBot", "Claude-User",
+    "claude-code", "ClaudeBot", "PerplexityBot", "Applebot",
+    "Amazonbot", "Amazonbot-Video", "meta-externalagent",
+    "Bytespider", "DuckAssistBot", "MistralAI-User",
+]
+
+or_block = "\n".join(
+    f'            {{ userAgent_like: "%{bot}%" }}' for bot in BOTS
+)
+
+blocks = []
+for i in range(NUM_DAYS):
+    day = start + timedelta(days=i)
+    next_day = day + timedelta(days=1)
+    alias = f"d{day.strftime('%Y%m%d')}"
+    blocks.append(f"""      {alias}: httpRequestsAdaptiveGroups(
+        filter: {{
+          datetime_geq: "{day.strftime('%Y-%m-%d')}T00:00:00Z"
+          datetime_lt: "{next_day.strftime('%Y-%m-%d')}T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "{DOMAIN}"
+          OR: [
+{or_block}
+          ]
+        }}
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {{
+        count
+        dimensions {{
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }}
+      }}""")
+
+query = "{\n  viewer {\n" + f'    zones(filter: {{ zoneTag: "{ZONE_ID}" }}) {{\n\n'
+query += "\n\n".join(blocks)
+query += "\n\n    }\n  }\n}"
+
+print(query)
+```
+
+次のコマンドで実行します：
+
+```bash
+python3 generate_ai_traffic_query.py
+```
+
+出力された内容をコピーし、そのまま GraphQL Explorer に貼り付けます。
+
+<Note>
+  **期間は `NUM_DAYS` で一度設定するだけです。** Free プランの保持期間の上限に合わせる場合は `7` のままにしてください。より長い保持期間を持つ有料プランでは、この値を大きくするだけで済み、ほかに変更する箇所はありません。期間は「今日」を基準にしているため、同じスクリプトを実行するたびに、日付を編集しなくても直近の期間の最新データを取得できます。
+</Note>
+
+<Note>
+  上記のユーザーエージェント一覧は、執筆時点での主要な AI クローラーおよびエージェントを網羅しています。一覧にないボットを追跡したい場合は、`userAgent_like` のエントリを追加または削除してください。
+</Note>
+
+ピンク色の **Run** ボタンをクリックしてクエリを実行します。
+
+## パート 5: レスポンスを JSON として保存する {#part-5-save-the-response-as-json}
+
+1. エクスプローラーの右側のパネルから、レスポンス全体をコピーします。
+2. **プレーンテキスト**エディター (リッチテキストエディターは不可) を開きます。
+3. レスポンスを貼り付け、`cloudflare_ai_traffic_response.json` というファイル名でダウンロードフォルダーに保存します。
+
+<Warning>
+  ファイルは、リッチテキストではなくプレーンテキストの JSON として保存してください。Mac で TextEdit を使用している場合は、後述のトラブルシューティングを参照してください。
+</Warning>
+
+**Mac ユーザー (TextEdit) :**
+
+1. TextEdit を開きます。
+2. **フォーマット → 標準テキストにする** をクリックします。
+3. レスポンスを貼り付けます。
+4. `cloudflare_ai_traffic_response.json` という名前で保存します。
+
+ターミナルでファイル形式を確認するには、次のコマンドを実行します。
+
+```bash
+cd ~/Downloads
+file cloudflare_ai_traffic_response.json
+```
+
+正しく保存できていれば、`JSON data` または `ASCII text` と表示されます。`Rich Text Format` と表示された場合は、TextEdit でファイルを開き直し、**Format → Make Plain Text** をクリックしてから保存し直してください。
+
+## パート 6: JSON を CSV に変換する {#part-6-convert-the-json-to-csv}
+
+ターミナルで次のコマンドを実行します。
+
+```bash
+cd ~/Downloads
+nano convert_ai_traffic_json_to_csv.py
+```
+
+次のスクリプトを貼り付けます。
+
+```python
+import json
+import csv
+
+input_file = "cloudflare_ai_traffic_response.json"
+output_file = "ai_traffic_export.csv"
+
+with open(input_file, "r") as f:
+    data = json.load(f)
+
+zone = data["data"]["viewer"]["zones"][0]
+
+with open(output_file, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["date_range", "path", "host", "userAgent", "requests"])
+
+    def sanitize_cell(value):
+            """Prefix cells that start with formula-trigger characters to prevent
+            spreadsheet formula injection when the CSV is opened in Excel/Sheets."""
+            s = str(value)
+            if s and s[0] in ('=', '+', '-', '@', '\t', '\r', '\n'):
+                return "'" + s
+            return s
+
+    for date_range, rows in zone.items():
+        for row in rows:
+            dims = row["dimensions"]
+            writer.writerow([
+                date_range,
+                sanitize_cell(dims["clientRequestPath"]),
+                sanitize_cell(dims["clientRequestHTTPHost"]),
+                sanitize_cell(dims["userAgent"]),
+                row["count"]
+            ])
+
+print(f"Saved to {output_file}")
+```
+
+ファイルを保存し (`Ctrl + O`、`Enter`、`Ctrl + X`) 、次のコマンドで実行します。
+
+```bash
+python3 convert_ai_traffic_json_to_csv.py
+```
+
+`Saved to ai_traffic_export.csv` と表示されれば成功です。CSV ファイルは「ダウンロード」フォルダーに保存されます。
+
+## パート 7: CSV を The Prompting Company に送信する {#part-7-send-the-csv-to-the-prompting-company}
+
+`ai_traffic_export.csv` を TPC の担当者に送付するか、[support@promptingco.com](mailto:support@promptingco.com) 宛てにメールでお送りください。お送りいただいたデータは、お客様の AI トラフィックダッシュボードに反映いたします。
+
+## トラブルシューティング {#troubleshooting}
+
+### クエリが権限エラーで失敗する {#the-query-fails-with-a-permissions-error}
+
+API トークンに必要なスコープが不足しています。パート 1 を再確認してください。**Account Analytics → Read**、**Zone → Read**、**Zone Analytics → Read** の権限が必要です。また、ゾーンリソースのスコープをご自身のドメインに設定してください。
+
+### `file` が JSON ではなく「Rich Text Format」と表示される {#file-reports-rich-text-format-instead-of-json}
+
+TextEdit はデフォルトでリッチテキスト形式で保存します。ファイルを開き直し、**Format → Make Plain Text** をクリックしてから、レスポンスをもう一度貼り付けて保存してください。
+
+### GraphQL クエリの結果が空になる {#the-graphql-query-returns-an-empty-result}
+
+指定した日付範囲が Cloudflare プランのデータ保持期間を外れているか、`REPLACE_WITH_YOUR_DOMAIN` がゾーンの `clientRequestHTTPHost` と完全に一致していない (`https://` や末尾のスラッシュは含めません) 可能性があります。自動ローリングスクリプトを使用している場合は、`NUM_DAYS` がプランの保持期間を超える値になっていないか確認してください。
+
+### `python3: command not found` {#python3-command-not-found}
+
+Python 3 をインストール (Mac の場合は `brew install python3` など) してから、スクリプトを再実行してください。

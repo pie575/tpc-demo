@@ -1,0 +1,139 @@
+---
+title: "任务"
+description: "定义智能体需要完成的目标以及衡量成功的方式"
+---
+
+任务既告诉智能体要完成什么，也告诉平台如何为本次尝试评分。这两部分都直接定义在任务中，因此无论在哪个环境中运行该任务，都会采用相同的评估标准。
+
+## 任务的组成 {#anatomy-of-a-task}
+
+| 部分       | 用途                                |
+| -------- | --------------------------------- |
+| **指令**   | 智能体收到的 prompt，说明要构建、安装或完成什么       |
+| **目标**   | 成功标准，每项目标都有加权评分和通过阈值              |
+| **初始化文件** | 运行前放入沙箱的文件：上传的 zip 文件或 git 仓库     |
+| **初始化命令** | 沙箱初始化期间执行的 Shell 命令 (如安装依赖、填充数据)  |
+| **密钥**   | 以环境变量形式提供给本次运行的具名凭据               |
+
+## 编写指令 {#writing-instructions}
+
+请按真实用户向智能体交代任务的方式来编写指令，而不是按你希望他们采用的方式。目的是衡量你的产品的智能体体验，因此不要加入普通用户不会提供的提示：
+
+* **好的示例：**“使用 Acme 为这个 Express 应用设置错误追踪。”
+* **提示过多：**“安装 `@acme/sdk@2.1`，然后使用控制台中的 DSN 调用 `acme.init()`。”
+
+## 目标与评分标准 {#goals-and-criteria}
+
+每个目标包含一条或多条**评分标准**。每条评分标准都有评估类型、权重和最高分。目标的计分方式可以是 `weighted_average`、`binary` 或 `percentage`，得分将与 0–100 之间的及格阈值进行比较。
+
+每条评分标准采用以下任一方式进行评估：
+
+| 评估方式                 | 检查内容                          |
+| -------------------- | ----------------------------- |
+| `comparison`         | 将运行指标与阈值进行比较 (时长、token 数、成本)  |
+| `file_exists`        | 运行结束后，沙箱中存在指定文件               |
+| `file_content_match` | 文件内容与指定模式匹配                   |
+| `json_schema`        | 输出通过 JSON Schema 校验           |
+| `bash_command`       | Shell 命令在运行后的沙箱中以退出码 0 结束     |
+| `python_script`      | 自定义 Python 检查通过               |
+| `script_judge`       | 你自己编写的验证脚本 (退出码为 0 即通过)       |
+| `llm_judge`          | 由 LLM 依据评分细则评判运行记录            |
+
+请尽可能优先使用确定性检查 (`file_exists`、`bash_command`、`script_judge`) ，因为它们成本更低、结果更易复现。`llm_judge` 应仅用于真正主观的评分标准，例如“智能体是否遵循了文档中说明的方法？”
+
+## 沙箱设置 {#sandbox-setup}
+
+初始化文件和初始化命令会在智能体启动前准备好沙箱：
+
+* **Zip 上传** — 将压缩包解压到沙箱中 (默认目标：智能体的主目录)
+* **Git 克隆** — 克隆仓库的指定 ref；私有仓库通过密钥引用进行身份验证
+* **初始化命令** — 按顺序运行 shell 命令，每条命令可单独设置工作目录和超时时间
+
+两者可以组合使用，经验法则很简单：**初始化文件负责把文件放到位** (入门仓库、测试数据、文档包) ，**初始化命令负责执行设置** (安装依赖、构建、填充数据) 。结合使用两者，可以让智能体从贴近真实的状态起步，例如一个尚未完成、需要集成你的产品的应用。同时，不要把这些设置写进指令，这样衡量的才是任务本身，而不是底层的准备工作。
+
+## 密钥 {#secrets}
+
+密钥 (Secrets) 是经过加密的凭据，作用范围限定于你的组织 (或单个环境) 。只需在任务中按名称引用密钥，运行时它们便会以环境变量的形式注入——API 密钥绝不会出现在任务定义或运行记录中。
+
+密钥在环境中统一管理。有关 CLI 操作流程，请参阅[环境](/zh/guides/coding-agent-optimization/environments#secrets-from-the-cli)。
+
+## 通过 CLI 管理任务 {#working-with-tasks-from-the-cli}
+
+任务需通过 JSON 文件创建。运行 `tpc sim spec` 可输出完整的规范定义；最简的 `task.json` 示例如下：
+
+```json
+{
+  "name": "Checkout regression",
+  "description": "Validate checkout flow",
+  "category": "coding",
+  "prompt": "Open the app, add an item to cart, and complete checkout successfully.",
+  "goals": [
+    {
+      "name": "Checkout succeeds",
+      "description": "The agent should add an item to the cart, proceed through the checkout flow, and reach a confirmation page without errors.",
+      "evaluationType": "llm_judge",
+      "model": "claude-sonnet-4-6",
+      "passingThreshold": 70,
+      "scoringMethod": "weighted_average"
+    }
+  ]
+}
+```
+
+`category` 的取值为 `coding`、`research`、`documentation` 或 `analysis` 之一。请勿包含 `product` 字段——CLI 会根据 `--scope <org-slug>/<product-slug>` 自动注入 product。
+
+```bash
+# 创建任务
+tpc sim task create --file task.json --scope pro-org/my-product
+
+# 浏览和查看任务
+tpc sim task list --search checkout --scope pro-org/my-product
+
+# 任务详情：目标、初始化命令、初始化文件名、关联环境
+tpc sim task get task_123 --scope pro-org/my-product
+
+# 更新元数据，或用文件替换目标/定义
+tpc sim task update task_123 --name "Checkout regression v2" --scope pro-org/my-product
+tpc sim task update task_123 --file task.json --scope pro-org/my-product
+
+# 在该任务所有已关联且已启用的环境中将运行加入队列
+tpc sim task run task_123 --scope pro-org/my-product
+
+# ……或仅在指定环境中运行（用逗号分隔，或重复使用该标志）
+tpc sim task run task_123 --environment-id env_a,env_b --scope pro-org/my-product
+
+# 删除任务（软删除，运行历史会保留）
+tpc sim task delete task_123 --scope pro-org/my-product
+```
+
+## 从目录运行任务 {#run-a-task-from-a-directory}
+
+任务及尝试完成该任务的智能体可以一起放在一个小巧、便于移植的目录中：
+
+```text
+checkout-regression/
+├── task.json         # 元数据 + 目标（不含 prompt，详见下文）
+├── instruction.md    # 智能体收到的 prompt
+└── environment.json  # 待测的智能体配置（可选）
+```
+
+`environment.json` 用于声明智能体配置：
+
+```json
+{
+  "name": "Claude Code + Sonnet",
+  "agentConfig": {
+    "harness": "claude",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  }
+}
+```
+
+```bash
+tpc sim run ./checkout-regression
+```
+
+只需一条命令，即可将目录与你的产品同步，并将运行加入队列：它会复用匹配的任务和环境；如果文件有改动，就更新它们；如果是新文件，就创建它们。因此，重复运行也不会产生重复项。若要针对已有环境运行，请省略 `environment.json` (或传入 `--environment-id`) 。
+
+`tpc sim task export <task-id>` 导出的目录结构与此完全一致 (如果任务只关联了一个环境，还会包含 `environment.json`) ，因此你可以将任务拉取到本地、进行编辑，然后在任何地方运行。

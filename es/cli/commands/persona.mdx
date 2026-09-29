@@ -1,0 +1,96 @@
+---
+title: "Personas"
+description: "Lista, crea, actualiza y elimina las personas de un producto desde la CLI de TPC."
+---
+
+# Personas {#personas}
+
+Gestiona las personas de un producto desde la terminal. Una persona es el usuario desde cuya perspectiva se le pide a un asistente de IA que responda al ejecutarse un prompt; los prompts hacen referencia a las personas por su ID. Pasa `--scope <org-slug>/<product-slug>` para seleccionar el producto. `tpc personas` es un alias de `tpc persona`.
+
+Los comandos de personas funcionan con un [inicio de sesión OAuth](/es/cli/authentication) (`tpc auth login`) o con una clave de API que tenga los permisos `products:read` (listar, obtener) y `products:write` (crear, actualizar, eliminar).
+
+## Listar personas {#list-personas}
+
+Primero las más recientes. `--search` filtra por nombre; `--page` empieza en cero; `--page-size` tiene un valor predeterminado de 50.
+
+```bash
+tpc --scope pro-org/my-product persona list
+tpc --scope pro-org/my-product persona list --search revops
+```
+
+```text
+PRODUCT:  my-product
+PAGE:     1 of 1
+
+ID                                    NAME         DESCRIPTION                                   CREATED
+4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a  RevOps lead  Owns CRM hygiene for a 200-seat sales org     2026-09-22
+
+Total: 1
+```
+
+No se admite `--format csv`.
+
+## Obtener una persona {#get-a-persona}
+
+El modo de texto muestra la descripción completa y el prompt del sistema. El modo JSON muestra el payload de la API.
+
+```bash
+tpc --scope pro-org/my-product persona get 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a
+```
+
+## Crear una persona {#create-a-persona}
+
+`--name` y `--description` son obligatorios. El prompt del sistema es opcional y se define con `--system-prompt` o con `--system-prompt-file`, pero no con ambos a la vez.
+
+```bash
+tpc --scope pro-org/my-product persona create \
+  --name "RevOps lead" \
+  --description "Owns CRM hygiene for a 200-seat sales org"
+```
+
+```bash
+tpc --scope pro-org/my-product persona create \
+  --name "Security reviewer" \
+  --description "Evaluates vendors for SOC 2 fit" \
+  --system-prompt-file ./security.md
+```
+
+La creación es idempotente respecto al nombre, sin distinguir entre mayúsculas y minúsculas. Si el producto ya tiene una persona con ese nombre, en lugar de crear un duplicado, se devuelve la persona existente y la salida de texto lo indica:
+
+```text
+Created persona RevOps lead (4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a)
+```
+
+```text
+Persona RevOps lead already exists (4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a)
+```
+
+## Actualizar una persona {#update-a-persona}
+
+Pasa solo los campos que quieras modificar; el resto se mantiene igual. `--clear-system-prompt` elimina el prompt del sistema y no se puede combinar con `--system-prompt` ni con `--system-prompt-file`.
+
+```bash
+tpc --scope pro-org/my-product persona update 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a \
+  --description "Owns CRM hygiene and lead routing"
+```
+
+```bash
+tpc --scope pro-org/my-product persona update 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a \
+  --clear-system-prompt
+```
+
+## Eliminar una persona {#delete-a-persona}
+
+La eliminación es lógica (soft delete): los prompts que hacían referencia a la persona conservan su historial.
+
+```bash
+tpc --scope pro-org/my-product persona delete 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a
+```
+
+## Salida JSON {#json-output}
+
+Todos los comandos admiten `--format json` para usarlos en scripts. `list` devuelve `{ "personas": [...], "total": n }`; los demás comandos devuelven el objeto de la persona.
+
+```bash
+tpc --scope pro-org/my-product persona list --format json | jq '.personas[].id'
+```

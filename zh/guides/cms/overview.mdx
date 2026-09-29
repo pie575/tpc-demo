@@ -1,0 +1,30 @@
+---
+title: "CMS 集成"
+description: "将 The Prompting Company 连接到您的 CMS，以草稿形式发布生成的内容"
+---
+
+The Prompting Company 会将生成的内容以草稿形式直接发布到您的 CMS 中。每个产品只需连接一次 CMS，此后每次发布都会写入该目标 CMS。
+
+## 支持的 CMS {#supported-cms}
+
+* [WordPress](/zh/guides/cms/wordpress) — 支持自托管版或 WordPress.com Business+，通过 TPC 连接器插件接入
+* [Sanity](/zh/guides/cms/sanity) — 使用项目级 API 令牌写入数据集
+* [Webflow](/zh/guides/cms/webflow) — 使用站点 API 令牌写入 CMS 集合
+* [Ghost](/zh/guides/cms/ghost) — 通过 Admin API 自定义集成接入
+* [Framer](/zh/guides/cms/framer) — 使用 Framer API 密钥写入 CMS 集合 (需 Pro 及以上套餐)
+* [Prismic](/zh/guides/cms/prismic) — 使用永久访问令牌写入仓库
+* [自定义端点](/zh/guides/cms/custom) — 使用 bearer 令牌向您自己的服务器 POST JSON 数据
+
+## 连接位置 {#where-to-connect}
+
+每个 CMS 都需要在产品工作区的 **Settings → Integrations** 中按产品单独配置。每个连接器都支持填写凭据，保存时会自动验证，并提供 **Test connection** 按钮。
+
+<Note>
+  TPC 始终以草稿形式发布。只有在您于 CMS 中批准后，内容才会上线。
+</Note>
+
+## 开始之前 {#before-you-start}
+
+* 你必须是目标 CMS 站点的管理员，因为生成 API 令牌通常需要管理员权限。
+* 准备一个专用的集成用户或令牌，并将其命名为 `TPC publisher`，以便单独撤销。
+* 如果你的 CMS 支持限定作用域的令牌 (Sanity、Webflow、Ghost) ，请只授予创建草稿所需的最小作用域。

@@ -1,0 +1,38 @@
+---
+title: "Descripción general de la API de contenido"
+description: "Conoce las superficies de la API de contenido de TPC y sus flujos de trabajo más habituales."
+---
+
+# Descripción general de la API de contenido {#content-api-overview}
+
+La API de contenido administra las superficies de contenido que TPC usa para la recuperación, la publicación y la entrega pública en Markdown.
+
+## Superficies {#surfaces}
+
+| Superficie                                      | Úsala para                                                                                                      | Ámbito principal                |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Ciclo de vida del contenido (`/api/v1/content`) | Crear, generar, revisar (aprobar/rechazar/solicitar cambios), publicar y administrar el contenido del producto. | `content:read`, `content:write` |
+| Páginas del sitio (obsoleto)                    | Alias CRUD heredado de la superficie de contenido; usa `/api/v1/content` en su lugar.                           | `content:read`, `content:write` |
+| Documentos agénticos                            | Consultar y actualizar los metadatos de los documentos y los flujos de trabajo de borradores.                   | `content:read`, `content:write` |
+| llms.txt                                        | Consultar y administrar los recursos llms.txt generados.                                                        | `content:read`, `content:write` |
+| Aplicaciones y rutas de aplicaciones            | Administrar la configuración de las aplicaciones y los recursos de rutas.                                       | `content:read`, `content:write` |
+
+Para páginas de producto, páginas de documentación y contenido de marketing, empieza por `/api/v1/content`. Las páginas creadas y generadas pasan a una cola de revisión (`GET /api/v1/content?status=pending_review`) y solo se publican una vez aprobadas (`POST /api/v1/content/{draftId}/review`).
+
+## Flujo de trabajo habitual {#common-workflow}
+
+1. Crea una clave de API con `content:read`.
+2. Enumera los recursos existentes de un producto.
+3. Añade `content:write` solo si tu integración necesita realizar modificaciones.
+4. Envía `Idempotency-Key` en las operaciones de escritura para que los reintentos sean seguros.
+5. Guarda `x-request-id` junto con los registros de tus trabajos.
+
+## Guías relacionadas {#related-guides}
+
+<Card title="Páginas del sitio" icon="file-text" href="/es/api/content/site-pages" horizontal>
+  Sincroniza las páginas del producto desde un CMS o una carpeta de Markdown.
+</Card>
+
+<Card title="Documentos agénticos" icon="files" href="/es/api/content/documents" horizontal>
+  Trabaja con documentos de contenido generados y revisados.
+</Card>

@@ -1,0 +1,83 @@
+---
+title: "Descripción general de la CLI"
+description: "Accede desde la terminal a tu espacio de trabajo, tus organizaciones y tus flujos de trabajo de simulación."
+---
+
+# Descripción general de la CLI {#cli-overview}
+
+La CLI de The Prompting Company te permite acceder desde la terminal a tu espacio de trabajo, tus organizaciones y tus flujos de trabajo de simulación.
+
+El nombre del binario es:
+
+```text
+tpc
+```
+
+## Requisitos previos {#prerequisites}
+
+* macOS, Linux o Windows
+* `amd64` o `arm64`
+
+Empieza por [Instalación](/es/cli/installation) y continúa con [Autenticación](/es/cli/authentication).
+
+## Comandos habituales {#common-commands}
+
+```bash
+# Mostrar el estado de autenticación actual
+tpc auth whoami
+
+# Mostrar la versión instalada de la CLI
+tpc version
+tpc --version
+
+# Buscar actualizaciones
+tpc update --check
+
+# Instalar la última actualización
+tpc update
+
+# Listar organizaciones
+tpc org list
+
+# Los comandos que operan a nivel de producto aceptan --scope <org-slug>/<product-slug>
+tpc sim experiment list --scope cloudflare-dev/browser-run
+tpc analytics sov --scope nvidia-com/nvidia-dgx-spark --last 30d
+
+# Listar contenido
+tpc --scope prompting-co/my-product content list
+
+# Listar archivos de conocimiento
+tpc --scope prompting-co/my-product knowledge file list
+
+# Revisar las sugerencias de prompts generadas
+tpc --scope my-product/prompting-co prompts suggestions list
+tpc --scope my-product/prompting-co prompts suggestions generate
+
+# Añadir una persona con la que ejecutar los prompts
+tpc --scope prompting-co/my-product persona create --name "RevOps lead" --description "Owns CRM hygiene"
+
+# Generar archivos llms.txt a partir de un sitemap (no requiere autenticación)
+tpc llmstxt init https://docs.example.com/sitemap.xml
+tpc llmstxt generate
+
+# Mostrar la ayuda de los comandos de simulación
+tpc sim help
+
+# Iniciar la configuración guiada de un benchmark competitivo
+tpc sim ax setup --type benchmark --scope acme/my-product
+
+# Mostrar la ayuda de la lista de entornos sin necesidad de autenticarse
+tpc env list -h
+
+# Listar entornos de simulación
+tpc env list
+
+# Configuración y ejecuciones de Model Council
+tpc council config get
+tpc council run
+tpc council list
+```
+
+## Siguiente paso {#next-step}
+
+Una vez instalada y autenticada la CLI, puedes pasar a los flujos de trabajo de productos y simulaciones desde la terminal. Consulta [Contenido](/es/cli/commands/content), [Knowledge](/es/cli/commands/knowledge), [Prompts](/es/cli/commands/prompts), [Personas](/es/cli/commands/persona), [Analíticas](/es/cli/commands/analytics), [Model Council](/es/cli/commands/council), [Agent Experience](/es/cli/commands/agent-experience) y [Entornos de simulación](/es/cli/commands/simulation-environments).

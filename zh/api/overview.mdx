@@ -1,0 +1,69 @@
+---
+title: "API 概览"
+description: "开始使用 TPC API，了解身份验证方式、权限范围及参考文档。"
+---
+
+# API 概览 {#api-overview}
+
+借助 The Prompting Company API，你可以通过控制台所用的同一组 `/api/v1` 端点，以编程方式管理内容；API 同样采用 `ApiResult` 响应封装，以及按组织划分范围的数据模型。
+
+如果你需要从 CMS 同步站点页面、自动执行内容操作，或围绕 TPC 工作区构建服务器到服务器的工作流，就可以使用该 API。
+
+## 基础 URL {#base-url}
+
+```text
+https://app.promptingco.com
+```
+
+本地开发环境使用：
+
+```text
+http://localhost:3000
+```
+
+所有公开端点都位于 `/api/v1` 路径下。
+
+## 身份验证概览 {#authentication-at-a-glance}
+
+| 方式              | 适用场景                     | 发送方式                                         |
+| --------------- | ------------------------ | -------------------------------------------- |
+| 会话 Cookie       | 在浏览器中发起第一方控制台调用时。        | 控制台会自动发送 `better-auth.session_token` Cookie。 |
+| OAuth Bearer 令牌 | 使用 CLI 或其他 OAuth 客户端流程时。 | 发送 `Authorization: Bearer <token>`。          |
+| API 密钥          | 构建服务器到服务器的集成时。           | 发送 `x-api-key: <key>`。                       |
+
+如需构建集成，请在控制台设置中创建组织 API 密钥，并仅授予工作流所需的权限范围。
+
+## 权限范围目录 {#scope-catalog}
+
+| 权限范围                | 允许的操作                           |
+| ------------------- | ------------------------------- |
+| `content:read`      | 读取站点页面、Markdown 内容和 llms.txt 文件 |
+| `content:write`     | 创建、更新和删除站点页面及内容                 |
+| `prompts:read`      | 读取提示词、主题、提示词建议和提示词分析结果          |
+| `prompts:write`     | 创建、更新、归档提示词，以及生成、编辑或审核提示词建议     |
+| `simulations:read`  | 读取智能体模拟任务、运行记录、环境和分析数据          |
+| `simulations:write` | 创建并触发模拟运行                       |
+| `logs:read`         | 读取 AI 流量日志和请求级审计事件              |
+| `analytics:read`    | 读取分析汇总数据，包括排名、提及、来源和声量份额 (SOV)  |
+| `products:read`     | 读取产品元数据和竞品数据                    |
+| `products:write`    | 更新产品设置和竞品列表                     |
+
+<Note>
+  此表格有意照搬自 `apps/client/src/lib/api/scopes.ts`。
+  该目录如有变更，请在同一个 PR 中同步更新此页面，确保文档与
+  控制台保持一致。
+</Note>
+
+## 后续步骤 {#where-to-go-next}
+
+<Card title="快速入门" icon="rocket" href="/zh/api/quickstart" horizontal>
+  创建限定作用域的密钥，发出第一个请求，并解析响应封装结构。
+</Card>
+
+<Card title="身份验证" icon="shield-check" href="/zh/api/authentication" horizontal>
+  在会话 Cookie、OAuth Bearer 令牌和 API 密钥中选择合适的方式。
+</Card>
+
+<Card title="参考" icon="book-open" href="/zh/api/reference" horizontal>
+  浏览基于实时 OpenAPI 文档生成的端点 schema。
+</Card>

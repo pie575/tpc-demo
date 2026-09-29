@@ -1,0 +1,73 @@
+---
+title: "速率限制"
+description: "了解 TPC API 配额、重试标头以及 429 错误的处理方法。"
+---
+
+# 速率限制 {#rate-limits}
+
+The Prompting Company 的速率限制针对每个已认证主体分别生效，起到保护作用。API 密钥按密钥实行全局限制，此外，个别端点还可能受到路由级限制。
+
+## 当前默认值 {#current-defaults}
+
+| 调用方                 | 默认限制              | 时间窗口  |
+| ------------------- | ----------------- | ----- |
+| 组织 API 密钥           | 300 个请求           | 60 秒  |
+| 会话或 OAuth Bearer 令牌 | 无全局封装层限制，除非路由主动启用 | 由路由定义 |
+
+API 密钥记录中可以配置更低的限制，但平台上限仍为每 60 秒 300 个请求。
+
+## 429 响应 {#429-response}
+
+当调用方超出速率限制时，API 会返回 `429`：
+
+```json
+{
+  "ok": false,
+  "code": "TOO_MANY_REQUESTS",
+  "message": "rate_limited",
+  "details": {
+    "limit": 300,
+    "resetAt": "2026-04-30T00:01:00.000Z"
+  }
+}
+```
+
+响应中包含：
+
+```text
+Retry-After: 12
+x-request-id: 6efaa25e-3ef6-4a34-91c1-7ff3e0fd4cc8
+```
+
+`Retry-After` 表示距当前限流桶重置还剩多少秒。
+
+<Note>
+  该封装层目前只返回 `Retry-After` 和 `x-request-id` 响应头，不会返回
+  `X-RateLimit-Limit`、`X-RateLimit-Remaining` 或 `X-RateLimit-Reset`。
+</Note>
+
+## 使用退避策略重试 {#retry-with-backoff}
+
+如果响应中包含 `Retry-After`，请优先遵循该值；如果连续收到 `429` 响应，还应采用带随机抖动的指数退避策略。
+
+```ts
+async function fetchWithBackoff(url: string, init: RequestInit, attempts = 4) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await fetch(url, init);
+
+    if (response.status !== 429) {
+      return response;
+    }
+
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const delayMs = Number.isFinite(retryAfter)
+      ? retryAfter * 1000
+      : Math.min(1000 * 2 ** attempt, 10000);
+    const jitterMs = Math.floor(Math.random() * 250);
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs + jitterMs));
+  }
+
+  throw new Error("Rate limit retries exhausted");
+}
+```

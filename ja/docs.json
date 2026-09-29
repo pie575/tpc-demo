@@ -1,0 +1,181 @@
+{
+  "global": {
+    "anchors": [
+      {
+        "anchor": "プラットフォーム",
+        "href": "https://app.promptingco.com",
+        "icon": "globe"
+      },
+      {
+        "anchor": "GitHub",
+        "href": "https://github.com/promptingcompany",
+        "icon": "github"
+      }
+    ]
+  },
+  "tabs": [
+    {
+      "groups": [
+        {
+          "group": "はじめに",
+          "pages": [
+            "ja/guides/quickstart-guide",
+            "ja/guides/MCP-Server"
+          ]
+        },
+        {
+          "group": "ダッシュボードの概要",
+          "pages": [
+            "ja/guides/knowledge-base",
+            "ja/guides/add-prompts",
+            "ja/guides/create-content",
+            "ja/guides/metrics"
+          ]
+        },
+        {
+          "group": "コンテンツの公開",
+          "pages": [
+            "ja/guides/cms/overview",
+            "ja/guides/cms/wordpress",
+            "ja/guides/cms/sanity",
+            "ja/guides/cms/webflow",
+            "ja/guides/cms/ghost",
+            "ja/guides/cms/framer",
+            "ja/guides/cms/prismic",
+            "ja/guides/cms/custom"
+          ]
+        },
+        {
+          "group": "アナリティクス",
+          "pages": [
+            "ja/guides/analytics/cf-integration",
+            {
+              "group": "サードパーティ製ログエクスポーター",
+              "pages": [
+                "ja/guides/analytics/log-exporters/cloudflare-logpush",
+                "ja/guides/analytics/log-exporters/raw-events"
+              ]
+            },
+            "ja/guides/analytics/cf-traffic-export"
+          ]
+        },
+        {
+          "group": "エージェント体験",
+          "pages": [
+            "ja/guides/coding-agent-optimization/overview",
+            {
+              "group": "基本概念",
+              "pages": [
+                "ja/guides/coding-agent-optimization/tasks",
+                "ja/guides/coding-agent-optimization/environments",
+                "ja/guides/coding-agent-optimization/runs",
+                "ja/guides/coding-agent-optimization/experiments",
+                "ja/guides/coding-agent-optimization/signals"
+              ]
+            },
+            "ja/guides/coding-agent-optimization/limits"
+          ]
+        }
+      ],
+      "tab": "ガイド"
+    },
+    {
+      "groups": [
+        {
+          "group": "はじめに",
+          "pages": [
+            "ja/cli/overview",
+            "ja/cli/installation",
+            "ja/cli/authentication",
+            "ja/cli/organizations"
+          ]
+        },
+        {
+          "group": "コマンド",
+          "pages": [
+            "ja/cli/commands/content",
+            "ja/cli/commands/knowledge",
+            "ja/cli/commands/prompts",
+            "ja/cli/commands/persona",
+            "ja/cli/commands/llmstxt",
+            "ja/cli/commands/analytics",
+            "ja/cli/commands/council",
+            "ja/cli/commands/simulation-environments",
+            "ja/cli/commands/agent-experience"
+          ]
+        },
+        {
+          "group": "実践例",
+          "pages": [
+            "ja/cli/recipes/competitive-position-by-topic"
+          ]
+        },
+        {
+          "group": "リファレンス",
+          "pages": [
+            "ja/cli/troubleshooting"
+          ]
+        }
+      ],
+      "tab": "CLI"
+    },
+    {
+      "groups": [
+        {
+          "group": "はじめに",
+          "pages": [
+            "ja/api/overview",
+            "ja/api/quickstart",
+            "ja/api/authentication"
+          ]
+        },
+        {
+          "group": "概念",
+          "pages": [
+            "ja/api/scopes",
+            "ja/api/rate-limits",
+            "ja/api/idempotency",
+            "ja/api/errors",
+            "ja/api/audit-log"
+          ]
+        },
+        {
+          "group": "Content API",
+          "pages": [
+            "ja/api/content/overview",
+            "ja/api/content/site-pages",
+            "ja/api/content/documents"
+          ]
+        },
+        {
+          "group": "APIリファレンス",
+          "openapi": {
+            "directory": "ja/api/reference",
+            "source": "/ja/api-reference/openapi.json"
+          }
+        }
+      ],
+      "tab": "API"
+    },
+    {
+      "groups": [
+        {
+          "group": "はじめに",
+          "pages": [
+            "ja/ts-sdk/index"
+          ]
+        },
+        {
+          "group": "TypeScript",
+          "pages": [
+            "ja/ts-sdk/introduction",
+            "ja/ts-sdk/installation",
+            "ja/ts-sdk/quickstart",
+            "ja/ts-sdk/advanced-usage"
+          ]
+        }
+      ],
+      "tab": "SDK"
+    }
+  ]
+}

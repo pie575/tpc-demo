@@ -1,0 +1,120 @@
+---
+title: "Agent Experience"
+description: "ターミナルから AX の実験や競合ベンチマークを設定し、オンボーディングの質問に回答します。"
+---
+
+# Agent Experience {#agent-experience}
+
+プロダクトの Agent Experience 実験を設定するには、`tpc sim ax setup` を使用します。
+競合ベンチマークを設計する場合は、代わりに `--type benchmark` を追加してください。
+
+## 前提条件 {#prerequisites}
+
+* [CLI をインストール](/ja/cli/installation)し、`tpc auth login` でサインインしてください。セットアップには OAuth ログインが必要で、API キーには対応していません。
+* `--scope <org-slug>/<product-slug>` で組織とプロダクトを指定します。
+* 競合ベンチマークを利用するには、組織でベンチマークが有効になっている必要があります。
+
+## ガイド付きセットアップ {#guided-setup}
+
+```bash
+# プロダクトの Agent Experience 実験をセットアップする
+tpc sim ax setup --scope acme/my-product
+
+# 競合ベンチマークを設計する
+tpc sim ax setup --type benchmark --scope acme/my-product
+```
+
+インタラクティブなターミナルでは、ベンチマークのセットアップ時に概要と競合の入力を求められます。
+競合は `NAME` または `NAME=DOMAIN` の形式で入力し、最後に空行を送信すると入力が完了します。
+自社のプロダクトは自動的に含まれます。
+
+セットアップ中は進捗が表示され、エージェントがテキスト、認証情報、ファイルを要求すると入力を求められます。
+認証情報の入力内容は画面に表示されません。ファイルを要求された場合はローカルのファイルパスを指定でき、
+回答の送信前にそのファイルがアップロードされます。アップロードできるのは 100 MiB 以下の通常ファイルのみです。
+ベンチマークのセットアップではバックエンドがアーカイブを受け付けないため、
+要求された際は個別のファイルを指定してください。
+
+任意の質問は、空欄のまま回答するとスキップできます。必須の質問には必ず回答してください。
+Ctrl+C を押すと、実行を一時停止した状態で終了し、後から再接続できます。
+
+監視付きセットアップが正常に完了すると、実験 ID と
+`tpc sim experiment run` コマンドが出力されます。セットアップの時点ではベンチマークのイテレーションは開始されません。
+実行する前に実験の内容を確認し、必要に応じてタスクの認証情報を設定してください。
+
+## フラグでベンチマークの入力を指定する {#supply-benchmark-inputs-with-flags}
+
+```bash
+tpc sim ax setup \
+  --type benchmark \
+  --scope acme/my-product \
+  --intent "Compare how easily agents can deploy a web app" \
+  --competitor "Vercel=https://vercel.com" \
+  --competitor "Netlify=https://netlify.com" \
+  --watch
+```
+
+| Flag           | Default            | Description                                                                                                                                         |
+| -------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--type`       | `agent-experience` | `agent-experience` または `benchmark`。                                                                                                                 |
+| `--intent`     | —                  | ベンチマークの概要 (1〜4000 文字) 。`--type benchmark` を指定した場合のみ有効です。                                                                                            |
+| `--competitor` | —                  | `NAME` または `NAME=DOMAIN` の形式で、繰り返し指定できます。1〜10 件を指定してください。サーバー側で自社のプロダクトが自動的に追加されるため、他社のプロダクトを少なくとも 1 つ指定する必要があります。`--type benchmark` を指定した場合のみ有効です。 |
+| `--watch`      | 対話モードでは有効、それ以外では無効 | 進行状況を追跡します。`--watch=false` を指定すると、セットアップを開始した後にデタッチします。                                                                                             |
+
+`--type` を省略すると、既存のプロダクト AX フローが選択されます。プロダクト AX のセットアップでは、
+そのプロダクトに 1 つだけ存在する Agent Experience 実験が更新されます。一方、ベンチマークのセットアップは、実行するたびに
+新しいベンチマークが作成されます。どちらのタイプも、同じプロダクト・同じタイプで進行中の実行がある場合は
+その実行に再接続します。フラグを指定し直しても、進行中の実行の内容は変更されません。
+
+## オンボーディングを再開する {#resume-onboarding}
+
+```bash
+# 再接続して未回答の質問に答える（どちらのセットアップタイプでも使用可能）
+tpc sim ax setup resume <run-id> --scope acme/my-product
+
+# 質問には回答せずに進捗を確認する
+tpc sim ax status <run-id> --scope acme/my-product
+
+# 完了するか、質問への入力が必要になるまで進捗を監視する
+tpc sim ax status <run-id> --scope acme/my-product --watch
+```
+
+`setup resume` は、新しい実行を開始せず、既存の実行の進行状況を追跡します。完了したら、
+`tpc sim experiment list --scope acme/my-product` を使用して、生成された
+実験を確認してください。
+
+## 自動化とJSON出力 {#automation-and-json-output}
+
+インタラクティブなターミナルがない環境、または `--format json` を指定した場合、ベンチマークのセットアップには
+`--intent` と1つ以上の `--competitor` の指定が必要です。パイプで渡された標準入力から回答を読み取ることはありません。
+
+```bash
+tpc sim ax setup --type benchmark \
+  --scope acme/my-product \
+  --intent "Compare deployment workflows" \
+  --competitor "Vercel=https://vercel.com" \
+  --format json
+```
+
+`--watch` を指定しない場合、JSON 出力には `runId` や
+`setupRunId` を含むセットアップのレスポンスが出力されます。`--watch` を指定した場合、コマンドは最終的な JSON オブジェクトを 1 つ出力します。
+
+* 完了時: `runId`、`status`、`milestones`、および監視対象が `setup` の場合は `experimentId`。
+* 失敗時: `runId`、`status: "failed"`、`milestones`。終了コードは 0 以外になります。
+* 対話が必要な場合: `runId`、`status: "input_required"`、および要求された項目を含む `pending`。
+  終了コードは 0 以外になります。ターミナルで `setup resume` を実行して再接続してください。
+
+進捗表示のみの `status --watch` と非対話モードの `setup resume` も、入力が必要になると
+0 以外の終了コードで停止します。エラーの案内は JSON 出力とは別に出力されます。
+シークレットの回答が CLI の出力に含まれることはありません。
+
+## プロダクトの AX 認証情報 {#product-ax-credentials}
+
+```bash
+tpc sim ax env set "API_KEY=$PRODUCT_API_KEY" --scope acme/my-product
+tpc sim ax env list --scope acme/my-product
+tpc sim ax env rm API_KEY --scope acme/my-product
+```
+
+これらの `env` コマンドの対象は、競合ベンチマークではなく、プロダクトに 1 つだけ存在する Agent Experience 実験です。
+実行するにはその実験が作成済みである必要があり、オンボーディングの質問に
+回答するためのコマンドではありません。保留中のオンボーディングリクエストには `setup resume` を使用してください。

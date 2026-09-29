@@ -1,0 +1,85 @@
+---
+title: "Model Council"
+description: "使用 TPC CLI 运行 Model Council 快照、管理 config.yaml，以及查看或删除结果。"
+---
+
+# Model council {#model-council}
+
+`tpc council` 是 Model Council 的 CLI。它会依据产品的问题配置，为某个产品、主题或提示词下的每一条响应打分。你可以运行 council 快照、查看状态和报告、替换 YAML 配置，以及删除已完成的快照。
+
+`tpc snapshot` 是 `tpc council` 的别名。
+
+<Note>
+  作用于产品范围的 council 命令需要指定 `--scope <org-slug>/<product-slug>`。保存或删除 `config.yaml` 需要管理员会话。
+</Note>
+
+## 配置 {#config}
+
+获取当前的 YAML 配置：
+
+```bash
+tpc council config get --scope pro-org/my-product
+tpc council config get --out config.yaml --scope pro-org/my-product
+```
+
+从文件 (或 stdin) 读取内容进行替换：
+
+```bash
+tpc council config set --file config.yaml --scope pro-org/my-product
+cat config.yaml | tpc council config set --file - --scope pro-org/my-product
+```
+
+在 `$VISUAL` 或 `$EDITOR` 中进行编辑：
+
+```bash
+tpc council config edit --scope pro-org/my-product
+```
+
+删除配置。删除后，在上传新配置之前，`tpc council run` 将一直失败：
+
+```bash
+tpc council config delete --scope pro-org/my-product
+```
+
+## 运行 {#run}
+
+快速模式默认开启 (通过网关同步分析) 。如需改用批处理方式，请传入 `--fast-mode=false`。
+
+```bash
+tpc council run --scope pro-org/my-product
+tpc council run --scope pro-org/my-product --topic <topicId>
+tpc council run --prompt <promptId> --scope pro-org
+tpc council run --scope pro-org/my-product --from 2025-01-01 --to 2025-04-01
+tpc council run --fast-mode=false --scope pro-org/my-product
+```
+
+`run` 会在启动工作流后立即退出。Council 运行可能耗时较长，请使用 `list` 查看状态。
+
+## 结果 {#results}
+
+```bash
+tpc council list --scope pro-org/my-product
+tpc council get --snapshot <snapshotId>
+tpc council report --snapshot <snapshotId>
+tpc --format json council report --snapshot <snapshotId> > report.json
+```
+
+`report` 默认输出 Markdown 格式的摘要 (包括执行摘要、跟踪的信号、建议操作以及限定条数的论断表) 。如需完整数据，请使用 `--format json`。只有状态为 `completed` 的快照才能生成报告。
+
+## 删除快照 {#delete-a-snapshot}
+
+目前没有可用于修改现有快照记录的 API。如需调整评分标准，请使用 `tpc council config set` 进行更改，然后重新运行。要删除已完成或失败的快照，请使用以下命令：
+
+```bash
+tpc council delete --snapshot <snapshotId>
+```
+
+仍在生成中的快照无法删除。
+
+## JSON 输出 {#json-output}
+
+```bash
+tpc --format json council list
+tpc --format json council config get
+tpc --format json council get --snapshot <snapshotId>
+```

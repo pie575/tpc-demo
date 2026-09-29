@@ -1,0 +1,93 @@
+---
+title: "エラー"
+description: "The Prompting Company API の結果エンベロープ、エラーコード、リクエスト ID の扱い方について説明します。"
+---
+
+# エラー {#errors}
+
+The Prompting Company の JSON エンドポイントは、成功時・失敗時ともに `ApiResult<T>` エンベロープを返します。
+
+## 結果の構造 {#result-shape}
+
+```ts
+type ApiSuccess<T> = {
+  ok: true;
+  data: T;
+};
+
+type ApiError = {
+  ok: false;
+  code: ApiErrorCode;
+  message: string;
+  details?: unknown;
+};
+
+type ApiResult<T> = ApiSuccess<T> | ApiError;
+```
+
+`data` を読み取る前に、`ok` を確認してください。
+
+```ts
+const result = await response.json();
+
+if (!result.ok) {
+  console.error(result.code, result.message, result.details);
+  return;
+}
+
+console.log(result.data);
+```
+
+## エラーコード {#error-codes}
+
+| コード                      | デフォルトのステータスコード |
+| ------------------------ | -------------- |
+| `BAD_REQUEST`            | 400            |
+| `UNAUTHORIZED`           | 401            |
+| `PAYMENT_REQUIRED`       | 402            |
+| `FORBIDDEN`              | 403            |
+| `NOT_FOUND`              | 404            |
+| `METHOD_NOT_ALLOWED`     | 405            |
+| `NOT_ACCEPTABLE`         | 406            |
+| `REQUEST_TIMEOUT`        | 408            |
+| `CONFLICT`               | 409            |
+| `GONE`                   | 410            |
+| `PAYLOAD_TOO_LARGE`      | 413            |
+| `UNSUPPORTED_MEDIA_TYPE` | 415            |
+| `UNPROCESSABLE_ENTITY`   | 422            |
+| `TOO_MANY_REQUESTS`      | 429            |
+| `INTERNAL`               | 500            |
+| `NOT_IMPLEMENTED`        | 501            |
+| `BAD_GATEWAY`            | 502            |
+| `SERVICE_UNAVAILABLE`    | 503            |
+| `GATEWAY_TIMEOUT`        | 504            |
+| `VALIDATION_ERROR`       | 422            |
+| `BUSINESS_LOGIC_ERROR`   | 422            |
+| `EXTERNAL_SERVICE_ERROR` | 502            |
+| `RATE_LIMITED`           | 429            |
+| `MAINTENANCE_MODE`       | 503            |
+| `LIVE_INDEX_NOT_FOUND`   | 404            |
+| `SCOPE_INVALID`          | 422            |
+
+## 主なメッセージ {#common-messages}
+
+| メッセージ                     | 意味                                       |
+| ------------------------- | ---------------------------------------- |
+| `authentication required` | 有効なセッション、ベアラートークン、または API キーが見つかりませんでした。 |
+| `invalid api key`         | `x-api-key` の値を検証できませんでした。               |
+| `public_api_only`         | API キーで内部ルートを呼び出そうとしました。                 |
+| `auth_method_not_allowed` | このエンドポイントは、使用した種類の認証情報に対応していません。         |
+| `insufficient_scope`      | ベアラートークンまたは API キーに必要なスコープが付与されていません。    |
+| `rate_limited`            | 現在のレート制限バケットの上限を超えました。                   |
+
+## リクエストID {#request-ids}
+
+すべてのラッパーレスポンスには、次の内容が含まれます。
+
+```text
+x-request-id: 6efaa25e-3ef6-4a34-91c1-7ff3e0fd4cc8
+```
+
+独自の `x-request-id` を送信することもできます。その場合、値には英字、数字、`_`、`.`、`-`、`:` のみを使用し、長さは 128 文字以内にしてください。安全でない値が指定された場合、TPC は新しい ID に置き換えます。
+
+失敗したリクエストの調査をサポートに依頼する際は、リクエスト ID をお伝えください。

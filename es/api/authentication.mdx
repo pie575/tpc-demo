@@ -1,0 +1,118 @@
+---
+title: "Autenticación"
+description: "Elige entre cookies de sesión, tokens bearer de OAuth y claves de API para autenticarte en la API de TPC."
+---
+
+# Autenticación {#authentication}
+
+TPC identifica a quien realiza la llamada en un orden fijo: clave de API, token bearer y, por último, cookie de sesión. Si envías más de una credencial, tiene prioridad `x-api-key`.
+
+## Elige tu credencial {#choose-your-credential}
+
+| Credencial            | Ideal para                            | Notas                                                                                                                   |
+| --------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Cookie de sesión      | Llamadas desde el panel propio.       | Solo para navegador. Las llamadas con sesión dependen de las comprobaciones de organización y producto a nivel de ruta. |
+| Token bearer de OAuth | La CLI y clientes OAuth.              | `tpc auth login` usa un flujo de dispositivo en el navegador y, después, la CLI envía credenciales bearer.              |
+| Clave de API          | Integraciones de servidor a servidor. | Limitada a la organización, rotable y restringida mediante alcances explícitos.                                          |
+
+## Cookie de sesión {#session-cookie}
+
+Las cookies de sesión se utilizan en el panel de The Prompting Company. El navegador envía automáticamente la cookie `better-auth.session_token`.
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "Cookie: better-auth.session_token=session_token_here"
+```
+
+```ts
+const response = await fetch("/api/v1/site/pages?productId=product_123", {
+  credentials: "include",
+});
+```
+
+Usa las cookies de sesión solo en flujos de navegador propios.
+
+## OAuth bearer {#oauth-bearer}
+
+La CLI se autentica mediante el flujo de dispositivo (device flow) en el navegador:
+
+```bash
+tpc auth login
+```
+
+Tras iniciar sesión, la CLI guarda un token local y lo envía como credencial de tipo bearer:
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "Authorization: Bearer $TPC_ACCESS_TOKEN"
+```
+
+```ts
+const response = await fetch(
+  "https://app.promptingco.com/api/v1/site/pages?productId=product_123",
+  {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  },
+);
+```
+
+Quienes realicen llamadas con un token bearer deben incluir los alcances que exige la ruta.
+
+## Clave de API {#api-key}
+
+Las claves de API son la credencial recomendada para las integraciones.
+
+Crea una clave de API de organización desde:
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+Luego, envíala con `x-api-key`:
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+```ts
+const response = await fetch(
+  "https://app.promptingco.com/api/v1/site/pages?productId=product_123",
+  {
+    headers: {
+      "x-api-key": process.env.TPC_API_KEY!,
+    },
+  },
+);
+```
+
+## Precedencia {#precedence}
+
+`resolveCaller` comprueba las credenciales en este orden:
+
+1. `x-api-key`
+2. `Authorization: Bearer <token>`
+3. Cookie de sesión
+
+Este orden de precedencia hace que las integraciones de servidor sean deterministas. Si un trabajo en segundo plano incluye por accidente una cookie del navegador, la clave de API seguirá identificando la integración.
+
+## Rotación y revocación {#rotation-and-revocation}
+
+Rota las claves de API cuando un miembro del equipo deje la organización, cuando un secreto pueda haberse filtrado o cuando cambien los límites de una integración.
+
+1. Crea una clave nueva con los mismos alcances o con alcances más restringidos.
+2. Despliega el nuevo secreto en tu integración.
+3. Comprueba que las solicitudes se completan correctamente con la nueva clave.
+4. Revoca la clave anterior desde la página de configuración de claves de API.
+
+Las claves revocadas devuelven el siguiente error:
+
+```json
+{
+  "ok": false,
+  "code": "UNAUTHORIZED",
+  "message": "invalid api key"
+}
+```

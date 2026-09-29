@@ -1,0 +1,85 @@
+---
+title: "Cloudflare Logpush"
+description: "Envía en streaming los registros de solicitudes HTTP de Cloudflare a The Prompting Company y consulta el tráfico de rastreadores de IA en tus paneles"
+---
+
+<Note>
+  **Configúralo desde el panel:** [Conectar Cloudflare Logpush](https://app.promptingco.com/traffic-onboarding/cloudflare-logpush) te guía por estos pasos, espera a que llegue tu primera visita de IA a una página de contenido y confirma que el tráfico se asigna al producto correcto. Usa esta página como referencia.
+</Note>
+
+Cloudflare Logpush envía lotes de los registros de solicitudes HTTP de tu zona directamente a The Prompting Company. En cuanto se habilita el trabajo, las visitas válidas a páginas de contenido procedentes de rastreadores y agentes de IA (GPTBot, ChatGPT-User, ClaudeBot, PerplexityBot, entre otros) aparecen automáticamente en la métrica de [tráfico de IA](/es/guides/metrics#ai-traffic). La clasificación se hace de nuestro lado: tú lo envías todo y nosotros nos quedamos con lo que importa.
+
+¿No usas Cloudflare Enterprise? En su lugar, usa la [API de eventos sin procesar](/es/guides/analytics/log-exporters/raw-events) para transmitir desde cualquier fuente de registros o [exporta un CSV puntual](/es/guides/analytics/cf-traffic-export) para obtener el historial.
+
+## Antes de empezar {#before-you-start}
+
+* Necesitas una **clave de API** de The Prompting Company (de organización o de cuenta de servicio), que puedes obtener en **Settings → API Keys**.
+* La zona debe tener un plan **Enterprise** de Cloudflare, ya que Logpush para el conjunto de datos de solicitudes HTTP solo está disponible en Enterprise.
+* Tus registros DNS deben estar **proxied** (nube naranja), porque Logpush solo captura el tráfico que pasa por Cloudflare.
+
+## Configurar el destino {#configure-the-destination}
+
+```text
+https://logs.promptingco.com/v1/events/cf-logpush?header_Authorization=Bearer%20YOUR_API_KEY
+```
+
+Cloudflare convierte los parámetros de consulta `header_*` en encabezados de solicitud, así que tu clave se envía como encabezado `Authorization: Bearer` en cada push. Mantén el valor codificado para URL (`%20` para el espacio).
+
+### Uso del panel {#using-the-dashboard}
+
+1. En el panel de Cloudflare, abre tu zona y ve a **Analytics &amp; Logs → Logpush**.
+2. Haz clic en **Create a Logpush job** y selecciona el conjunto de datos **HTTP requests**.
+3. Elige **HTTP destination** y pega la URL de destino indicada arriba.
+4. Selecciona estos campos: `ClientIP`, `ClientRequestHost`, `ClientRequestMethod`, `ClientRequestReferer`, `ClientRequestSource`, `ClientRequestURI`, `ClientRequestUserAgent`, `WorkerSubrequest`, `EdgeStartTimestamp`, `EdgeResponseContentType`, `EdgeResponseStatus`.
+5. Guarda y activa el trabajo. Cloudflare valida el destino con un mensaje de prueba, que se supera automáticamente.
+
+### Con la API {#using-the-api}
+
+```bash
+curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/logpush/jobs" \
+  -H "Authorization: Bearer $CF_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "name": "tpc-crawler-logs",
+    "dataset": "http_requests",
+    "enabled": true,
+    "destination_conf": "https://logs.promptingco.com/v1/events/cf-logpush?header_Authorization=Bearer%20YOUR_API_KEY",
+    "max_upload_bytes": 5000000,
+    "output_options": {
+      "field_names": [
+        "ClientIP", "ClientRequestHost", "ClientRequestMethod",
+        "ClientRequestReferer", "ClientRequestSource", "ClientRequestURI",
+        "ClientRequestUserAgent", "WorkerSubrequest", "EdgeStartTimestamp",
+        "EdgeResponseContentType", "EdgeResponseStatus"
+      ],
+      "timestamp_format": "rfc3339"
+    }
+  }'
+```
+
+Puedes usar cualquier `timestamp_format` (`unixnano`, `unix` o `rfc3339`); `rfc3339` es el más fácil de depurar.
+
+## Qué se ingiere {#what-gets-ingested}
+
+No necesitas filtrar el tráfico de antemano: envíalo todo y The Prompting Company clasificará los rastreadores y agentes de IA durante la ingesta. El tráfico de IA reconocido solo se conserva cuando cumple los requisitos de una visita a una página de contenido: `GET`, un estado entre `200` y `299` excepto `204` y `205` (o `304`), y un tipo de contenido HTML o XHTML cuando esos campos están presentes. Los valores de estado numéricos pueden llegar como números JSON o como cadenas decimales.
+
+Si los metadatos HTTP faltan o no son numéricos, las rutas con aspecto de página se admiten por defecto. Los trabajos que omiten `EdgeResponseContentType` o `EdgeResponseStatus` seguirán ingiriendo accesos de IA que no son HTML, como API JSON, a menos que la ruta coincida con un prefijo de Next.js o un sufijo de recurso. Los prefijos canónicos de Next.js (`/_next/static`, `/_next/image` y `/_next/data`, en minúsculas) siempre se filtran, al igual que los sufijos habituales de scripts, hojas de estilo, mapas de código fuente, imágenes, fuentes, multimedia, Rive, WASM, JSON, XML, texto y PDF cuando falta el tipo de contenido. La coincidencia de sufijos no distingue entre mayúsculas y minúsculas e ignora la barra final; un tipo de contenido HTML permite conservar las páginas legítimas con puntos en la ruta.
+
+Algunos tipos de líneas se omiten automáticamente para no contar las visitas dos veces: el mensaje de prueba de validación de destino de Cloudflare, las subsolicitudes de Worker (`WorkerSubrequest: true`), las solicitudes que no proceden de usuarios reales (valores de `ClientRequestSource` como `edgeWorkerFetch` o purgas) y las líneas sin `ClientRequestHost`. Si quieres, puedes añadir un filtro de Logpush para reducir el volumen, pero no es necesario para obtener resultados correctos.
+
+## Respuestas {#responses}
+
+| Estado | Significado                                                                                                                                                                                                                                                      |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `200`  | Lote procesado. El cuerpo devuelve `{"ok": true, "received": N, "ingested": N, "skipped": N, "filtered": N}`. Un valor positivo de `filtered` indica que las solicitudes que no proceden de IA o que no corresponden a páginas se descartaron intencionadamente. |
+| `401`  | Falta la clave de API o no es válida: comprueba la clave en la URL de destino                                                                                                                                                                                         |
+| `429`  | La verificación de la clave superó el límite de frecuencia: Cloudflare vuelve a intentarlo                                                                                                                                                                       |
+| `400`  | No se pudo decodificar el cuerpo                                                                                                                                                                                                                                 |
+| `413`  | El lote descomprimido es demasiado grande: reduce el valor de `max_upload_bytes` del trabajo                                                                                                                                                                     |
+| `503`  | Interrupción temporal de la ingesta: Cloudflare vuelve a intentarlo automáticamente                                                                                                                                                                              |
+
+La entrega sigue el modelo «al menos una vez»: los lotes fallidos se reenvían completos, por lo que es normal que aparezcan duplicados ocasionales, y las métricas de tráfico están preparadas para tolerarlos.
+
+## Comprueba que funciona {#verify-its-working}
+
+El tráfico real empieza a aparecer en el panel de [tráfico de IA](/es/guides/metrics#ai-traffic) a los pocos minutos de habilitar el trabajo. Para probar la canalización al instante, sin esperar a que la visite un rastreador, envía un evento de prueba mediante la [API de eventos sin procesar](/es/guides/analytics/log-exporters/raw-events#verify-its-working).

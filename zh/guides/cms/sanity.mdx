@@ -1,0 +1,60 @@
+---
+title: "连接 Sanity"
+description: "使用项目级 API 令牌将 TPC 草稿发布到 Sanity"
+---
+
+The Prompting Company 通过具有 Editor 或 Maintainer 权限的项目级 API 令牌，将文档写入您的 Sanity 数据集。
+
+## 开始之前 {#before-you-start}
+
+* 你在目标 Sanity 项目中拥有 Admin 或 Developer 角色。
+* 你的文档 schema 已部署到计划写入的数据集。
+
+## 生成 API 令牌 {#generate-an-api-token}
+
+1. 前往 [sanity.io/manage](https://sanity.io/manage)，打开你的项目。
+2. 打开 **API** 选项卡，然后进入 **Tokens**。
+3. 点击 **Add API token**。
+4. 将其命名为 `TPC publisher`，并选择 **Editor** 或 **Maintainer** 角色。
+5. 复制令牌。Sanity 只会显示一次。
+
+## 查找项目 ID 和数据集 {#find-your-project-id-and-dataset}
+
+* **项目 ID** 显示在 `sanity.io/manage` 中项目页面的顶部。
+* **数据集** 通常为 `production`。数据集名称须完全一致。
+* **API 版本** 默认为 `v2025-03-01`。仅在需要用到新功能时才升级版本。
+
+## 匹配你的 schema 字段 {#match-your-schema-fields}
+
+TPC 只会写入一种文档类型。默认配置如下：
+
+* **文档类型** — `post`
+* **字段** — `title`、`content`、`slug`、`excerpt`
+* **图片字段** — `thumbnail`、`hero` (可选) 
+
+如果你的 schema 使用了不同的名称，请在集成表单中粘贴准确的字段名。图片字段为可选项——如果你的 schema 中没有图片引用，留空即可。
+
+## 在 TPC 中连接 {#connect-in-tpc}
+
+1. 在你的 TPC 产品工作区中打开 **Settings → Integrations**。
+2. 选择 **Sanity**。
+3. 填写项目 ID、数据集 (dataset) 、API 版本、文档类型、字段名以及 API 令牌。
+4. 点击 **Save**，然后点击 **Test connection**。
+
+## 故障排除 {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+令牌缺少写入权限。请重新生成具有 **Editor** 或 **Maintainer** 权限范围的令牌。
+
+### 404 或“unknown type” {#404-or-unknown-type}
+
+TPC 中配置的 **文档类型** 在已部署的 schema 中不存在。请部署 schema，或修改类型名称使二者一致。
+
+### 字段保存后为 `null` {#fields-save-as-null}
+
+字段名区分大小写，必须与 schema 键完全一致，而非显示标签。
+
+## 相关链接 {#related-links}
+
+* [Sanity API 令牌文档](https://www.sanity.io/docs/http-auth)

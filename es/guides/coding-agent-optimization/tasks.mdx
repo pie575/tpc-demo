@@ -1,0 +1,139 @@
+---
+title: "Tareas"
+description: "Define qué deben lograr los agentes y cómo se mide el éxito"
+---
+
+Una tarea le indica al agente qué debe lograr y a la plataforma cómo puntuar el intento. Ambas partes se definen en la propia tarea, de modo que todos los entornos que la ejecutan se evalúan con el mismo criterio.
+
+## Anatomía de una tarea {#anatomy-of-a-task}
+
+| Parte             | Propósito                                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Instrucción**   | El prompt que recibe el agente: qué debe construir, instalar o conseguir                                             |
+| **Objetivos**     | Criterios de éxito, cada uno con una puntuación ponderada y un umbral de aprobación                                  |
+| **Archivos de inicialización**    | Archivos que se colocan en el sandbox antes de la ejecución: archivos zip subidos o repositorios git                 |
+| **Comandos de inicialización** | Comandos de shell que se ejecutan durante la preparación del sandbox (instalar dependencias, cargar datos iniciales) |
+| **Secretos**      | Credenciales con nombre que se ponen a disposición de la ejecución como variables de entorno                         |
+
+## Redacción de instrucciones {#writing-instructions}
+
+Redacta las instrucciones tal como un usuario real se las plantearía a un agente, no como te gustaría que lo hiciera. El objetivo es medir la experiencia de los agentes con tu producto, así que evita incluir pistas que un usuario típico no daría:
+
+* **Bien:** «Configura el seguimiento de errores para esta aplicación Express con Acme».
+* **Demasiado útil:** «Instala `@acme/sdk@2.1` y luego llama a `acme.init()` con el DSN del panel de control».
+
+## Objetivos y criterios {#goals-and-criteria}
+
+Cada objetivo contiene uno o más **criterios**. Un criterio tiene un tipo de evaluación, un peso y una puntuación máxima. Los objetivos se puntúan mediante `weighted_average`, `binary` o `percentage`, y se comparan con un umbral de aprobación de 0 a 100.
+
+Cada criterio se evalúa con uno de estos tipos:
+
+| Evaluación           | Qué comprueba                                                                |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `comparison`         | Una métrica de la ejecución frente a un umbral (duración, tokens, costo)     |
+| `file_exists`        | Que un archivo exista en el sandbox después de la ejecución                  |
+| `file_content_match` | Que el contenido de un archivo coincida con un patrón                        |
+| `json_schema`        | Que la salida sea válida según un JSON Schema                                |
+| `bash_command`       | Que un comando de shell termine con código 0 en el sandbox tras la ejecución |
+| `python_script`      | Que se supere una comprobación personalizada en Python                       |
+| `script_judge`       | Tu propio script de verificación (código de salida 0 = aprobado)             |
+| `llm_judge`          | Un LLM evalúa la transcripción según una rúbrica                                |
+
+Siempre que sea posible, opta por comprobaciones deterministas (`file_exists`, `bash_command`, `script_judge`): son más económicas y reproducibles. Reserva `llm_judge` para criterios realmente subjetivos, como «¿siguió el agente el enfoque documentado?».
+
+## Configuración del sandbox {#sandbox-setup}
+
+Los archivos y comandos de inicialización preparan el sandbox antes de que el agente comience:
+
+* **Carga de zip**: extrae un archivo comprimido en el sandbox (destino predeterminado: el directorio personal del agente)
+* **Clonación de Git**: clona un repositorio en una referencia específica; los repositorios privados se autentican mediante una referencia a un secreto
+* **Comandos de inicialización**: ejecutan comandos de shell en orden, cada uno con su propio directorio de trabajo y tiempo de espera
+
+Ambos se complementan, y la regla general es sencilla: **los archivos de inicialización colocan los bytes en su sitio** (un repositorio inicial, datos de prueba, un paquete de documentación), mientras que **los comandos de inicialización ejecutan la configuración** (instalar dependencias, compilar, cargar datos iniciales). Combínalos para que el agente parta de un estado realista, como una aplicación a medio terminar en la que hay que integrar tu producto, y deja esta configuración fuera de la instrucción para evaluar la tarea y no la infraestructura.
+
+## Secretos {#secrets}
+
+Los secretos son credenciales cifradas cuyo alcance se limita a tu organización (o a un solo entorno). Haz referencia a ellos por su nombre en una tarea y se inyectarán como variables de entorno durante la ejecución, de modo que las claves de API nunca aparecen en la definición de la tarea ni en las transcripciones.
+
+Los secretos se gestionan en los entornos. Consulta [Entornos](/es/guides/coding-agent-optimization/environments#secrets-from-the-cli) para ver el flujo de trabajo con la CLI.
+
+## Trabajar con tareas desde la CLI {#working-with-tasks-from-the-cli}
+
+Las tareas se crean a partir de un archivo JSON. Ejecuta `tpc sim spec` para ver el contrato completo. Un `task.json` mínimo tiene este aspecto:
+
+```json
+{
+  "name": "Checkout regression",
+  "description": "Validate checkout flow",
+  "category": "coding",
+  "prompt": "Open the app, add an item to cart, and complete checkout successfully.",
+  "goals": [
+    {
+      "name": "Checkout succeeds",
+      "description": "The agent should add an item to the cart, proceed through the checkout flow, and reach a confirmation page without errors.",
+      "evaluationType": "llm_judge",
+      "model": "claude-sonnet-4-6",
+      "passingThreshold": 70,
+      "scoringMethod": "weighted_average"
+    }
+  ]
+}
+```
+
+`category` puede ser `coding`, `research`, `documentation` o `analysis`. No incluyas un campo `product`: la CLI añade el producto a partir de `--scope <org-slug>/<product-slug>`.
+
+```bash
+# Crear la tarea
+tpc sim task create --file task.json --scope pro-org/my-product
+
+# Explorar y consultar tareas
+tpc sim task list --search checkout --scope pro-org/my-product
+
+# Detalles de la tarea: objetivos, comandos de inicialización, nombres de los archivos de inicialización y entornos vinculados
+tpc sim task get task_123 --scope pro-org/my-product
+
+# Actualizar metadatos o reemplazar los objetivos/la definición a partir de un archivo
+tpc sim task update task_123 --name "Checkout regression v2" --scope pro-org/my-product
+tpc sim task update task_123 --file task.json --scope pro-org/my-product
+
+# Poner en cola ejecuciones en todos los entornos vinculados y habilitados de la tarea
+tpc sim task run task_123 --scope pro-org/my-product
+
+# ...o solo en entornos concretos (sepáralos con comas o repite la opción)
+tpc sim task run task_123 --environment-id env_a,env_b --scope pro-org/my-product
+
+# Eliminar una tarea (eliminación lógica; se conserva el historial de ejecuciones)
+tpc sim task delete task_123 --scope pro-org/my-product
+```
+
+## Ejecutar una tarea desde un directorio {#run-a-task-from-a-directory}
+
+Una tarea y el agente que intenta resolverla pueden convivir en un directorio pequeño y portable:
+
+```text
+checkout-regression/
+├── task.json         # metadatos + objetivos (sin prompt; ver más abajo)
+├── instruction.md    # el prompt que recibe el agente
+└── environment.json  # la configuración del agente que se evalúa (opcional)
+```
+
+Un archivo `environment.json` declara la configuración del agente:
+
+```json
+{
+  "name": "Claude Code + Sonnet",
+  "agentConfig": {
+    "harness": "claude",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
+  }
+}
+```
+
+```bash
+tpc sim run ./checkout-regression
+```
+
+Un solo comando sincroniza el directorio con tu producto y pone ejecuciones en cola: reutiliza la tarea y el entorno coincidentes, los actualiza si los archivos cambiaron y los crea si son nuevos, de modo que volver a ejecutarlo nunca genera duplicados. Omite `environment.json` (o pasa `--environment-id`) para ejecutar sobre entornos que ya existen.
+
+`tpc sim task export <task-id>` genera un directorio con exactamente esta estructura (incluido `environment.json` cuando la tarea tiene un único entorno vinculado), para que puedas descargar una tarea, editarla y ejecutarla en cualquier lugar.

@@ -1,0 +1,249 @@
+---
+title: "生成 llms.txt"
+description: "使用 TPC CLI 基于任意网站的站点地图生成 llms.txt 文件。"
+---
+
+# llms.txt 生成 {#llmstxt-generation}
+
+只需两步即可将站点地图转换为一个或多个 [llms.txt](https://llmstxt.org) 文件：`tpc llmstxt init` 读取站点地图，并生成一个可编辑的 YAML 配置文件，将页面划分到不同章节中；`tpc llmstxt generate` 则根据该配置将文件输出到磁盘。这两个命令完全在本地运行，无需身份验证，也无需指定组织或产品范围。
+
+<Note>
+  一切以 YAML 配置文件为准。`init` 只是为你提供一个起点；你可以随意编辑配置 (重命名章节、移动页面、拆分文件) ，然后重新运行 `generate`。`generate` 既不会重新分组，也不会抓取任何内容。
+</Note>
+
+## 基于站点地图创建配置 {#create-a-config-from-a-sitemap}
+
+解析站点地图并生成 `llmstxt.yaml`：
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml
+```
+
+`tpc llmstxt <sitemap-url>` 是同一操作的简写形式 (不带任何标志) 。嵌套的站点地图索引最多可追踪 5 层，gzip 压缩的站点地图也会自动处理。
+
+页面会按 URL 路径划分为不同章节：CLI 先去除所有 URL 共有的路径前缀，再按下一级路径段分组 (`/docs/deployment/aws.html` → &quot;Deployment&quot; 章节) 。位于共有前缀本身或其直接下级的页面会归入 &quot;Overview&quot; 章节。
+
+在初始化时设置根文件的头部内容：
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml \
+  --name "Example" \
+  --title "Example Docs" \
+  --description "Docs for agents." \
+  --details "This index covers the latest release."
+```
+
+`--title` 会渲染为 `# ...` 标题，`--description` 渲染为 `> ...` 引用块，`--details` 则渲染为第一个章节之前的自由格式段落。
+
+## 筛选要包含的页面 {#filter-which-pages-are-included}
+
+Glob 模式用于匹配 URL 路径：`**` 可跨越多个路径段，`*` 仅在单个路径段内匹配：
+
+```bash
+tpc llmstxt init https://example.com/sitemap.xml \
+  --include '/docs/**' \
+  --exclude '/docs/internal/**'
+```
+
+正则表达式 (Go 语法) 会与完整 URL 进行匹配：
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml \
+  --include-regex '/docs/latest(/|$)' \
+  --exclude-regex '/docs/(es|fr|ja)(/|$)'
+```
+
+只要设置了任意包含规则，URL 就必须至少匹配其中一条；匹配任一排除规则的 URL 会被剔除。可使用 `--max-urls` (默认值为 5000) 限制从站点地图中读取的页面数量上限。
+
+## 获取真实的标题和描述 {#fetch-real-titles-and-descriptions}
+
+默认情况下，链接标题根据 URL slug 生成。启用 `--enrich` 后，CLI 会抓取每个页面 (8 个并发工作线程) ，并填入真实的元数据：
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --enrich
+```
+
+信息补全按以下优先级依次解析：
+
+* **标题**：先取 `<title>`，其次取 `og:title` / `twitter:title`
+* **描述**：先取 `<meta name="description">`，其次取 `og:description` / `twitter:description`，最后取页面 `<main>` 内容区域中第一个有实质内容的段落
+
+描述超过 400 个字符时会按单词边界截断。可使用 `--max-description` 调高或调低该上限：
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --enrich --max-description 800
+```
+
+该限制按字符而非字节计数，因此无论使用哪种文字，额度都一样。
+
+补全过程还会跟随 `<meta http-equiv="refresh">` 和 HTTP 重定向 (托管在 S3 上的文档常有这种情况，其站点地图中往往列着过时的 URL) ，丢弃与其他页面解析到同一 URL 的页面，并按最终 URL 重新划分章节。每个被丢弃的页面都会连同其合并到的目标页面一并列出；如需保留所有页面，请传入 `--no-dedup`。抓取失败的页面会被静默跳过，沿用根据 slug 推导出的标题。
+
+<Note>
+  配置了重写规则时，补全过程会抓取**重写后**的 URL，也就是 `generate` 实际输出的链接。如果站点会重定向旧的 `.html` 路径，但仍在对应的 `.md` 路径上提供内容，这一点就尤为重要：输出的链接均有效且各不相同，因此会被保留，而不会被合并。标题和描述既可从 HTML 中读取，也可从 Markdown 文档中读取。
+</Note>
+
+## 配置文件 {#the-config-file}
+
+```yaml
+version: 1
+sitemap: https://docs.example.com/sitemap.xml
+site:
+  name: Example
+  baseUrl: https://docs.example.com
+  urlRewrites:
+    - match: \.html$
+      replace: .md
+files:
+  - path: llms.txt
+    title: Example Docs
+    summary: Docs for agents.
+    info: This index covers the latest release.
+    sections:
+      - title: Get Started
+        pages:
+          - url: https://docs.example.com/get-started/quickstart.html
+            title: Quickstart
+            description: Run your first request in five minutes.
+          - file: guides/llms.txt
+  - path: guides/llms.txt
+    title: Example Guides
+    sections:
+      - title: Guides
+        pages:
+          - url: /guides/streaming.html
+            title: Streaming
+```
+
+关键规则：
+
+* `files` 可以声明任意数量的输出，因此运行一次 `generate` 即可同时生成根目录的 `llms.txt` 和各分类文件。输出路径必须是相对路径，以 `.txt` 结尾，且不能超出输出目录。
+* 每个页面必须在 `url` 和 `file` 中设置且仅设置其一：`url` 可以是绝对路径，也可以是相对于 `site.baseUrl` 的路径；`file` 为 `files` 中另一个条目的 `path`，会渲染为指向该生成文件的链接——父级 llms.txt 正是通过这种方式链接到嵌套文件的。
+* 页面的 `description` 会渲染为链接后的 `: ...` 后缀，为空时省略。不含任何页面的章节会被跳过。
+
+## 重写 URL {#rewrite-urls}
+
+`site.urlRewrites` 包含一组按顺序执行的正则查找/替换规则，会在生成时应用于每个解析后的页面 URL，例如通过追加 `.md` 让链接指向 Markdown 版本。捕获组 (`$1`、`${name}`) 的用法与 Go 的 `Regexp.ReplaceAllString` 相同。初始化时可通过 `--rewrite 'PATTERN=>REPLACEMENT'` (可多次指定) 预置规则：
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --rewrite '\.html$=>.md'
+```
+
+如果重写逻辑无法用正则表达式实现，可以将 `site.urlRewriteCommand` 设为你自己的程序，并以 argv 列表的形式指定 (不经过 shell) ：
+
+```yaml
+site:
+  urlRewriteCommand: ["python3", "scripts/rewrite-urls.py"]
+```
+
+生成时，该命令只运行一次：通过 stdin 接收所有已解析的页面 URL (已应用 `urlRewrites`) ，每行一个，并且必须针对每行输入恰好输出一行——重写后的 URL，或留空行以保持原 URL 不变。非零退出码或行数不匹配均视为错误。由 `file:` 引用生成的链接始终不会被重写。
+
+## 生成文件 {#generate-the-files}
+
+```bash
+tpc llmstxt generate
+```
+
+写入指定目录，或仅预览而不写入：
+
+```bash
+tpc llmstxt generate --config docs/llmstxt.yaml --out public
+tpc llmstxt generate --dry-run
+```
+
+每个文件均以标准 llms.txt 格式呈现：
+
+```markdown
+# 示例文档
+
+> 面向智能体的文档。
+
+本索引适用于最新版本。
+
+## 开始使用
+
+- [快速入门](https://docs.example.com/get-started/quickstart.md)：五分钟内发出你的第一个请求。
+- [示例指南](https://docs.example.com/guides/llms.txt)
+```
+
+所有 llmstxt 命令均可添加 `--format json`，以输出机器可读的结果。
+
+## 检查所有链接 {#check-every-link}
+
+`doctor` 可以检查任意 llms.txt 文档——无论是本地文件还是在线 URL，也无论是否由本 CLI 生成。它会提取文档中的每个 Markdown 链接并通过 HTTP 逐一检查；凡是出现传输错误或返回 400 及以上状态码的链接，都会被报告出来，并附上所在章节、链接标题和行号：
+
+```bash
+tpc llmstxt doctor https://docs.example.com/llms.txt
+```
+
+```text
+BROKEN  https://docs.example.com/guides/old-page.md  (HTTP 404)
+        https://docs.example.com/llms.txt:14  Guides › Old page
+Checked 58 links: 57 OK, 1 broken
+```
+
+发布前请检查生成的文件 (本地文件中的相对链接需要配合 `--base-url` 使用；通过 URL 抓取的内容，其相对链接会自动以该 URL 为基准进行解析) ：
+
+```bash
+tpc llmstxt doctor ./out/llms.txt ./out/guides/llms.txt --base-url https://docs.example.com
+```
+
+链接检查使用 `HEAD` 请求，若服务器拒绝该请求则回退为 `GET`，默认每次并发检查 8 个 (可通过 `--concurrency` 调整) 。锚点和 `mailto:` 链接会被忽略，重复的 URL 只检查一次。只要有任何链接失效，该命令就会以退出码 1 退出，因此你可以将其作为 CI 或发布步骤的检查关卡。
+
+## 标志参考 {#flags-reference}
+
+### tpc llmstxt init {#tpc-llmstxt-init}
+
+```bash
+tpc llmstxt init <sitemap-url>
+```
+
+| 标志                | Default           | Description                                                                                       |
+| ------------------- | ----------------- | ------------------------------------------------------------------------------------------------- |
+| `--config`, `-c`    | `llmstxt.yaml`    | YAML 配置文件的写入路径。                                                                                   |
+| `--name`            | 根据站点地图的主机名推导 | 站点名称，用于配置文件和根文件标题。                                                                                |
+| `--title`           | 站点名称              | 根文件标题 (即 `# ...` 标题) 。                                                                            |
+| `--description`     | —                 | 根文件描述，以 `> ...` 引用块的形式显示在标题下方。                                                                    |
+| `--details`         | —                 | 根文件详细信息，以自由格式文本的形式显示在描述与第一个章节之间。                                                                  |
+| `--include`         | —                 | 仅保留路径与此 glob 匹配的 URL (可多次指定) 。`**` 可跨越多个路径段，`*` 仅匹配单个路径段内的内容。                                     |
+| `--exclude`         | —                 | 排除路径与此 glob 匹配的 URL (可多次指定) 。                                                                     |
+| `--include-regex`   | —                 | 仅保留与此 Go 正则表达式匹配的 URL，匹配对象为完整 URL (可多次指定) 。                                                       |
+| `--exclude-regex`   | —                 | 排除与此 Go 正则表达式匹配的 URL，匹配对象为完整 URL (可多次指定) 。                                                        |
+| `--rewrite`         | —                 | URL 重写规则，格式为 `PATTERN=>REPLACEMENT` (Go 正则表达式，可多次指定) ，会写入 `site.urlRewrites`，并在执行 `generate` 时应用。 |
+| `--enrich`          | `false`           | 抓取每个页面，填入真实的标题和描述；会跟随重定向，并对最终指向同一 URL 的页面去重。如果设置了 `--rewrite` 规则，则抓取重写后的 URL。                     |
+| `--no-dedup`        | `false`           | 在 `--enrich` 过程中保留所有页面，即使多个页面经重定向后指向同一 URL。                                                       |
+| `--max-description` | `400`             | `--enrich` 过程中生成的描述的最大长度 (字符数) 。                                                                  |
+| `--max-urls`        | `5000`            | 从站点地图中读取的页面 URL 数量上限。                                                                        |
+| `--force`           | `false`           | 如果配置文件已存在，则将其覆盖。                                                                                  |
+
+### tpc llmstxt generate {#tpc-llmstxt-generate}
+
+```bash
+tpc llmstxt generate
+```
+
+| 标志               | 默认值            | 说明                        |
+| ---------------- | -------------- | ------------------------- |
+| `--config`, `-c` | `llmstxt.yaml` | YAML 配置文件的路径。             |
+| `--out`, `-o`    | `.`            | 生成的 llms.txt 文件的输出目录。     |
+| `--dry-run`      | `false`        | 将渲染后的文件打印到 stdout，而不写入文件。 |
+
+### tpc llmstxt doctor {#tpc-llmstxt-doctor}
+
+```bash
+tpc llmstxt doctor <llms.txt file or URL> [more...]
+```
+
+| 标志              | 默认值                  | 说明                                     |
+| --------------- | -------------------- | -------------------------------------- |
+| `--base-url`    | 对于远程获取的文档，默认为输入的 URL | 用于解析相对链接的绝对 URL。本地文件中若包含相对链接，则必须指定此参数。 |
+| `--concurrency` | `8`                  | 并行检查的链接数 (1–64) 。                      |
+
+### 全局标志 {#global-flags}
+
+适用于所有 `tpc` 命令。
+
+| 标志               | 默认值                                  | 说明                                            |
+| ---------------- | ------------------------------------ | --------------------------------------------- |
+| `--format`, `-f` | `text`                               | 命令结果和帮助信息的输出格式：`text`、`json` 或 `csv`。         |
+| `--api`, `-a`    | `https://app.promptingco.com/api/v1` | 所有请求使用的 API 基础 URL (`llmstxt` 在本地运行，不使用此标志) 。 |
+| `--token`, `-t`  | —                                    | 仅对单次命令调用生效的访问令牌 (`llmstxt` 不使用此标志) 。          |

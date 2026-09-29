@@ -1,0 +1,96 @@
+---
+title: "persona"
+description: "使用 TPC CLI 列出、创建、更新和删除产品的 persona。"
+---
+
+# persona {#personas}
+
+在终端中管理产品的 persona。persona 是运行提示词时 AI 助手被要求代入的用户身份；提示词通过 ID 引用 persona。使用 `--scope <org-slug>/<product-slug>` 选择产品。`tpc personas` 是 `tpc persona` 的别名。
+
+persona 命令支持通过 [OAuth 登录](/zh/cli/authentication) (`tpc auth login`) 进行身份验证，也支持使用 API 密钥：只读操作 (list、get) 需要 `products:read` 权限，写入操作 (create、update、delete) 需要 `products:write` 权限。
+
+## 列出 persona {#list-personas}
+
+按创建时间倒序排列 (最新的在前) 。`--search` 按名称筛选；`--page` 从 0 开始计数；`--page-size` 默认为 50。
+
+```bash
+tpc --scope pro-org/my-product persona list
+tpc --scope pro-org/my-product persona list --search revops
+```
+
+```text
+PRODUCT:  my-product
+PAGE:     1 of 1
+
+ID                                    NAME         DESCRIPTION                                   CREATED
+4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a  RevOps lead  Owns CRM hygiene for a 200-seat sales org     2026-09-22
+
+Total: 1
+```
+
+不支持 `--format csv`。
+
+## 获取 persona {#get-a-persona}
+
+文本模式会输出完整的描述和系统提示词，JSON 模式则输出 API 载荷。
+
+```bash
+tpc --scope pro-org/my-product persona get 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a
+```
+
+## 创建 persona {#create-a-persona}
+
+`--name` 和 `--description` 为必填项。系统提示词为可选项，可通过 `--system-prompt` 或 `--system-prompt-file` 指定，但二者只能选其一。
+
+```bash
+tpc --scope pro-org/my-product persona create \
+  --name "RevOps lead" \
+  --description "Owns CRM hygiene for a 200-seat sales org"
+```
+
+```bash
+tpc --scope pro-org/my-product persona create \
+  --name "Security reviewer" \
+  --description "Evaluates vendors for SOC 2 fit" \
+  --system-prompt-file ./security.md
+```
+
+创建操作按名称保持幂等，且名称匹配不区分大小写。如果该 product 中已存在同名 persona，则不会创建重复项，而是返回现有的 persona，并在文本输出中注明这一点：
+
+```text
+Created persona RevOps lead (4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a)
+```
+
+```text
+Persona RevOps lead already exists (4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a)
+```
+
+## 更新 persona {#update-a-persona}
+
+只需传入要修改的字段，其余字段保持不变。`--clear-system-prompt` 用于清除系统提示词，不能与 `--system-prompt` 或 `--system-prompt-file` 同时使用。
+
+```bash
+tpc --scope pro-org/my-product persona update 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a \
+  --description "Owns CRM hygiene and lead routing"
+```
+
+```bash
+tpc --scope pro-org/my-product persona update 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a \
+  --clear-system-prompt
+```
+
+## 删除 persona {#delete-a-persona}
+
+删除操作为软删除：引用过该 persona 的提示词仍会保留其历史记录。
+
+```bash
+tpc --scope pro-org/my-product persona delete 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a
+```
+
+## JSON 输出 {#json-output}
+
+所有命令都支持 `--format json`，便于在脚本中使用。`list` 输出 `{ "personas": [...], "total": n }`；其他命令则输出 persona 对象。
+
+```bash
+tpc --scope pro-org/my-product persona list --format json | jq '.personas[].id'
+```

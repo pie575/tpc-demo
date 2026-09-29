@@ -1,0 +1,80 @@
+---
+title: "ナレッジ"
+description: "TPC CLI を使用して、生成されたナレッジファイルの一覧表示、読み取り、書き込みを行います。"
+---
+
+# ナレッジ {#knowledge}
+
+ターミナルから、プロダクトの生成済みナレッジファイルを読み書きできます。対象のプロダクトは `--scope <org-slug>/<product-slug>` で指定します。`tpc kb` は `tpc knowledge` のエイリアスです。
+
+今回の初期リリースで対応しているのはファイル操作 (list、get、put) のみです。提案、検索、取り込み、グラフの各コマンドはまだ利用できません。
+
+<Note>
+  ナレッジ コマンドを使用するには [OAuth ログイン](/ja/cli/authentication) (`tpc auth login`) が必要です。API キーでは「OAuth login required」エラーとなり、拒否されます。
+</Note>
+
+## ファイルの一覧表示 {#list-files}
+
+テキスト形式では、インデント付きの Unix 形式のツリーで出力されます。JSON 形式では、API が返すフラットなファイル一覧がそのまま出力されます。
+
+```bash
+tpc --scope pro-org/my-product knowledge file list
+```
+
+```text
+knowledge/
+  product/
+    features.md
+    overview.md
+  sources/
+    pricing.md
+```
+
+サブツリーに絞り込むには、次のようにします。指定したプレフィックスがツリーのルートになります。
+
+```bash
+tpc --scope pro-org/my-product knowledge file list --path product
+```
+
+```text
+product/
+  features.md
+  overview.md
+```
+
+スクリプト向けの JSON 出力はフラットな形式のままです (ツリー構造にはネストされません) 。
+
+```bash
+tpc --scope pro-org/my-product knowledge file list --format json
+```
+
+`--format csv` はサポートされていません。
+
+## ファイルを取得する {#get-a-file}
+
+テキストモードではファイルの内容が出力され、JSON モードでは API ペイロードが出力されます。
+
+```bash
+tpc --scope pro-org/my-product knowledge file get product/overview.md
+tpc --scope pro-org/my-product knowledge file get product/overview.md --format json
+```
+
+## ファイルを書き込む {#write-a-file}
+
+`put` はファイルを作成します。同名のファイルがすでに存在する場合は上書きします。`--content` または `--content-file` のいずれかを指定してください。
+
+```bash
+tpc --scope pro-org/my-product knowledge file put product/overview.md \
+  --content "# Overview"
+```
+
+```bash
+tpc --scope pro-org/my-product knowledge file put product/overview.md \
+  --content-file ./overview.md
+```
+
+テキスト出力では、書き込まれたファイルのパス、コミット、リポジトリのメッセージが表示されます。
+
+## JSON 出力 {#json-output}
+
+すべてのコマンドで `--format json` を指定でき、スクリプトから利用できます。一覧表示の JSON はツリー構造ではなく、ファイルとパスのフラットなリストになります。

@@ -1,0 +1,36 @@
+---
+title: "故障排除"
+description: "解决 TPC CLI 安装、登录和更新过程中的常见问题。"
+---
+
+# 故障排除 {#troubleshooting}
+
+## 找不到 `tpc` 命令 {#tpc-command-not-found}
+
+* 安装完成后，请打开一个新的 shell。
+* 检查安装程序是否已将二进制文件所在目录添加到 `PATH` 中。
+* 重新运行安装程序，并留意其中关于更新 shell 配置文件的说明。
+* 在 Windows 上，`PATH` 的更改仅对新打开的 PowerShell 或 cmd 会话生效。
+
+## 浏览器中已完成登录，但 CLI 未更新 {#login-completes-in-the-browser-but-cli-does-not-update}
+
+* 重新运行 `tpc auth login`
+* 在运行 CLI 的同一台机器上完成设备授权流程
+* 检查浏览器是否拦截了回调，或将你重定向到了已过期的会话
+
+## 提示找不到实验，但该实验确实存在 {#experiment-not-found-but-the-experiment-exists}
+
+该实验所在的组织或产品很可能与命令中 `--scope` 指定的不同。CLI 不会将组织或产品保存到 `~/.tpc/config.json` 中。
+
+请在命令中传入 `--scope <org-slug>/<product-slug>`：
+
+```bash
+tpc sim experiment get <experiment-id> --scope <org-slug>/<product-slug>
+tpc sim experiment run <experiment-id> --scope <org-slug>/<product-slug>
+```
+
+## 更新时找不到发布版本 {#update-does-not-find-a-release}
+
+* 运行 `tpc update --check`
+* 确认你使用的是预期的渠道或固定版本
+* 如果你安装的是预发布版本，请确认其对应的预发布元数据存在

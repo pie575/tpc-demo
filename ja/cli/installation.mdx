@@ -1,0 +1,103 @@
+---
+title: "インストール"
+description: "macOS、Linux、Windows で TPC CLI をインストール・更新し、バージョンを固定する方法を説明します。"
+---
+
+# インストール {#installation}
+
+## macOS と Linux {#macos-and-linux}
+
+最新の安定版をインストールします。
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | bash
+```
+
+インストール後、バイナリが利用できることを確認します。
+
+```bash
+tpc --version
+```
+
+## Windows {#windows}
+
+winget でインストールします。
+
+```powershell
+winget install promptingcompany.tpc
+```
+
+または、The Prompting Company の bucket を追加してから、Scoop でインストールすることもできます。
+
+```powershell
+scoop bucket add promptingcompany https://github.com/promptingcompany/scoop-bucket
+scoop install tpc
+```
+
+PowerShell も使用できます。
+
+```powershell
+irm https://cli.promptingco.com/install.ps1 | iex
+```
+
+実行ポリシーによってインストーラーがブロックされる場合は、同じ
+PowerShell セッションで、先に次のコマンドを実行してください。
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
+
+手動でインストールする場合:
+
+1. `https://cli.promptingco.com/tpc/<version>/` から最新の
+   `tpc_<version>_windows_amd64.zip` または `tpc_<version>_windows_arm64.zip`
+   をダウンロードします。
+2. `tpc.exe` を展開します。
+3. `tpc.exe` を `PATH` 上のディレクトリに移動するか、「システムのプロパティ」-&gt;「環境変数」-&gt;「Path」
+   から新しいディレクトリを `PATH` に追加します。
+4. PowerShell または cmd のセッションを新たに開き、インストールされたことを確認します。
+
+   ```powershell
+   tpc --version
+   ```
+
+## 更新 {#update}
+
+新しい CLI ビルドが公開されているかどうかを確認します。
+
+```bash
+tpc update --check
+```
+
+インストール済みのバイナリをそのままアップグレードします。
+
+```bash
+tpc update
+```
+
+## 特定のバージョンをインストールする {#install-a-specific-version}
+
+バージョンを固定してインストールするには、次のコマンドを実行します：
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | TPC_VERSION=0.1.0-alpha.1 bash
+```
+
+リリースチャネルからインストールするには、次のコマンドを実行します：
+
+```bash
+curl -fsSL https://cli.promptingco.com/install.sh | TPC_CHANNEL=alpha bash
+```
+
+<Note>
+  変数を `curl` の前に置いても (`TPC_VERSION=... curl ... | bash`) 機能しません。この代入は `curl` の環境にしか適用されず、パイプの先でスクリプトを読み込む `bash` プロセスには反映されないためです。変数は必ず `bash` の直前に置いてください。
+</Note>
+
+## インストーラーのURL {#installer-url}
+
+公開インストーラーは次のURLから配信されています。
+
+```text
+https://cli.promptingco.com/install.sh
+https://cli.promptingco.com/install.ps1
+```

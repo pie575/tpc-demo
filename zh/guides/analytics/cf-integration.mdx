@@ -1,0 +1,92 @@
+---
+title: "与 Cloudflare 集成"
+description: "部署 Cloudflare Worker，在边缘跟踪页面访问，并将 page_visit 事件转发到 The Prompting Company"
+---
+
+Cloudflare Worker 采集器会**在边缘**跟踪页面访问，
+即在请求到达您的源站之前完成跟踪。该 Worker 位于您现有站点的前端，
+以透明方式代理每个匹配的请求，并将页面访问事件转发到 The Prompting Company——既无需
+改动您的源服务器，也无需添加任何客户端 JavaScript。
+
+本指南将逐步介绍如何在您的部署中设置 Cloudflare Worker。
+
+## 工作原理 {#how-it-works}
+
+该 Worker 绑定到一个或多个路由上，作为透传代理运行：
+
+1. 访问者请求与已配置路由匹配的页面 (例如 `example.com/*`) 。
+2. Worker 将原始请求转发到你的源站，并立即返回响应。
+3. 与此同时，Worker 会向 The Prompting Company 发送一个页面访问事件。该过程在后台进行，因此不会给访问者的响应带来任何延迟。
+
+## 开始之前 {#before-you-start}
+
+你需要准备：
+
+* 一个 **Cloudflare 账户**，并已将要跟踪的域名添加为区域。
+* 一个具有 `analytics:write` 权限范围 (scope) 的 **TPC API 密钥**。你可以前往 Organization Settings，选择 API Keys，然后创建具有 `analytics:write` 权限范围的 API 密钥。请注意，只有 Enterprise Plan 账户才能创建 API 密钥。
+* [示例仓库](https://github.com/promptingcompany/samples/)中的 `cf-collector` 文件夹
+
+## 步骤 1：安装依赖项 {#step-1-install-dependencies}
+
+在 `cf-collector` 目录下安装依赖项：
+
+```bash
+npm ci
+```
+
+## 第 2 步：设置 API 密钥 {#step-2-set-your-api-key}
+
+API 密钥以加密的 [Wrangler secret](https://developers.cloudflare.com/workers/configuration/secrets/) 形式存储，而不是写在配置文件中。运行以下命令进行设置：
+
+```bash
+npx wrangler secret put TPC_API_KEY
+```
+
+根据提示粘贴你的密钥。
+
+<Warning>
+  切勿将 API 密钥提交到代码仓库，也不要将其写入 `wrangler.jsonc`。请始终将其存储为 secret。
+</Warning>
+
+## 第 3 步：配置路由 {#step-3-configure-your-routes}
+
+编辑 `wrangler.jsonc` 中的 `routes` 数组，使其与你要跟踪的页面相匹配。将 `pattern` 设置为你的域名，并将 `zone_name` 设置为对应的 Cloudflare 区域 (zone) ：
+
+```jsonc wrangler.jsonc
+{
+  "routes": [
+    {
+      "pattern": "example.com/*",
+      "zone_name": "example.com"
+    }
+  ]
+}
+```
+
+你可以在该数组中添加更多条目，以跟踪更多域名或路径模式。
+
+## 第 4 步：部署 {#step-4-deploy}
+
+运行以下命令，将 Worker 部署到 Cloudflare：
+
+```bash
+npm run wrangler:deploy
+```
+
+部署完成后，Cloudflare 会将所有匹配你所配置模式的流量路由到该 worker，随后你应该就能在分析页面中看到页面访问记录了。
+
+## 故障排除 {#troubleshooting}
+
+### 事件未显示 {#events-are-not-appearing}
+
+* 确认请求 URL 与 `routes` 数组中的某个 `pattern` 相匹配，且 `zone_name` 正确无误。
+* 确保已在你所部署的环境中设置了 `TPC_API_KEY` secret (可运行 `npx wrangler secret list` 查看) 。
+* 在 Cloudflare 控制台的 **Workers &amp; Pages** 中，检查 Worker 是否已部署并绑定到该路由。
+
+### 查看实时日志 {#inspect-live-logs}
+
+从已部署的 worker 流式获取日志，实时查看事件投递情况以及出现的错误：
+
+```bash
+npm run tail
+```

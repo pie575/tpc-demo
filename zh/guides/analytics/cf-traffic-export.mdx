@@ -1,0 +1,416 @@
+---
+title: "从 Cloudflare 导出 AI 爬虫流量"
+description: "将经 Cloudflare 代理的域名上的 AI 智能体和爬虫流量导出为 CSV，以便与 The Prompting Company 共享"
+---
+
+将经 Cloudflare 代理的域名上的 AI 智能体和爬虫流量导出为 CSV，以便与 The Prompting Company 共享。[AI 流量](/zh/guides/metrics#ai-traffic)指标会实时呈现您的**自定义域名**上的 AI 访问情况。如果您想获取尚未接入 TPC 的域名的 AI 爬虫流量，或者接入之前的历史流量，可以直接通过 Cloudflare 的 GraphQL Analytics API 拉取。如需持续的数据流而非一次性导出，请参阅 [Cloudflare Logpush](/zh/guides/analytics/log-exporters/cloudflare-logpush) 或[原始事件 API](/zh/guides/analytics/log-exporters/raw-events)。
+
+本指南将介绍如何将来自 AI 爬虫和智能体 (ChatGPT、GPTBot、OAI SearchBot、Claude、Perplexity、Applebot、Amazonbot、Meta、Bytespider、DuckAssistBot、MistralAI 等) 的流量导出为 CSV 文件，其中包含 `date_range`、`path`、`host`、`userAgent` 和 `requests` 列。
+
+## 开始之前 {#before-you-start}
+
+* 你的域名必须**通过 Cloudflare 代理** (即 DNS 记录的云朵图标为橙色，而非灰色) 。
+* 若使用方法 1，你需要拥有 Cloudflare 账户的 **Super Administrator** 或 **Administrator** 权限，才能创建 API 令牌。
+* 若使用方法 2，你需要拥有 Cloudflare 账户的 **Permission group: &quot;Analytics Read&quot;** 策略权限，才能创建 API 令牌。
+* 你需要安装 `python3`，可运行 `python3 --version` 检查是否已安装。
+
+## 第 1 部分：创建 Cloudflare API 令牌 {#part-1-create-a-cloudflare-api-token}
+
+Account API Tokens 和 User API Tokens 均可用于 GraphQL Analytics API。请根据实际情况选择：
+
+|          | Account API Token                   | User API Token          |
+| -------- | ----------------------------------- | ----------------------- |
+| **位置**   | Manage Account → Account API Tokens | My Profile → API Tokens |
+| **适用场景** | 团队配置、自动化、服务脚本                       | 个人一次性导出                 |
+| **归属**   | 属于 Cloudflare 账户                    | 与你的个人用户账户绑定             |
+| **持久性**  | 即使有成员离职，仍可继续使用                      | 你的用户账户被删除后即失效           |
+
+### 步骤 1：登录 Cloudflare {#step-1-log-in-to-cloudflare}
+
+登录 Cloudflare 控制台，然后从以下两种方法中**任选一种**进行操作。
+
+### 方法 1：账户 API 令牌 {#method-1-account-api-token}
+
+1. 在左侧边栏中，点击 **Manage Account**。
+2. 点击 **Account API Tokens** (或前往 `https://dash.cloudflare.com/{Account ID}/api-tokens`) 。
+3. 点击 **Create Token**。
+4. 为令牌起一个名称，例如 `AI traffic GraphQL read`。
+5. **Permission policies** 部分默认应为账户级别的自定义权限范围。添加第一条策略：
+   * **Analytics &amp; Logs → Account Analytics → Read**
+6. 点击 **+ Add policy**，添加一条区域级别的策略，包含以下权限：
+   * **DNS &amp; Zones → Zone → Read**
+   * **Analytics &amp; Logs → Zone Analytics → Read**
+7. 点击 **Review Token**，然后点击 **Create Token**。
+8. 复制令牌并妥善保存。
+
+### 方法 2：用户 API 令牌 {#method-2-user-api-token}
+
+1. 前往域名的概览页面，向下滚动到 API 部分，点击 **Get your API token** (或直接访问 `https://dash.cloudflare.com/profile/api-tokens`) 。
+2. 点击 **+ Create Token**。
+3. 点击“Create Custom Token”旁边的 **Get started**。
+4. 填写令牌名称 (例如 `AI traffic GraphQL read`) 。
+5. 权限 1：**Account → Account Analytics → Read**。
+6. 点击 **Add more**。权限 2：**Zone → Zone → Read**。
+7. 点击 **Add more**。权限 3：**Zone → Zone Analytics → Read**。
+8. 向下滚动到 **Zone Resources**，将其设置为：Include → Specific zone → `yourdomain.com`。
+9. (可选) 设置 TTL，指定令牌的过期时间。
+10. 点击 **Continue to summary**，然后点击 **Create Token**。
+11. 复制令牌并妥善保存。
+
+<Warning>
+  请像保管密码一样保管此令牌——任何人拿到它都能读取您账户的分析数据。切勿分享该令牌，也不要将其提交到任何公开位置。
+</Warning>
+
+## 第 2 部分：获取 Zone ID {#part-2-get-your-zone-id}
+
+1. 在 Cloudflare 中，进入 **Websites**，然后点击你的域名。
+2. 进入 **Overview**。
+3. 在右侧找到 **Zone ID** 并复制。下面的查询中会用到它。
+
+## 第 3 部分：打开 Cloudflare GraphQL Explorer {#part-3-open-cloudflare-graphql-explorer}
+
+1. 打开 [https://graphql.cloudflare.com/explorer](https://graphql.cloudflare.com/explorer)。
+2. 出现提示时，查看所需权限并授予访问权限。
+3. 将 API 令牌粘贴到 **API Token** 字段中，然后点击 **Save**。
+
+## 第 4 部分：运行查询 {#part-4-run-the-query}
+
+Cloudflare 将每个 `httpRequestsAdaptiveGroups` 块的查询范围限制在 **24 小时时间窗口**内，而可查询的历史时长取决于你的 Cloudflare 套餐 (Free 和 Pro 套餐通常只提供最近几天的数据) 。选择日期范围前，请先确认你的套餐提供多少天的历史数据。如果你根本不想手动选择日期，可以直接跳到[自动生成多日查询](#auto-generate-the-multi-day-query-optional)，脚本会自动为你计算滚动时间窗口。
+
+将下面的查询粘贴到 GraphQL 查询工具中，然后进行以下替换：
+
+* `REPLACE_WITH_ZONE_ID` → 第 2 部分中获取的 Zone ID。
+* `REPLACE_WITH_YOUR_DOMAIN` → 你的裸域名 (例如 `example.com`，不带 `https://`，也不带末尾斜杠) 。
+* `datetime_geq` / `datetime_lt` → 套餐允许范围内的某个 24 小时时间窗口。
+
+### 查询多天数据 {#covering-multiple-days}
+
+<Note>
+  **为什么查询会这么长：** Cloudflare 规定每个 `httpRequestsAdaptiveGroups` 块只能查询单个 24 小时窗口，并不存在类似“给我 7 月 6 日到 13 日的数据”这样的参数。要查询 N 天，就得把整个块 (包括完整的约 14 行 `userAgent_like` OR 列表) 复制粘贴 N 次，每个块使用唯一的别名，并将日期窗口依次后移 24 小时。拉取 8 天的数据，就是把同一个块重复 8 次。查询之所以变得冗长，原因仅此而已。
+</Note>
+
+如需查询多天数据，请为每一天复制一份完整的 `httpRequestsAdaptiveGroups(...)` 块。为每个块指定唯一的**别名** (即冒号前的标签，例如 `d20260706`、`d20260707`) ，并将其日期窗口后移 24 小时。所有块都放在同一个 `zones(...)` 包装器中，作为一个请求运行。
+
+以下是**单日**查询示例：
+
+```graphql
+{
+  viewer {
+    zones(filter: { zoneTag: "REPLACE_WITH_ZONE_ID" }) {
+
+      d20260706: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-06T00:00:00Z"
+          datetime_lt: "2026-07-07T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+    }
+  }
+}
+```
+
+再来看一个**两天**的示例，展示各个块如何叠加：
+
+```graphql
+{
+  viewer {
+    zones(filter: { zoneTag: "REPLACE_WITH_ZONE_ID" }) {
+
+      d20260706: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-06T00:00:00Z"
+          datetime_lt: "2026-07-07T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+      d20260707: httpRequestsAdaptiveGroups(
+        filter: {
+          datetime_geq: "2026-07-07T00:00:00Z"
+          datetime_lt: "2026-07-08T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "REPLACE_WITH_YOUR_DOMAIN"
+          OR: [
+            { userAgent_like: "%ChatGPT-User%" }
+            { userAgent_like: "%GPTBot%" }
+            { userAgent_like: "%OAI-SearchBot%" }
+            { userAgent_like: "%Claude-User%" }
+            { userAgent_like: "%claude-code%" }
+            { userAgent_like: "%ClaudeBot%" }
+            { userAgent_like: "%PerplexityBot%" }
+            { userAgent_like: "%Applebot%" }
+            { userAgent_like: "%Amazonbot%" }
+            { userAgent_like: "%Amazonbot-Video%" }
+            { userAgent_like: "%meta-externalagent%" }
+            { userAgent_like: "%Bytespider%" }
+            { userAgent_like: "%DuckAssistBot%" }
+            { userAgent_like: "%MistralAI-User%" }
+          ]
+        }
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {
+        count
+        dimensions {
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }
+      }
+
+    }
+  }
+}
+```
+
+<Warning>
+  **复制粘贴查询块时请注意：**
+
+  * 每个块都需要一个**唯一的别名** (`d20260706`、`d20260707` 等) ——别名重复会导致 GraphQL 错误。
+  * 确保**花括号成对匹配**。块内的每个 `{` 都必须有对应的 `}`。最简单的检查方法：开头的 `d20260706: httpRequestsAdaptiveGroups(` 与该块 `dimensions` 部分末尾的闭合 `}` 应位于同一缩进层级。
+  * **删除所有多余文本** (例如页眉或标签页标题) 。从浏览器或 PDF 复制时，这类内容很容易被一并带入，而查询中混入的随机字符串会导致语法错误。
+</Warning>
+
+### 自动生成多日查询 (可选) {#auto-generate-the-multi-day-query-optional}
+
+如果要拉取的天数较多，手动复制代码块会非常繁琐。下面的脚本会为你生成完整的查询，并**自动滚动日期窗口**——它始终拉取截至今天 UTC 零点的最近 `NUM_DAYS` 天数据，你完全不必手动修改日期。只需每周运行一次 (或设置 cron 定时任务) ，即可自动完成。
+
+将以下内容保存为 `generate_ai_traffic_query.py`：
+
+```python
+from datetime import datetime, timedelta, timezone
+
+# ---- 请配置以下各项 ----
+ZONE_ID = "REPLACE_WITH_ZONE_ID"
+DOMAIN = "REPLACE_WITH_YOUR_DOMAIN"
+NUM_DAYS = 7   # 要拉取的最近天数，即要生成的 24 小时块数（Free 套餐约保留 7 天；付费套餐可调大此值）
+# --------------------------
+
+# 自动滚动时间窗口：以今天零点（UTC）为终点，向前回溯 NUM_DAYS 天。
+# 今天尚未过完，因此最后一个完整的 24 小时块截止于今天 00:00Z。
+# 以此为锚点，即可得到 NUM_DAYS 个恰好以午夜为界的完整天，无需手动修改。
+today_utc = datetime.now(timezone.utc).replace(
+    hour=0, minute=0, second=0, microsecond=0
+)
+start = today_utc - timedelta(days=NUM_DAYS)
+
+BOTS = [
+    "ChatGPT-User", "GPTBot", "OAI-SearchBot", "Claude-User",
+    "claude-code", "ClaudeBot", "PerplexityBot", "Applebot",
+    "Amazonbot", "Amazonbot-Video", "meta-externalagent",
+    "Bytespider", "DuckAssistBot", "MistralAI-User",
+]
+
+or_block = "\n".join(
+    f'            {{ userAgent_like: "%{bot}%" }}' for bot in BOTS
+)
+
+blocks = []
+for i in range(NUM_DAYS):
+    day = start + timedelta(days=i)
+    next_day = day + timedelta(days=1)
+    alias = f"d{day.strftime('%Y%m%d')}"
+    blocks.append(f"""      {alias}: httpRequestsAdaptiveGroups(
+        filter: {{
+          datetime_geq: "{day.strftime('%Y-%m-%d')}T00:00:00Z"
+          datetime_lt: "{next_day.strftime('%Y-%m-%d')}T00:00:00Z"
+          requestSource: "eyeball"
+          clientRequestHTTPHost: "{DOMAIN}"
+          OR: [
+{or_block}
+          ]
+        }}
+        limit: 10000
+        orderBy: [count_DESC]
+      ) {{
+        count
+        dimensions {{
+          clientRequestPath
+          clientRequestHTTPHost
+          userAgent
+        }}
+      }}""")
+
+query = "{\n  viewer {\n" + f'    zones(filter: {{ zoneTag: "{ZONE_ID}" }}) {{\n\n'
+query += "\n\n".join(blocks)
+query += "\n\n    }\n  }\n}"
+
+print(query)
+```
+
+运行：
+
+```bash
+python3 generate_ai_traffic_query.py
+```
+
+复制脚本打印的输出，直接粘贴到 GraphQL Explorer 中。
+
+<Note>
+  **只需通过 `NUM_DAYS` 设置一次时间窗口。** 如使用 Free 套餐，请保持默认值 `7`，以符合其数据保留上限。如果您使用的是保留期更长的付费套餐，只需调大这一个数字即可，其他内容均无需改动。由于时间窗口以&quot;今天&quot;为基准，每次运行同一脚本都会拉取最新的滚动时间范围，无需手动修改日期。
+</Note>
+
+<Note>
+  上述用户代理列表涵盖了截至撰写本文时主要的 AI 爬虫和智能体。如需跟踪未列出的机器人，可相应添加或删除 `userAgent_like` 条目。
+</Note>
+
+点击粉色的 **Run** 按钮执行查询。
+
+## 第 5 部分：将响应保存为 JSON {#part-5-save-the-response-as-json}
+
+1. 从 API Explorer 右侧面板复制完整的响应内容。
+2. 打开一个**纯文本**编辑器 (不要使用富文本编辑器) 。
+3. 粘贴响应内容，将文件命名为 `cloudflare_ai_traffic_response.json`，并保存到“下载”文件夹中。
+
+<Warning>
+  文件必须保存为纯文本 JSON，而不是富文本。如果你在 Mac 上使用 TextEdit，请参阅下方的故障排除部分。
+</Warning>
+
+**Mac 用户 (TextEdit) ：**
+
+1. 打开 TextEdit。
+2. 点击 **Format → Make Plain Text**。
+3. 粘贴响应内容。
+4. 另存为 `cloudflare_ai_traffic_response.json`。
+
+在终端中确认文件格式：
+
+```bash
+cd ~/Downloads
+file cloudflare_ai_traffic_response.json
+```
+
+如果输出为 `JSON data` 或 `ASCII text`，说明文件格式正确。如果显示的是 `Rich Text Format`，请在 TextEdit 中重新打开该文件，点击 **Format → Make Plain Text**，然后重新保存。
+
+## 第 6 部分：将 JSON 转换为 CSV {#part-6-convert-the-json-to-csv}
+
+在终端中运行：
+
+```bash
+cd ~/Downloads
+nano convert_ai_traffic_json_to_csv.py
+```
+
+粘贴以下脚本：
+
+```python
+import json
+import csv
+
+input_file = "cloudflare_ai_traffic_response.json"
+output_file = "ai_traffic_export.csv"
+
+with open(input_file, "r") as f:
+    data = json.load(f)
+
+zone = data["data"]["viewer"]["zones"][0]
+
+with open(output_file, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["date_range", "path", "host", "userAgent", "requests"])
+
+    def sanitize_cell(value):
+            """Prefix cells that start with formula-trigger characters to prevent
+            spreadsheet formula injection when the CSV is opened in Excel/Sheets."""
+            s = str(value)
+            if s and s[0] in ('=', '+', '-', '@', '\t', '\r', '\n'):
+                return "'" + s
+            return s
+
+    for date_range, rows in zone.items():
+        for row in rows:
+            dims = row["dimensions"]
+            writer.writerow([
+                date_range,
+                sanitize_cell(dims["clientRequestPath"]),
+                sanitize_cell(dims["clientRequestHTTPHost"]),
+                sanitize_cell(dims["userAgent"]),
+                row["count"]
+            ])
+
+print(f"Saved to {output_file}")
+```
+
+保存文件 (依次按 `Ctrl + O`、`Enter`、`Ctrl + X`) ，然后运行该脚本：
+
+```bash
+python3 convert_ai_traffic_json_to_csv.py
+```
+
+你应该会看到 `Saved to ai_traffic_export.csv`。该 CSV 文件会保存在“下载”文件夹中。
+
+## 第 7 部分：将 CSV 发送给 The Prompting Company {#part-7-send-the-csv-to-the-prompting-company}
+
+请将 `ai_traffic_export.csv` 发送给您的 TPC 对接人，或通过电子邮件发送至 [support@promptingco.com](mailto:support@promptingco.com)，以便我们将其导入您的 AI 流量控制台。
+
+## 故障排除 {#troubleshooting}
+
+### 查询因权限错误而失败 {#the-query-fails-with-a-permissions-error}
+
+你的 API 令牌缺少某项权限范围 (scope) 。请回头检查第 1 部分：你需要授予 **Account Analytics → Read**、**Zone → Read** 和 **Zone Analytics → Read** 权限，并将 zone 资源的范围限定为你的域名。
+
+### `file` 显示“Rich Text Format”而非 JSON {#file-reports-rich-text-format-instead-of-json}
+
+TextEdit 默认使用富文本格式。请重新打开该文件，点击 **Format → Make Plain Text**，重新粘贴响应内容，然后保存。
+
+### GraphQL 查询返回空结果 {#the-graphql-query-returns-an-empty-result}
+
+这很可能是因为你设置的日期范围超出了 Cloudflare 套餐的数据保留期限，或者 `REPLACE_WITH_YOUR_DOMAIN` 与你的区域 (zone) 中的 `clientRequestHTTPHost` 不完全一致 (不要包含 `https://`，末尾也不要带斜杠) 。如果你使用的是自动滚动脚本，请确保 `NUM_DAYS` 的值不超过套餐的数据保留期限。
+
+### `python3: command not found` {#python3-command-not-found}
+
+请先安装 Python 3 (例如在 Mac 上运行 `brew install python3`) ，然后重新运行脚本。

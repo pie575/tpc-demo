@@ -1,0 +1,65 @@
+---
+title: "Documentos agénticos"
+description: "Usa los endpoints de documentos de TPC para gestionar contenido generado y flujos de trabajo con borradores."
+---
+
+# Documentos agénticos {#agentic-documents}
+
+Los documentos agénticos son registros de contenido generados o revisados que están asociados a un producto. No son lo mismo que las páginas del sitio: las páginas del sitio constituyen la superficie estable de sincronización de contenido, mientras que los documentos agénticos son la base del contenido generado, los borradores, las sugerencias de metadatos y los flujos de revisión.
+
+## Leer un documento {#read-a-document}
+
+Necesitas el permiso `content:read`.
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+## Buscar un documento por ruta {#find-a-document-by-path}
+
+Usa la búsqueda por ruta cuando tu sistema de origen conozca la ruta dentro del producto en lugar del ID del documento:
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/by-path?brandId=$TPC_PRODUCT_ID&path=docs/install" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+En este endpoint heredado, el parámetro de consulta sigue llamándose `brandId`. Indica el ID del producto.
+
+## Actualizar un documento {#update-a-document}
+
+Necesitas el permiso `content:write`.
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -X PUT \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: document-update-$DOCUMENT_ID" \
+  --data '{
+    "title": "Install The Prompting Company",
+    "content": "# Install The Prompting Company\n\nSet up TPC and publish content.",
+    "metaTitle": "Install The Prompting Company",
+    "metaDescription": "Set up TPC and publish content."
+  }'
+```
+
+## Actualizar la prioridad {#update-priority}
+
+Usa `PATCH` cuando solo necesites cambiar la prioridad del documento:
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -X PATCH \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: document-priority-$DOCUMENT_ID" \
+  --data '{
+    "priority": 80
+  }'
+```
+
+## Flujos de revisión {#review-workflows}
+
+Por ahora, los endpoints de creación de borradores, sugerencias de metadatos y vinculación de dominios son rutas internas del panel. Antes de llamar a una ruta con una clave de API, consulta la sección Reference generada para confirmar si es pública.

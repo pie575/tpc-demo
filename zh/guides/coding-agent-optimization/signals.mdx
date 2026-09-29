@@ -1,0 +1,136 @@
+---
+title: "信号"
+description: "通过 YAML 信号配置从运行中提取自定义指标"
+---
+
+信号 (Signals) 可将原始运行记录转化为指标。你只需在附加到实验的 YAML 配置中定义一次：每次运行都会提取各自的值，每次迭代再将这些值汇总为可相互比较的数值，全程无需编写代码。
+
+信号与[目标](/zh/guides/coding-agent-optimization/tasks#goals-and-criteria)不同：目标是对单次运行给出的通过/失败判定，而信号是对一次迭代中所有运行汇总得出的度量。目标回答的是“这次运行成功了吗？”，信号回答的则是“各个环境之间有何差异？”
+
+## 信号类型与权限范围 {#signal-types-and-scopes}
+
+信号在每次运行中产生一个值，类型如下：
+
+* **boolean** — “智能体是否编造了 API？”
+* **number** — “本次运行使用了多少 token？”
+* **category** — “智能体选择了哪种安装方式？” (需要 `category_enums`)
+
+信号可在以下两种**权限范围**之一中提取：
+
+* `run` — 每次运行产生一个观测值 (默认)
+* `message` — 每条匹配的消息各产生一个观测值，然后**折叠**为单个运行级别的值 (`sum`、`count`、`average`、`min`、`max` 或 `histogram`) 。消息级信号必须指定 `target_role` (`assistant`、`user` 或 `tool`) 和 `fold`。
+
+## 提取方法 {#extraction-methods}
+
+| 方法        | 工作原理                                                                                                                     | 限制条件                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `pattern` | 用正则表达式匹配消息内容                                                                                                             | 仅限 `message` 作用域；返回布尔值 (通过 `patterns`) 或数值 (通过 `needle`)  |
+| `stats`   | 内置运行指标：`duration`、`token_in`、`token_out`、`token_total`、`cost`、`tool_calls`、`turns`、`steps`、`status`、`termination_reason` | 仅限 `run` 作用域                                              |
+| `llm`     | 由评判模型根据你的提示词评估内容                                                                                                         | 返回布尔值或类别；需要提供 `model` 和 `prompt`                          |
+
+运行作用域的 `pattern` 和 `llm` 信号还需声明 `source`，用于指定读取运行记录的哪一部分：`codeText`、`assistantText`、`userText`、`thinkingText`、`toolCalls`、`toolResults`、`finalAnswer` 或 `any`。
+
+## 聚合 {#aggregates}
+
+聚合会将每次运行的信号值汇总为迭代级别的指标：`count`、`count_where`、`rate`、`sum`、`avg`、`min`、`max`、`median`、`mode`、`count_by_category`、`avg_by_category` 和 `distribution`。每个聚合通过 ID 引用一个信号，并带有一个显示标签。`rate` 返回的是 0 到 1 之间的比例值 (结果为真的运行数 ÷ 总运行数) ，而非百分比。
+
+## 配置示例 {#example-config}
+
+```yaml
+version: 1
+
+signals:
+  # 消息级模式匹配：统计每次运行中出现的虚构端点数量
+  - id: fabricated-endpoint
+    name: "Fabricated API endpoint"
+    type: boolean
+    scope: message
+    target_role: assistant
+    extract:
+      method: pattern
+      patterns:
+        - name: legacy-v2-api
+          regex: "api\\.acme\\.com/v2/"
+    fold:
+      fn: count
+
+  # 运行级统计：token 总数
+  - id: total-tokens
+    name: "Total tokens"
+    type: number
+    scope: run
+    extract:
+      method: stats
+      stat: token_total
+
+  # 运行级 LLM 评判：智能体是否放弃了任务？
+  - id: agent-gave-up
+    name: "Agent abandoned the task"
+    type: boolean
+    scope: run
+    extract:
+      method: llm
+      source: finalAnswer
+      model: deepseek/deepseek-v4-flash-0731
+      prompt: >
+        Did the agent abandon the task or deliver a workaround instead of
+        completing the instruction? Answer true if it gave up.
+
+aggregates:
+  - id: fabrication-rate
+    signal_id: fabricated-endpoint
+    fn: rate
+    label: "Share of runs with fabricated endpoints"
+  - id: avg-tokens
+    signal_id: total-tokens
+    fn: avg
+    label: "Average tokens per run"
+  - id: give-up-rate
+    signal_id: agent-gave-up
+    fn: rate
+    label: "Share of runs where the agent gave up"
+```
+
+信号 (signal) 和聚合 (aggregate) 的 id 必须采用 kebab-case 格式，且不得重复。配置会在上传时进行校验：如果权限范围不匹配、缺少折叠 (fold) ，或聚合引用了未知信号，上传将被拒绝，并返回具体的错误信息。
+
+使用 `llm` 提取时，`model` 为网关模型 id。默认的小型评判模型为 `deepseek/deepseek-v4-flash-0731`。如果已存储的配置仍指定 Claude Haiku 4.5，解析时会自动改写为该 id。
+
+## 通过 CLI 使用信号配置 {#working-with-signal-configs-from-the-cli}
+
+上传前请先在本地验证。验证完全在客户端执行，无需身份验证：
+
+```bash
+tpc sim experiment validate-signal-config signals.yaml
+```
+
+配置有效时，该命令返回退出码 `0`；配置无效时，则返回 `1` 并输出具体错误，因此可用作 CI 检查或 pre-commit 钩子。
+
+可以在创建实验时附加该配置，也可以稍后再更新：
+
+```bash
+tpc sim experiment create --name "Docs friction" \
+  --task-ids task_abc --env-ids env_123 \
+  --signal-config signals.yaml
+
+tpc sim experiment update exp_789 --signal-config signals.yaml
+tpc sim experiment update exp_789 --clear-signal-config
+```
+
+迭代完成后，读取提取出的值：
+
+```bash
+# 迭代级汇总值及各次运行的值
+tpc sim experiment signals exp_789
+
+# 指定某次迭代（默认为最新一次）
+tpc sim experiment signals exp_789 --iteration 1
+
+# 机器可读格式，可用于仪表盘或回归检查
+tpc --format json sim experiment signals exp_789
+```
+
+## 版本控制 {#versioning}
+
+信号配置及其内容哈希一并存储在实验中。每次迭代都会冻结其运行时所用的配置，因此之后修改配置不会改写历史聚合结果——下一次迭代会直接采用新版本。
+
+每个提取出的值还会保留**证据**：即该值来源的运行记录事件及一段简短摘录，方便你审查信号触发的原因。

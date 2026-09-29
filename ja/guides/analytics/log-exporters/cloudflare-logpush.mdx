@@ -1,0 +1,85 @@
+---
+title: "Cloudflare Logpush"
+description: "Cloudflare から The Prompting Company へ HTTP リクエストログをストリーミングし、AI クローラーのトラフィックをダッシュボードで確認します"
+---
+
+<Note>
+  **ダッシュボードで設定する:** [Cloudflare Logpush を接続](https://app.promptingco.com/traffic-onboarding/cloudflare-logpush)では、以下の手順を順に案内し、AI によるコンテンツページへの最初の訪問が届くまで待機したうえで、そのトラフィックが正しいプロダクトに紐付けられていることを確認します。このページはリファレンスとしてご利用ください。
+</Note>
+
+Cloudflare Logpush は、ゾーンの HTTP リクエストログをバッチ単位で The Prompting Company に直接送信します。ジョブを有効にすると、AI クローラーやエージェント (GPTBot、ChatGPT-User、ClaudeBot、PerplexityBot など) による対象のコンテンツページ訪問が、[AI トラフィック](/ja/guides/metrics#ai-traffic)指標に自動的に表示されます。分類は当社側で行うため、ログはすべてそのまま送信してください。必要なものだけを当社で選別して保持します。
+
+Cloudflare Enterprise をご利用でない場合は、代わりに [raw events API](/ja/guides/analytics/log-exporters/raw-events) を使用して任意のログソースからストリーミングできます。過去のデータが必要な場合は、[CSV を一括エクスポート](/ja/guides/analytics/cf-traffic-export)することもできます。
+
+## 始める前に {#before-you-start}
+
+* **Settings → API Keys** で発行した The Prompting Company の **API キー** (組織キーまたはサービスアカウントキー) が必要です。
+* ゾーンが Cloudflare の **Enterprise** プランである必要があります。HTTP リクエストのデータセットの Logpush は、Enterprise プランでのみ利用できます。
+* DNS レコードで**プロキシ** (オレンジ色の雲) を有効にしておく必要があります。Logpush で取得できるのは、Cloudflare を経由するトラフィックのみです。
+
+## 送信先を設定する {#configure-the-destination}
+
+```text
+https://logs.promptingco.com/v1/events/cf-logpush?header_Authorization=Bearer%20YOUR_API_KEY
+```
+
+Cloudflare は `header_*` クエリパラメーターをリクエストヘッダーに変換します。そのため、この設定ではプッシュのたびにキーが `Authorization: Bearer` ヘッダーとして送信されます。値は URL エンコードされた状態のまま指定してください (スペースは `%20`) 。
+
+### ダッシュボードを使用する {#using-the-dashboard}
+
+1. Cloudflare ダッシュボードで対象のゾーンを開き、**Analytics &amp; Logs → Logpush** に移動します。
+2. **Create a Logpush job** をクリックし、**HTTP requests** データセットを選択します。
+3. **HTTP destination** を選択し、上記の送信先 URL を貼り付けます。
+4. 次のフィールドを選択します：`ClientIP`、`ClientRequestHost`、`ClientRequestMethod`、`ClientRequestReferer`、`ClientRequestSource`、`ClientRequestURI`、`ClientRequestUserAgent`、`WorkerSubrequest`、`EdgeStartTimestamp`、`EdgeResponseContentType`、`EdgeResponseStatus`。
+5. ジョブを保存して有効にします。Cloudflare はテストメッセージを送って送信先を検証しますが、この検証は自動的に成功します。
+
+### API を使用する {#using-the-api}
+
+```bash
+curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/logpush/jobs" \
+  -H "Authorization: Bearer $CF_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "name": "tpc-crawler-logs",
+    "dataset": "http_requests",
+    "enabled": true,
+    "destination_conf": "https://logs.promptingco.com/v1/events/cf-logpush?header_Authorization=Bearer%20YOUR_API_KEY",
+    "max_upload_bytes": 5000000,
+    "output_options": {
+      "field_names": [
+        "ClientIP", "ClientRequestHost", "ClientRequestMethod",
+        "ClientRequestReferer", "ClientRequestSource", "ClientRequestURI",
+        "ClientRequestUserAgent", "WorkerSubrequest", "EdgeStartTimestamp",
+        "EdgeResponseContentType", "EdgeResponseStatus"
+      ],
+      "timestamp_format": "rfc3339"
+    }
+  }'
+```
+
+`timestamp_format` にはどの値 (`unixnano`、`unix`、`rfc3339`) でも指定できますが、最もデバッグしやすいのは `rfc3339` です。
+
+## 取り込まれるデータ {#what-gets-ingested}
+
+トラフィックを事前にフィルタリングする必要はありません。すべて送信すれば、The Prompting Company が取り込み時に AI クローラーとエージェントを分類します。認識された AI トラフィックは、コンテンツページへの訪問に該当する場合にのみ保持されます。条件は、`GET` であること、ステータスが `200`～`299` (`204` と `205` を除く) または `304` であること、そして該当フィールドが存在する場合はコンテンツタイプが HTML または XHTML であることです。数値のステータス値は、JSON の数値と10進数の文字列のどちらでも受け付けます。
+
+HTTP メタデータが欠落しているか数値でない場合でも、ページと思われるパスはフェイルオープン (保持する側に倒す) で扱われます。そのため、`EdgeResponseContentType` または `EdgeResponseStatus` を省略したジョブでは、パスが Next.js のプレフィックスまたはアセットのサフィックスに一致しない限り、JSON API など HTML 以外への AI アクセスも取り込まれます。Next.js の正規プレフィックス (小文字の `/_next/static`、`/_next/image`、`/_next/data`) は常に除外されます。また、コンテンツタイプが欠落している場合は、一般的なスクリプト、スタイルシート、ソースマップ、画像、フォント、メディア、Rive、WASM、JSON、XML、テキスト、PDF のサフィックスも除外されます。サフィックスの照合では大文字と小文字は区別されず、末尾のスラッシュも無視されます。なお、コンテンツタイプが HTML であれば、パスにドットを含む正当なページも保持されます。
+
+訪問の二重計上を防ぐため、次の種類の行は自動的にスキップされます：Cloudflare の送信先検証用テストメッセージ、Worker サブリクエスト (`WorkerSubrequest: true`) 、実ユーザー以外によるリクエスト (`edgeWorkerFetch` やパージなどの `ClientRequestSource` 値) 、および `ClientRequestHost` のない行です。データ量を減らしたい場合は Logpush フィルターを追加することもできますが、正確な計測に必須ではありません。
+
+## レスポンス {#responses}
+
+| Status | 意味                                                                                                                                                                         |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `200`  | バッチが処理されました。レスポンスボディには `{"ok": true, "received": N, "ingested": N, "skipped": N, "filtered": N}` が返されます。`filtered` が 1 以上の場合、AI 以外のリクエストやページ以外へのリクエストが意図的に保存されなかったことを示します。 |
+| `401`  | API キーが指定されていないか、無効です。送信先 URL に含まれるキーを確認してください                                                                                                                              |
+| `429`  | キーの検証がレート制限に達しました。Cloudflare が再試行します                                                                                                                                       |
+| `400`  | リクエストボディをデコードできませんでした                                                                                                                                                      |
+| `413`  | 展開後のバッチサイズが大きすぎます。ジョブの `max_upload_bytes` を小さくしてください                                                                                                                       |
+| `503`  | 取り込みが一時的に停止しています。Cloudflare が自動的に再試行します                                                                                                                                    |
+
+配信は at-least-once 方式です。失敗したバッチは全体が再送信されるため、まれに重複が発生することがあります。これは想定された動作であり、トラフィック指標では重複が許容されます。
+
+## 動作を確認する {#verify-its-working}
+
+ジョブを有効にすると、数分以内に実際のトラフィックが [AI トラフィック](/ja/guides/metrics#ai-traffic)ダッシュボードに表示され始めます。クローラーの訪問を待たずにすぐパイプラインの動作を確かめたい場合は、[raw events API](/ja/guides/analytics/log-exporters/raw-events#verify-its-working) からテストイベントを 1 件送信してください。

@@ -1,0 +1,137 @@
+---
+title: "サイトページ"
+description: "TPC Site Pages API を使用して、プロダクトのページの一覧取得、作成、更新、削除を行います。"
+---
+
+# サイトページ {#site-pages}
+
+<Warning>
+  `/api/v1/site/pages` エンドポイントは非推奨であり、将来のバージョンで削除される予定です。代わりに、統合されたコンテンツライフサイクル API を使用してください。対象となるのは `GET/POST /api/v1/content`、`GET/PUT/DELETE /api/v1/content/{id}`、`POST /api/v1/content/generate`、およびレビュー用エンドポイント (`/api/v1/content/{draftId}/review`、`/revision`、`/publish`、`/revert`) です。スキーマについては API リファレンスを参照してください。作成したページはレビューキューに追加され、承認後に初めて公開されます。
+</Warning>
+
+サイトページは、プロダクト単位で管理されるコンテンツレコードです。パス、タイトル、ステータス、本文コンテンツ (任意) 、メタデータ、および紐付けられたドメインで構成されます。CMS、ドキュメントサイト、または Markdown フォルダーを信頼できる情報源として運用している場合に使用してください。
+
+## ページの一覧を取得する {#list-pages}
+
+`content:read` スコープが必要です。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=$TPC_PRODUCT_ID&page=1&pageSize=25" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+検索語、ステータス、パス、コンテンツの有無で絞り込めます。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=$TPC_PRODUCT_ID&query=pricing&status=published&pathPrefix=docs/&hasContent=true" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+## ページを作成する {#create-pages}
+
+`content:write` 権限が必要です。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-create-docs-install" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "slug": "docs/install",
+        "title": "Install",
+        "content": "# Install\n\nInstall instructions."
+      }
+    ]
+  }'
+```
+
+1回のリクエストで最大25ページを作成できます。
+
+## ページを更新する {#update-pages}
+
+変更するフィールドのみを渡します。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X PATCH \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-update-page-123" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "id": "page_123",
+        "title": "Install The Prompting Company",
+        "status": "published"
+      }
+    ]
+  }'
+```
+
+## ページの削除 {#delete-pages}
+
+ページの削除は論理削除 (ソフトデリート) です。削除されたページは通常の一覧結果には表示されなくなりますが、社内のデータ保持システムおよび監査システムでは引き続き利用可能です。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X DELETE \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: page-delete-page-123" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pageIds": ["page_123"]
+  }'
+```
+
+1回のリクエストで最大50ページまで削除できます。
+
+## 実践例：Markdown ファイルを同期する {#worked-example-sync-markdown-files}
+
+```ts
+import { readFile, readdir } from "node:fs/promises";
+import { join, relative } from "node:path";
+
+async function syncMarkdownFolder(root: string, productId: string, apiKey: string) {
+  const names = await readdir(root);
+  const pages = [];
+
+  for (const name of names) {
+    if (!name.endsWith(".md")) continue;
+
+    const path = join(root, name);
+    const content = await readFile(path, "utf8");
+    const slug = relative(root, path).replace(/\.md$/, "");
+
+    pages.push({
+      slug,
+      title: slug.replace(/-/g, " "),
+      content,
+    });
+  }
+
+  const results = [];
+
+  for (let index = 0; index < pages.length; index += 25) {
+    const batch = pages.slice(index, index + 25);
+    const response = await fetch("https://app.promptingco.com/api/v1/site/pages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "Idempotency-Key": `markdown-sync-${index}-${Date.now()}`,
+      },
+      body: JSON.stringify({ productId, pages: batch }),
+    });
+
+    results.push(await response.json());
+  }
+
+  return results;
+}
+```

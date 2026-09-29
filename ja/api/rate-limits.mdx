@@ -1,0 +1,73 @@
+---
+title: "レート制限"
+description: "TPC API のクォータ、リトライヘッダー、429 エラーの処理方法について説明します。"
+---
+
+# レート制限 {#rate-limits}
+
+The Prompting Company のレート制限は、認証済みのプリンシパルごとに適用され、各プリンシパルを保護します。API キーにはキー単位でグローバルな制限が適用されます。また、個々のエンドポイントにルート単位の制限が適用される場合もあります。
+
+## 現在のデフォルト {#current-defaults}
+
+| 呼び出し元                 | デフォルトの上限                         | ウィンドウ    |
+| --------------------- | -------------------------------- | -------- |
+| 組織の API キー            | 300 リクエスト                        | 60 秒     |
+| セッションまたは OAuth bearer | ルートがオプトインしない限り、グローバルなラッパーによる上限なし | ルートごとに定義 |
+
+API キーのレコードにはより低い上限値を設定できますが、プラットフォーム全体の上限は 60 秒あたり 300 リクエストのまま変わりません。
+
+## 429 レスポンス {#429-response}
+
+呼び出し元が上限を超えると、API は次のように `429` を返します。
+
+```json
+{
+  "ok": false,
+  "code": "TOO_MANY_REQUESTS",
+  "message": "rate_limited",
+  "details": {
+    "limit": 300,
+    "resetAt": "2026-04-30T00:01:00.000Z"
+  }
+}
+```
+
+レスポンスには以下が含まれます。
+
+```text
+Retry-After: 12
+x-request-id: 6efaa25e-3ef6-4a34-91c1-7ff3e0fd4cc8
+```
+
+`Retry-After` は、現在のバケットがリセットされるまでの秒数を示します。
+
+<Note>
+  現在、ラッパーが出力するのは `Retry-After` と `x-request-id` のみです。
+  `X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset` は出力されません。
+</Note>
+
+## バックオフを使った再試行 {#retry-with-backoff}
+
+`Retry-After` がある場合はその値に従い、`429` レスポンスが繰り返し返される場合は、さらにジッター付きの指数バックオフを適用してください。
+
+```ts
+async function fetchWithBackoff(url: string, init: RequestInit, attempts = 4) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await fetch(url, init);
+
+    if (response.status !== 429) {
+      return response;
+    }
+
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const delayMs = Number.isFinite(retryAfter)
+      ? retryAfter * 1000
+      : Math.min(1000 * 2 ** attempt, 10000);
+    const jitterMs = Math.floor(Math.random() * 250);
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs + jitterMs));
+  }
+
+  throw new Error("Rate limit retries exhausted");
+}
+```
