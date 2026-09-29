@@ -1,0 +1,73 @@
+---
+title: "Límites de frecuencia"
+description: "Conoce las cuotas de la API de TPC, los encabezados de reintento y cómo gestionar los errores 429."
+---
+
+# Límites de frecuencia {#rate-limits}
+
+Los límites de frecuencia de The Prompting Company protegen a cada entidad autenticada. Las claves de API tienen un límite global por clave y, además, pueden aplicarse límites por ruta a endpoints concretos.
+
+## Valores predeterminados actuales {#current-defaults}
+
+| Autor de la llamada             | Límite predeterminado                                         | Ventana              |
+| ------------------------------- | ------------------------------------------------------------- | -------------------- |
+| Clave de API de la organización | 300 solicitudes                                               | 60 segundos          |
+| Sesión u OAuth bearer           | Sin límite global del wrapper, salvo que la ruta lo active | Definida por la ruta |
+
+Los registros de claves de API pueden almacenar un límite configurado más bajo, pero el tope de la plataforma sigue siendo de 300 solicitudes cada 60 segundos.
+
+## Respuesta 429 {#429-response}
+
+Cuando un cliente supera su límite, la API devuelve `429`:
+
+```json
+{
+  "ok": false,
+  "code": "TOO_MANY_REQUESTS",
+  "message": "rate_limited",
+  "details": {
+    "limit": 300,
+    "resetAt": "2026-04-30T00:01:00.000Z"
+  }
+}
+```
+
+La respuesta incluye:
+
+```text
+Retry-After: 12
+x-request-id: 6efaa25e-3ef6-4a34-91c1-7ff3e0fd4cc8
+```
+
+`Retry-After` indica los segundos que faltan para que se restablezca el bucket actual.
+
+<Note>
+  Actualmente, el wrapper devuelve `Retry-After` y `x-request-id`. No devuelve
+  `X-RateLimit-Limit`, `X-RateLimit-Remaining` ni `X-RateLimit-Reset`.
+</Note>
+
+## Reintentos con espera progresiva {#retry-with-backoff}
+
+Usa `Retry-After` cuando esté presente y, además, aplica una espera exponencial con variación aleatoria (jitter) si recibes respuestas `429` repetidas.
+
+```ts
+async function fetchWithBackoff(url: string, init: RequestInit, attempts = 4) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await fetch(url, init);
+
+    if (response.status !== 429) {
+      return response;
+    }
+
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const delayMs = Number.isFinite(retryAfter)
+      ? retryAfter * 1000
+      : Math.min(1000 * 2 ** attempt, 10000);
+    const jitterMs = Math.floor(Math.random() * 250);
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs + jitterMs));
+  }
+
+  throw new Error("Rate limit retries exhausted");
+}
+```

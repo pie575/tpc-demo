@@ -1,0 +1,60 @@
+---
+title: "实验"
+description: "在多个环境中并行运行任务并查看结果"
+---
+
+实验是一种受控对比，由一组任务、一组环境以及一个可选的信号配置组成。每次运行实验都会生成一个 **iteration (迭代)&#x20;**：针对每个“任务 × 环境”组合各运行一次，所有运行并行执行。
+
+## 设置实验 {#setting-up-an-experiment}
+
+1. 创建实验并为其命名
+2. 关联要评估的任务
+3. 关联要对比的环境
+4. (可选) 上传[信号配置](/zh/guides/coding-agent-optimization/signals)，以提取自定义指标
+5. 触发一次迭代
+
+实验位于控制台中对应产品的 **Simulation** 版块，也可以通过 [API](/zh/api/overview) 或 CLI 创建和运行：
+
+```bash
+tpc sim experiment create --name "Onboarding friction" \
+  --task-ids task_abc,task_def \
+  --env-ids env_123,env_456 \
+  --signal-config signals.yaml
+
+# 也可以分步创建
+tpc sim experiment create --name "Onboarding friction"
+tpc sim experiment task add exp_789 task_abc
+tpc sim experiment env add exp_789 env_123
+```
+
+触发一次迭代 (iteration) 后，系统会为每个“任务 × 环境”组合各创建一次运行。如需了解每次运行内部的执行过程及其记录的内容，请参阅[运行与迭代](/zh/guides/coding-agent-optimization/runs)。
+
+## 迭代结果 {#iteration-results}
+
+一次迭代中的所有运行完成后，系统会在迭代层面生成结果：
+
+* **信号汇总** — 将每个信号在所有运行中的数据汇总为比率、平均值、中位数和分布，并按环境和任务分组
+* **失败聚类** — 从失败运行中识别出反复出现的阻碍模式，每个模式都附有根本原因 (即您的产品、文档或基础设施中引发该问题的环节) 和建议的修复方案
+* **摘要** — 任务级得分和各环境对比
+
+迭代一经生成便不可更改。重新运行实验会创建一个新编号的迭代，而不会覆盖上一次迭代，因此改进效果可以长期追踪衡量。
+
+## 通过 CLI 运行实验 {#running-experiments-from-the-cli}
+
+```bash
+# 一条命令即可触发新迭代，并持续跟踪直至完成
+#（每个任务 × 环境组合各执行一次运行；每 5 秒轮询一次）
+tpc sim experiment run exp_789 --watch
+
+# 查看迭代结果：摘要、任务得分、失败聚类和改进建议
+tpc sim experiment results exp_789
+
+# 与之前的迭代对比，或深入查看某个失败聚类
+tpc sim experiment results exp_789 --iteration 2
+tpc sim experiment results exp_789 --error-category "Auth failures"
+
+# 信号值（汇总值及各次运行的值）
+tpc sim experiment signals exp_789
+```
+
+以上任一命令均可加上 `--format json`，以便将结果传入脚本或 CI。如需深入查看单次运行的详情 (`tpc sim run get/logs/actions`) ，请参阅[运行与迭代](/zh/guides/coding-agent-optimization/runs#inspecting-runs-from-the-cli)。

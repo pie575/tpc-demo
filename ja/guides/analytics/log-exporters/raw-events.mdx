@@ -1,0 +1,80 @@
+---
+title: "Raw events API"
+description: "nginx、CDN、バックフィル用スクリプトなど、あらゆるログソースからクローラーログを The Prompting Company に送信します"
+---
+
+<Note>
+  **ダッシュボードで設定する:** [Connect the raw events API](https://app.promptingco.com/traffic-onboarding/raw) では、コピーして使えるリクエストが表示されます。さらに、AI による最初のコンテンツページへの訪問が届くまで待機し、そのトラフィックが正しいプロダクトに紐付けられていることを確認できます。このページはリファレンスとしてご利用ください。
+</Note>
+
+Raw events API は、自社の Web サーバー、マネージドエクスポートのない CDN、過去のログを再送するスクリプトなど、あらゆるソースからのリクエストログを受け付けます。イベントは他のすべてのコレクターと同じ [AI トラフィック](/ja/guides/metrics#ai-traffic)指標に集計されます。AI クローラーやエージェントの分類は当社側で行います。
+
+Cloudflare Enterprise をご利用の場合は、[Cloudflare Logpush](/ja/guides/analytics/log-exporters/cloudflare-logpush) を使えば、一度設定するだけで同じデータを継続的にストリーミングできます。
+
+## 始める前に {#before-you-start}
+
+* **Settings → API Keys** で発行した The Prompting Company の **API キー** (組織キーまたはサービスアカウントキー) が必要です。
+
+## イベントを送信する {#send-events}
+
+JSON 配列 (単一のオブジェクトも可) を、非圧縮または gzip 圧縮のいずれかの形式で `https://logs.promptingco.com/v1/events/raw` に POST します。認証には `X-API-Key` ヘッダーまたは `Authorization: Bearer` のいずれかを使用します。
+
+```bash
+curl -X POST "https://logs.promptingco.com/v1/events/raw" \
+  -H "X-API-Key: $TPC_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '[
+    {
+      "timestamp": "2026-08-11T12:00:00.000Z",
+      "status_code": 200,
+      "request_method": "GET",
+      "request_path": "/pricing",
+      "query_string": "ref=x",
+      "content_type": "text/html",
+      "client_ip": "203.0.113.7",
+      "hostname": "example.com",
+      "user_agent": "GPTBot/1.2",
+      "referrer": "https://www.google.com"
+    }
+  ]'
+```
+
+| フィールド                                                                                  | 必須  | 備考                                                                       |
+| -------------------------------------------------------------------------------------- | --- | ------------------------------------------------------------------------ |
+| `hostname`                                                                             | はい  | このフィールドがないイベントはスキップ扱いとしてカウントされます                                         |
+| `timestamp`                                                                            | いいえ | ISO 8601、または Unix 時間 (秒／ミリ秒／ナノ秒) 。省略時は受信時刻が使われます                         |
+| `request_path`                                                                         | いいえ | 省略時は `/` です。クエリ文字列を直接含めることもできます (`/pricing?ref=x`)                       |
+| `query_string`                                                                         | いいえ | `request_path` にクエリを直接含める代わりに使用できます                                      |
+| `user_agent`, `client_ip`, `request_method`, `status_code`, `content_type`, `referrer` | いいえ | 推奨。ユーザーエージェントとクライアント IP は AI の分類に、メソッド、ステータス、コンテンツタイプはコンテンツページの識別に使用されます |
+
+リクエストの上限は 64 MB です (圧縮時・展開時とも) 。上限に収まる範囲で、1 回のリクエストにできるだけ多くのイベントをまとめて送信してください。
+
+## 取り込まれる対象 {#what-gets-ingested}
+
+The Prompting Company は、認識された AI トラフィックのうち、コンテンツページへの訪問に該当するものだけを保持します。各項目が存在する場合、メソッドは `GET`、数値のステータスは `204` と `205` を除く `200`–`299` (または `304`) 、コンテンツタイプは `text/html` または `application/xhtml+xml` である必要があります。数値の `status_code` の値は、JSON の数値と10進数の文字列のどちらでも受け付けます。
+
+HTTP メタデータが欠落している場合や数値でない場合、ページらしいパスはフェイルオープン (通過扱い) となります。そのため、`content_type` や `status_code` を省略して送信すると、パスが Next.js のプレフィックスまたはアセットのサフィックスに一致しない限り、JSON API などの HTML 以外の AI アクセスも取り込まれます。Next.js の正規プレフィックス (小文字の `/_next/static`、`/_next/image`、`/_next/data`) は常に除外されます。また、コンテンツタイプが欠落している場合は、一般的なスクリプト、スタイルシート、ソースマップ、画像、フォント、メディア、Rive、WASM、JSON、XML、テキスト、PDF のサフィックスで終わるパスも除外されます。サフィックスの照合では大文字と小文字は区別されず、末尾のスラッシュは無視されます。なお、HTML のコンテンツタイプが指定されていれば、`/docs/node.js` のようなドットを含む正当なページは保持されます。
+
+## レスポンス {#responses}
+
+| ステータス | 意味                                                                                                                                                                         |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `200` | バッチが処理されました。レスポンスボディは `{"ok": true, "received": N, "ingested": N, "skipped": N, "filtered": N}` の形式です。`filtered` が 1 以上の場合は、AI 以外によるリクエストやページ以外へのリクエストを意図的に保存しなかったことを示します。 |
+| `401` | API キーが指定されていないか、無効です                                                                                                                                                      |
+| `429` | キーの検証がレート制限を受けました。しばらくしてから再試行してください                                                                                                                                        |
+| `400` | リクエストボディをデコードできないか、JSON として解析できません                                                                                                                                         |
+| `413` | 展開後のリクエストボディが大きすぎます。バッチを小さくして送信してください                                                                                                                                      |
+| `503` | 取り込み処理が一時的に停止しています。バッチを再送信してください                                                                                                                                           |
+
+配信は at-least-once 方式です。`503` が返された場合はバッチ全体を再送信してください。まれに重複が発生することは想定済みで、トラフィック指標側で吸収されます。
+
+## 動作を確認する {#verify-its-working}
+
+```bash
+curl -s -X POST "https://logs.promptingco.com/v1/events/raw" \
+  -H "X-API-Key: $TPC_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '[{"hostname": "example.com", "request_path": "/", "user_agent": "GPTBot/1.2", "client_ip": "203.0.113.7"}]'
+```
+
+`200` とともに `"ingested": 1` が返されれば、パイプラインは正常に動作しています。その訪問はまもなく [AI トラフィック](/ja/guides/metrics#ai-traffic)ダッシュボードに表示されます。

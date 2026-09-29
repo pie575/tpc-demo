@@ -1,0 +1,108 @@
+---
+title: "環境"
+description: "タスクに取り組むエージェントと、その実行先となるサンドボックスを設定します"
+---
+
+環境とは、エージェント設定とサンドボックスのリソースを組み合わせたものです。環境は、*どのエージェントがタスクに取り組むのか*、そして*そのエージェントにどのようなマシンを割り当てるのか*という 2 つの問いに答えます。
+
+環境は実験における変数にあたるため、通常は比較したい構成ごとに環境を 1 つずつ作成し (例：「Claude Code + 最新の Sonnet」と「Codex + 最新の GPT」) 、それぞれを同じタスクに対して実行します。
+
+## エージェントの設定 {#agent-configuration}
+
+| 設定                        | オプション                                                               |
+| ------------------------- | ------------------------------------------------------------------- |
+| **ハーネス**                  | `claude` (Claude Code) 、`codex` (Codex CLI) 、`opencode` (OpenCode)  |
+| **モデル**                   | 選択したハーネスがサポートする任意のモデル (実行開始時に検証されます)                                |
+| **Temperature / 最大トークン数** | サンプリング設定を上書きする場合に指定 (任意)                                            |
+| **サンドボックスモード**            | `read-only`、`workspace-write`、`danger-full-access` のいずれか            |
+
+ハーネスはサンドボックス内でヘッドレスモードで実行され、開発者が自分のターミナルで実行する場合とまったく同じように動作します。セッションログは、どのハーネスが出力したものであっても取得・解析され、統一形式のトランスクリプトに変換されます。そのため、異なるハーネス間でも実行結果を比較できます。
+
+## サンドボックスのリソース {#sandbox-resources}
+
+実行ごとに、分離された新しい Linux サンドボックスが用意されます。
+
+* **CPU**: 1～4 コア
+* **メモリ**: 1～8 GB
+* **ディスク**: 1～10 GB
+* **GPU** (任意) : T4、L4、A10G、A100、H100
+
+GPU を使用しない実行は、デフォルトのサンドボックスプロバイダー上で実行されます。GPU をリクエストすると、実行は自動的に GPU 搭載のインフラストラクチャに割り当てられます。サンドボックスは実行開始時に作成され、タスクのファイル、コマンド、シークレットで初期化されます。実行終了後はアーカイブされてから破棄されます。
+
+## スケジュール実行 {#scheduling}
+
+環境は定期的なスケジュール (7日ごとまたは14日ごと) で実行できます。スケジュール実行では環境のタスクが自動的に実行されるため、エージェント体験を継続的に監視するにはこれが最も簡単な方法です。たとえばドキュメントの変更によってエージェントのオンボーディングが機能しなくなった場合でも、次に手動で実験するのを待たずに、次回のスケジュール実行で問題が明らかになります。
+
+## 比較対象の選び方 {#choosing-what-to-compare}
+
+一般的な比較パターン:
+
+* **モデルスイープ** — ハーネスを固定してモデルを切り替え、どのモデルが自社プロダクトをうまく扱えるかを確認します
+* **ハーネススイープ** — 同じモデルファミリーを Claude Code、Codex、OpenCode で使い分け、ハーネス固有のつまずきポイントを洗い出します
+* **変更前後の比較** — ドキュメントや API の変更前と変更後に、同一の環境を別々のイテレーションとして実行します
+
+## CLI から環境を操作する {#working-with-environments-from-the-cli}
+
+環境を作成する最も簡単な方法は、タスクと同じ場所に置いた `environment.json` で環境を宣言し、そのディレクトリを実行することです。詳しくは [ディレクトリからタスクを実行する](/ja/guides/coding-agent-optimization/tasks#run-a-task-from-a-directory) を参照してください。`tpc sim run` を使えば、環境の作成、リンク、実行のキュー登録を 1 つのコマンドでまとめて行えます。
+
+環境を直接管理するには、エージェントの設定をインライン JSON または `@file` (JSON または TOML) で渡します。
+
+```json
+{
+  "harness": "claude",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "sandboxResources": {
+    "cpu": 2,
+    "memory": 4,
+    "disk": 10
+  }
+}
+```
+
+```bash
+# 設定ファイルから環境を作成し、同時にタスクを紐付ける
+tpc sim env create --name "Claude Code + Sonnet" \
+  --agent-config @agent-config.json \
+  --task-ids task_123,task_456
+
+# 設定をインラインで渡すことも可能
+tpc sim env create --name "Codex sweep" \
+  --agent-config '{"harness":"codex","provider":"openai","model":"gpt-5"}'
+
+# 環境を一覧表示する（フィルターは併用可能）
+tpc sim env list --search claude --enabled true
+
+# 特定の環境の詳細を確認する — エージェント設定、初期化コマンド、初期化ファイル名、紐付けられたタスク
+tpc sim env get env_123
+
+# 後からタスクを紐付ける／紐付けを解除する
+tpc sim env task attach env_123 task_789
+tpc sim env task detach env_123 task_789
+
+# 設定を更新する — 複数のフラグを1回で指定可能（--schedule: 7d または 14d、none で解除）
+tpc sim env update env_123 --name "Shared Claude Sonnet" --schedule 7d
+tpc sim env update env_123 --enabled false
+
+# 削除する（事前にすべてのタスクの紐付けを解除しておくこと）
+tpc sim env delete env_123
+```
+
+GPU サンドボックスをリクエストするには、`sandboxResources` に GPU の指定を追加します (例：`"gpu": "A100", "gpuCount": 1`) 。
+
+## CLI でのシークレット管理 {#secrets-from-the-cli}
+
+シークレットは環境ごとに設定し、実行時に環境変数として注入されます。CLI がシークレットの値を表示することはありません。
+
+```bash
+# シークレットをリテラル値で設定するか、ローカルシェルの環境変数から安全に設定する
+tpc sim env secret set env_123 --name FEATURE_FLAG --value enabled
+tpc sim env secret set env_123 --name ACME_API_KEY --from-env ACME_API_KEY
+
+# .env ファイルから一括インポートする（--env-file - を指定すると標準入力から読み込む）
+tpc sim env secret import env_123 --env-file .env.simulation
+
+# メタデータを一覧表示し、不要なシークレットを削除する
+tpc sim env secret list env_123
+tpc sim env secret delete env_123 --name ACME_API_KEY
+```

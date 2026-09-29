@@ -1,0 +1,83 @@
+---
+title: "CLI の概要"
+description: "ターミナルからワークスペース、組織、シミュレーションワークフローを操作できます。"
+---
+
+# CLI の概要 {#cli-overview}
+
+The Prompting Company CLI を使うと、ワークスペース、組織、シミュレーションワークフローにターミナルからアクセスできます。
+
+バイナリ名は次のとおりです。
+
+```text
+tpc
+```
+
+## 前提条件 {#prerequisites}
+
+* macOS、Linux、または Windows
+* `amd64` または `arm64`
+
+まず[インストール](/ja/cli/installation)を行い、次に[認証](/ja/cli/authentication)に進んでください。
+
+## よく使うコマンド {#common-commands}
+
+```bash
+# 現在の認証状態を表示
+tpc auth whoami
+
+# インストール済みの CLI バージョンを表示
+tpc version
+tpc --version
+
+# アップデートを確認
+tpc update --check
+
+# 最新のアップデートをインストール
+tpc update
+
+# 組織を一覧表示
+tpc org list
+
+# プロダクト単位のコマンドでは --scope <org-slug>/<product-slug> を指定
+tpc sim experiment list --scope cloudflare-dev/browser-run
+tpc analytics sov --scope nvidia-com/nvidia-dgx-spark --last 30d
+
+# コンテンツを一覧表示
+tpc --scope prompting-co/my-product content list
+
+# ナレッジファイルを一覧表示
+tpc --scope prompting-co/my-product knowledge file list
+
+# 生成されたプロンプト候補を確認
+tpc --scope my-product/prompting-co prompts suggestions list
+tpc --scope my-product/prompting-co prompts suggestions generate
+
+# プロンプト実行時に使用するペルソナを追加
+tpc --scope prompting-co/my-product persona create --name "RevOps lead" --description "Owns CRM hygiene"
+
+# サイトマップから llms.txt ファイルを生成（認証不要）
+tpc llmstxt init https://docs.example.com/sitemap.xml
+tpc llmstxt generate
+
+# シミュレーションコマンドのヘルプを表示
+tpc sim help
+
+# 競合ベンチマークのガイド付きセットアップを開始
+tpc sim ax setup --type benchmark --scope acme/my-product
+
+# 環境一覧のヘルプを表示（認証不要）
+tpc env list -h
+
+# シミュレーション環境を一覧表示
+tpc env list
+
+# Model Council の設定と実行
+tpc council config get
+tpc council run
+tpc council list
+```
+
+## 次のステップ {#next-step}
+
+インストールと認証が完了したら、ターミナルからプロダクトやシミュレーションのワークフローを進められます。詳しくは、[コンテンツ](/ja/cli/commands/content)、[ナレッジ](/ja/cli/commands/knowledge)、[プロンプト](/ja/cli/commands/prompts)、[ペルソナ](/ja/cli/commands/persona)、[アナリティクス](/ja/cli/commands/analytics)、[Model council](/ja/cli/commands/council)、[Agent Experience](/ja/cli/commands/agent-experience)、[シミュレーション環境](/ja/cli/commands/simulation-environments)を参照してください。

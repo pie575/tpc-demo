@@ -1,0 +1,63 @@
+---
+title: "はじめに"
+description: "強力な TypeScript SDK で、エージェント向け Markdown ドキュメントのデータにアクセスできます"
+---
+
+# TypeScript SDK {#the-typescript-sdk}
+
+The Prompting Company プラットフォームからエージェント向け Markdown ドキュメントのデータにアクセスするための公式 TypeScript SDK です。完全な型安全性と快適な開発者体験のもとで、組織のドキュメントを活用した強力なアプリケーションを構築できます。
+
+## はじめに {#getting-started}
+
+わずか数分でSDKを使い始められます。
+
+<Card title="SDKを使ってみる" icon="rocket" href="/ja/ts-sdk/installation" horizontal>
+  SDKをインストールし、開発環境をセットアップします。
+</Card>
+
+## 主な機能 {#key-features}
+
+ドキュメントデータの統合に必要な機能がすべて揃っています。
+
+<Columns cols={2}>
+  <Card title="TypeScript SDK" icon="code" href="/ja/ts-sdk/introduction">
+    TypeScript を完全にサポートし、厳密な型安全性と自動補完を備えています。
+  </Card>
+
+  <Card title="簡単インストール" icon="download" href="/ja/ts-sdk/installation">
+    npm、yarn、pnpm でインストールでき、数分で設定が完了します。
+  </Card>
+
+  <Card title="クイックスタートガイド" icon="play" href="/ja/ts-sdk/quickstart">
+    ステップごとの手順に沿って、最初の統合を構築しましょう。
+  </Card>
+
+  <Card title="高度な使い方" icon="settings" href="/ja/ts-sdk/advanced-usage">
+    高度なパターン、キャッシュ、最適化の手法について学びます。
+  </Card>
+</Columns>
+
+## かんたんな統合 {#simple-integration}
+
+わずか数行のコードで、ドキュメントデータにアクセスできます。
+
+```typescript
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: "your-product-slug",
+  organizationSlug: "your-organization-slug",
+});
+
+const doc = await client.document.getByPath("en-us/contact");
+
+if (doc.ok) {
+  console.log(doc.data?.content);
+}
+```
+
+## 次のステップ {#next-steps}
+
+<Card title="ガイド全体を見る" icon="book-open" href="/ja/ts-sdk/introduction" horizontal>
+  SDK のすべての機能について確認しましょう。
+</Card>

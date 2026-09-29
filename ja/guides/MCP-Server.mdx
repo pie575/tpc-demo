@@ -1,0 +1,223 @@
+---
+title: "MCP サーバー"
+description: "Claude、Codex、Cursor、VS Code などの MCP クライアントに The Prompting Company の MCP サーバーをインストールします"
+---
+
+The Prompting Company は、次の URL でリモート MCP サーバーを提供しています。
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+このサーバーは Streamable HTTP と OAuth 2.1 を使用します。リモート MCP にネイティブ対応しているクライアントでは、通常はサーバー URL を指定するだけで済みます。動的クライアント登録と認証用のブラウザ起動は、クライアントが自動的に行います。
+
+<Note>
+  通常の MCP クライアントのセットアップでは、OAuth クライアント ID やクライアントシークレットを手動で作成したり貼り付けたりする必要はありません。リモート MCP にネイティブ対応しているクライアントは、OAuth フローの中で自動的に登録されます。
+</Note>
+
+<Note>
+  ホスト型 OAuth コールバックの許可リストに現在登録されているのは、Claude、ChatGPT、
+  MCPJam です。その他のホスト型クライアントでは、コールバックが審査を経て追加されるまでは、
+  ローカルのループバックコールバック、または `mcp-remote` などの stdio ブリッジを使用してください。
+</Note>
+
+## サーバー情報 {#server-details}
+
+* **MCP トランスポート URL**: `https://app.promptingco.com/api/mcp`
+* **保護されたリソースのメタデータ**: `https://app.promptingco.com/.well-known/oauth-protected-resource/api/mcp`
+* **認可サーバーのメタデータ**: `https://app.promptingco.com/.well-known/oauth-authorization-server/api/auth`
+
+## 始める前に {#before-you-start}
+
+使用するクライアントが、パブリックインターネット経由で `https://app.promptingco.com` にアクセスできることを確認してください。
+
+認証の流れは次のとおりです。
+
+1. MCP クライアントがブラウザを開きます。
+2. 必要に応じて The Prompting Company にサインインします。
+3. 同意画面で承認します。
+4. ブラウザから MCP クライアントに制御が戻ります。
+
+## Claude {#claude}
+
+### Claude.ai / Claude Desktop {#claudeai-claude-desktop}
+
+1. **Settings** -&gt; **Connectors** を開きます。
+2. カスタム MCP サーバーを追加します。
+3. 次のサーバー URL を入力します：
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+4. 接続フローを開始します。
+5. ブラウザでサインインと承認を完了します。
+6. ブラウザでのリダイレクトが完了したら、Claude に戻ります。
+
+<Warning>
+  Claude は Anthropic が管理するインフラストラクチャから接続します。本番以外の環境でテストする場合は、MCP エンドポイントがインターネットからアクセス可能である必要があります。また、OAuth メタデータでは、クライアントが使用しているものと同じ公開ホスト名を提示する必要があります。
+</Warning>
+
+## Claude Code {#claude-code}
+
+次のコマンドを実行します。
+
+```bash
+claude mcp add --transport http tpc https://app.promptingco.com/api/mcp
+```
+
+次に、Claude Code 内で以下を実行します：
+
+```text
+/mcp
+```
+
+Claude Code がブラウザで OAuth フローを開始します。
+
+## Codex {#codex}
+
+次のコマンドを実行します。
+
+```bash
+codex mcp add tpc --url https://app.promptingco.com/api/mcp
+```
+
+Codex で初めてリモート MCP サーバーを使用する場合は、`~/.codex/config.toml` で RMCP クライアントを有効にしてください。
+
+```toml
+[features]
+experimental_use_rmcp_client = true
+```
+
+次に、ログインします。
+
+```bash
+codex mcp login tpc
+```
+
+`~/.codex/config.toml` で直接設定することもできます。
+
+```toml
+[features]
+experimental_use_rmcp_client = true
+
+[mcp_servers.tpc]
+url = "https://app.promptingco.com/api/mcp"
+```
+
+## Cursor {#cursor}
+
+お使いのバージョンの Cursor がリモート MCP URL を直接サポートしている場合は、次の設定を使用します。
+
+```text
+https://app.promptingco.com/api/mcp
+```
+
+代わりに stdio ブリッジを使用する場合は、次のように設定します。
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+## Visual Studio Code {#visual-studio-code}
+
+`mcp-remote` で stdio ブリッジを使用します。
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+コマンドパレットから追加することもできます。
+
+1. **MCP: Add Server** を実行します
+2. **Command (stdio)** を選択します
+3. 次のように入力します。
+
+```text
+npx -y mcp-remote https://app.promptingco.com/api/mcp
+```
+
+4. 名前を `tpc` に設定します
+5. **MCP: List Servers** からサーバーを起動します
+
+## Windsurf {#windsurf}
+
+MCP サーバーの設定に以下を追加してください。
+
+```json
+{
+  "mcpServers": {
+    "tpc": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"]
+    }
+  }
+}
+```
+
+## Zed {#zed}
+
+設定に以下を追加してください。
+
+```json
+{
+  "context_servers": {
+    "tpc": {
+      "source": "custom",
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://app.promptingco.com/api/mcp"],
+      "env": {}
+    }
+  }
+}
+```
+
+## その他のクライアント {#other-clients}
+
+OAuth を使用したリモート MCP にネイティブ対応していないクライアントでは、次の設定を使用してください。
+
+* **コマンド**: `npx`
+* **引数**: `-y mcp-remote https://app.promptingco.com/api/mcp`
+
+## トラブルシューティング {#troubleshooting}
+
+### ブラウザ認証は成功するがクライアントが接続されない {#browser-auth-succeeds-but-the-client-does-not-connect}
+
+* MCP クライアントを閉じてから、再度開いてください。
+* 既存の MCP 接続を削除し、改めて追加してください。
+* サーバー URL が `https://app.promptingco.com/api/mcp` と完全に一致していることを確認してください。
+
+### 同意画面から先に進まない {#consent-screen-gets-stuck}
+
+* クライアントで選択できる場合は、埋め込みブラウザではなく通常のブラウザウィンドウで承認を完了してください。
+* 新しい署名付き OAuth URL を取得するため、改めて接続し直してください。
+* プロキシやトンネル経由でテストしている場合は、OAuth メタデータと MCP トランスポートが同じ公開ホスト名を使用していることを確認してください。
+
+### クライアントがサーバーを検出できない {#client-cannot-discover-the-server}
+
+次の URL が正常に読み込まれることを確認してください。
+
+```text
+https://app.promptingco.com/api/mcp
+https://app.promptingco.com/.well-known/oauth-protected-resource/api/mcp
+https://app.promptingco.com/.well-known/oauth-authorization-server/api/auth
+```
+
+想定される動作:
+
+* 未認証の状態では、`/api/mcp` は `401` を返します
+* well-known エンドポイントはどちらも `200` を返します

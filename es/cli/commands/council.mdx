@@ -1,0 +1,85 @@
+---
+title: "Model council"
+description: "Ejecuta instantáneas de Model Council, gestiona config.yaml y consulta o elimina resultados desde la CLI de TPC."
+---
+
+# Model Council {#model-council}
+
+`tpc council` es la CLI de Model Council. Puntúa todas las respuestas de un producto, tema o prompt según la configuración de preguntas del producto. Puedes ejecutar una instantánea de Model Council, consultar el estado y los informes, reemplazar el YAML de configuración y eliminar las instantáneas completadas.
+
+`tpc snapshot` es un alias de `tpc council`.
+
+<Note>
+  Los comandos de Model Council con scope de producto requieren `--scope <org-slug>/<product-slug>`. Para guardar o eliminar `config.yaml` se necesita una sesión de administrador.
+</Note>
+
+## Configuración {#config}
+
+Obtén el YAML actual:
+
+```bash
+tpc council config get --scope pro-org/my-product
+tpc council config get --out config.yaml --scope pro-org/my-product
+```
+
+Reemplázala desde un archivo (o stdin):
+
+```bash
+tpc council config set --file config.yaml --scope pro-org/my-product
+cat config.yaml | tpc council config set --file - --scope pro-org/my-product
+```
+
+Edítalo en `$VISUAL` o `$EDITOR`:
+
+```bash
+tpc council config edit --scope pro-org/my-product
+```
+
+Elimínala. `tpc council run` fallará hasta que subas una nueva configuración:
+
+```bash
+tpc council config delete --scope pro-org/my-product
+```
+
+## Ejecución {#run}
+
+El modo rápido está activado de forma predeterminada (análisis síncrono a través del gateway). Pasa `--fast-mode=false` para usar el procesamiento por lotes.
+
+```bash
+tpc council run --scope pro-org/my-product
+tpc council run --scope pro-org/my-product --topic <topicId>
+tpc council run --prompt <promptId> --scope pro-org
+tpc council run --scope pro-org/my-product --from 2025-01-01 --to 2025-04-01
+tpc council run --fast-mode=false --scope pro-org/my-product
+```
+
+`run` inicia el flujo de trabajo y termina. Las ejecuciones de Model Council pueden tardar bastante. Consulta su estado con `list`.
+
+## Resultados {#results}
+
+```bash
+tpc council list --scope pro-org/my-product
+tpc council get --snapshot <snapshotId>
+tpc council report --snapshot <snapshotId>
+tpc --format json council report --snapshot <snapshotId> > report.json
+```
+
+`report` muestra por defecto un resumen en Markdown (resumen ejecutivo, señales monitorizadas, acciones sugeridas y una tabla de afirmaciones con un número limitado de filas). Usa `--format json` para obtener el contenido completo. El informe solo está disponible para las instantáneas con estado `completed`.
+
+## Eliminar una instantánea {#delete-a-snapshot}
+
+No hay ninguna API para modificar una fila de instantánea existente. Cambia la rúbrica de puntuación con `tpc council config set` y vuelve a ejecutar el proceso. Para eliminar una instantánea completada o fallida, usa:
+
+```bash
+tpc council delete --snapshot <snapshotId>
+```
+
+No se pueden eliminar las instantáneas que aún se están generando.
+
+## Salida JSON {#json-output}
+
+```bash
+tpc --format json council list
+tpc --format json council config get
+tpc --format json council get --snapshot <snapshotId>
+```

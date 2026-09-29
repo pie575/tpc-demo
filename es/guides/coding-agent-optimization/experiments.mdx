@@ -1,0 +1,60 @@
+---
+title: "Experimentos"
+description: "Ejecuta tareas en varios entornos en paralelo y consulta los resultados"
+---
+
+Un experimento es una comparación controlada: un conjunto de tareas, un conjunto de entornos y, opcionalmente, una configuración de señales. Al ejecutar un experimento se genera una **iteración**: una ejecución por cada par tarea × entorno, todas en paralelo.
+
+## Configurar un experimento {#setting-up-an-experiment}
+
+1. Crea el experimento y ponle un nombre
+2. Adjunta las tareas que quieres evaluar
+3. Adjunta los entornos que quieres comparar
+4. Si quieres, sube una [configuración de señales](/es/guides/coding-agent-optimization/signals) para extraer métricas personalizadas
+5. Lanza una iteración
+
+Los experimentos se encuentran en la sección **Simulation** de tu producto en el panel de control, aunque también puedes crearlos y ejecutarlos mediante la [API](/es/api/overview) o la CLI:
+
+```bash
+tpc sim experiment create --name "Onboarding friction" \
+  --task-ids task_abc,task_def \
+  --env-ids env_123,env_456 \
+  --signal-config signals.yaml
+
+# O configúrelo paso a paso
+tpc sim experiment create --name "Onboarding friction"
+tpc sim experiment task add exp_789 task_abc
+tpc sim experiment env add exp_789 env_123
+```
+
+Al iniciar una iteración, se crea una ejecución por cada par tarea × entorno. Consulta [Ejecuciones e iteraciones](/es/guides/coding-agent-optimization/runs) para saber qué ocurre dentro de cada ejecución y qué información registra.
+
+## Resultados de la iteración {#iteration-results}
+
+Cuando finalizan todas las ejecuciones de una iteración, se generan resultados a nivel de iteración:
+
+* **Agregados de señales**: cada señal se consolida a partir de todas las ejecuciones en tasas, promedios, medianas y distribuciones, agrupadas por entorno y tarea
+* **Grupos de fallos**: patrones de fricción recurrentes detectados en las ejecuciones fallidas, cada uno con una causa raíz (qué elemento de tu producto, documentación o infraestructura lo provocó) y una corrección recomendada
+* **Resumen**: puntuaciones por tarea y comparativas entre entornos
+
+Las iteraciones son inmutables. Al volver a ejecutar un experimento, se crea una nueva iteración numerada en lugar de sobrescribir la anterior, de modo que las mejoras se pueden medir a lo largo del tiempo.
+
+## Ejecución de experimentos desde la CLI {#running-experiments-from-the-cli}
+
+```bash
+# Lanza una nueva iteración y sigue su progreso hasta que termine, todo con un solo comando
+# (una ejecución por cada par tarea × entorno; consulta el estado cada 5 segundos)
+tpc sim experiment run exp_789 --watch
+
+# Consulta los resultados de la iteración: resumen, puntuaciones por tarea, grupos de fallos y sugerencias
+tpc sim experiment results exp_789
+
+# Compara con una iteración anterior o examina en detalle un grupo de fallos concreto
+tpc sim experiment results exp_789 --iteration 2
+tpc sim experiment results exp_789 --error-category "Auth failures"
+
+# Valores de las señales, agregados y por ejecución
+tpc sim experiment signals exp_789
+```
+
+Usa `--format json` con cualquiera de estos comandos para pasar los resultados a scripts o a CI. Para analizar en detalle ejecuciones individuales (`tpc sim run get/logs/actions`), consulta [Ejecuciones e iteraciones](/es/guides/coding-agent-optimization/runs#inspecting-runs-from-the-cli).

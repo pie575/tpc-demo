@@ -1,0 +1,66 @@
+---
+title: "Conectar Webflow"
+description: "Publica borradores de TPC en una colección del CMS de Webflow con un token de API del sitio"
+---
+
+The Prompting Company publica en una colección del CMS de Webflow mediante un token de API con alcance limitado al sitio.
+
+## Antes de empezar {#before-you-start}
+
+* Permisos de administrador del espacio de trabajo en el sitio de Webflow.
+* Una colección del CMS creada para el tipo de contenido que quieres publicar (p. ej., Blog Posts).
+
+## Generar un token de API {#generate-an-api-token}
+
+1. En Webflow Designer, haz clic en el logotipo de **Webflow** (arriba a la izquierda) y abre **Site Settings**.
+2. Ve a la pestaña **Apps &amp; integrations**.
+3. Desplázate hasta **API access** y haz clic en **Generate API token**.
+4. Concede el scope **CMS read/write** para el sitio que contiene tu colección.
+5. Copia el token.
+
+## Obtén el ID de tu colección {#get-your-collection-id}
+
+1. En Designer, abre el panel **CMS**.
+2. Haz clic en la colección en la que quieres publicar.
+3. Haz clic en el icono **⚙ Settings**.
+4. Copia el **Collection ID** que aparece en la parte inferior.
+
+<Warning>
+  Usa el Collection ID, no el slug. Se parecen, pero el ID es una cadena alfanumérica más larga.
+</Warning>
+
+## Haz coincidir los slugs de los campos de tu colección {#match-your-collection-field-slugs}
+
+De forma predeterminada, TPC usa estos slugs de campo:
+
+* `name`
+* `slug`
+* `body`
+* `summary`
+
+Si cambiaste el nombre de los campos en Webflow, pega el **slug** exacto (no la etiqueta visible). Los campos de imagen son opcionales.
+
+## Conectar en TPC {#connect-in-tpc}
+
+1. Abre **Settings → Integrations** en el espacio de trabajo de tu producto en TPC.
+2. Selecciona **Webflow**.
+3. Introduce el token de API, el ID de la colección y, si los hay, los slugs de los campos personalizados.
+4. Haz clic en **Save** y, a continuación, en **Test connection**.
+
+## Solución de problemas {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+Al token le falta el scope de escritura del CMS o se generó para otro sitio. Vuelve a generarlo en el sitio correcto con la opción **CMS read/write** habilitada.
+
+### 400 &quot;unknown field&quot; {#400-unknown-field}
+
+Uno de los slugs de campo configurados en TPC no existe en la colección. Comprueba los slugs de los campos en Webflow Designer → CMS → Collection settings → Fields.
+
+### El borrador se publicó, pero no aparece en el panel del CMS {#draft-published-but-not-visible-in-the-cms-panel}
+
+Actualiza el Designer. El Designer de Webflow almacena en caché la lista de colecciones, así que el elemento aparecerá en cuanto actualices.
+
+## Enlaces relacionados {#related-links}
+
+* [Documentación sobre los tokens de la API de Webflow](https://developers.webflow.com/data/reference/authentication)

@@ -1,0 +1,96 @@
+---
+title: "ペルソナ"
+description: "TPC CLI を使用して、プロダクトのペルソナを一覧表示、作成、更新、削除します。"
+---
+
+# ペルソナ {#personas}
+
+ターミナルからプロダクトのペルソナを管理します。ペルソナとは、プロンプトの実行時に AI アシスタントがなりきって回答するユーザー像のことです。プロンプトはペルソナを ID で参照します。対象のプロダクトは `--scope <org-slug>/<product-slug>` で指定します。`tpc personas` は `tpc persona` のエイリアスです。
+
+ペルソナコマンドは、[OAuth ログイン](/ja/cli/authentication) (`tpc auth login`) で使用できるほか、`products:read` (list、get) および `products:write` (create、update、delete) の権限を持つ API キーでも使用できます。
+
+## ペルソナの一覧表示 {#list-personas}
+
+新しい順に表示されます。`--search` で名前による絞り込みができます。`--page` は 0 始まりで、`--page-size` のデフォルトは 50 です。
+
+```bash
+tpc --scope pro-org/my-product persona list
+tpc --scope pro-org/my-product persona list --search revops
+```
+
+```text
+PRODUCT:  my-product
+PAGE:     1 of 1
+
+ID                                    NAME         DESCRIPTION                                   CREATED
+4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a  RevOps lead  Owns CRM hygiene for a 200-seat sales org     2026-09-22
+
+Total: 1
+```
+
+`--format csv` はサポートされていません。
+
+## ペルソナを取得する {#get-a-persona}
+
+テキストモードでは、説明の全文とシステムプロンプトが出力されます。JSON モードでは、API ペイロードが出力されます。
+
+```bash
+tpc --scope pro-org/my-product persona get 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a
+```
+
+## ペルソナを作成する {#create-a-persona}
+
+`--name` と `--description` は必須です。システムプロンプトは任意で、`--system-prompt` または `--system-prompt-file` のいずれか一方で指定します (両方を同時に指定することはできません) 。
+
+```bash
+tpc --scope pro-org/my-product persona create \
+  --name "RevOps lead" \
+  --description "Owns CRM hygiene for a 200-seat sales org"
+```
+
+```bash
+tpc --scope pro-org/my-product persona create \
+  --name "Security reviewer" \
+  --description "Evaluates vendors for SOC 2 fit" \
+  --system-prompt-file ./security.md
+```
+
+作成処理は名前について冪等で、大文字と小文字は区別されません。プロダクトに同じ名前のペルソナがすでに存在する場合は、重複して作成されることはなく、既存のペルソナが返されます。テキスト出力にもその旨が表示されます：
+
+```text
+Created persona RevOps lead (4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a)
+```
+
+```text
+Persona RevOps lead already exists (4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a)
+```
+
+## ペルソナを更新する {#update-a-persona}
+
+変更したいフィールドのみを指定してください。指定しなかったフィールドは現在の値のまま保持されます。`--clear-system-prompt` はシステムプロンプトを削除します。このオプションは `--system-prompt` や `--system-prompt-file` と併用できません。
+
+```bash
+tpc --scope pro-org/my-product persona update 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a \
+  --description "Owns CRM hygiene and lead routing"
+```
+
+```bash
+tpc --scope pro-org/my-product persona update 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a \
+  --clear-system-prompt
+```
+
+## ペルソナを削除する {#delete-a-persona}
+
+削除はソフトデリート (論理削除) として行われるため、そのペルソナを参照していたプロンプトの履歴は保持されます。
+
+```bash
+tpc --scope pro-org/my-product persona delete 4f2c9a1e-8d3b-4c1a-9e2f-7b6a5d4c3b2a
+```
+
+## JSON 出力 {#json-output}
+
+すべてのコマンドで `--format json` を指定でき、スクリプトから利用できます。`list` は `{ "personas": [...], "total": n }` を出力し、それ以外のコマンドはペルソナオブジェクトを出力します。
+
+```bash
+tpc --scope pro-org/my-product persona list --format json | jq '.personas[].id'
+```

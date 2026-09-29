@@ -1,0 +1,71 @@
+---
+title: "Idempotencia"
+description: "Usa el encabezado Idempotency-Key para reintentar de forma segura las solicitudes a la API de TPC."
+---
+
+# Idempotencia {#idempotency}
+
+Usa `Idempotency-Key` en las solicitudes de escritura distintas de GET cuando, tras agotarse el tiempo de espera de la red, no puedas saber con certeza si la solicitud se completó correctamente.
+
+## Cuándo usarla {#when-to-use-it}
+
+Envía una clave de idempotencia en los trabajos de creación, actualización y eliminación que tu sistema pueda reintentar automáticamente:
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: content-sync-2026-04-30-pricing" \
+  --data '{"productId":"product_123","pages":[{"slug":"pricing","title":"Pricing"}]}'
+```
+
+## Comportamiento de reproducción {#replay-behavior}
+
+TPC almacena las respuestas JSON correctas durante 24 horas.
+
+| Misma clave | Misma ruta y método | Mismo cuerpo           | Resultado                                                                      |
+| ----------- | ------------------- | ---------------------- | ------------------------------------------------------------------------------ |
+| Sí          | Sí                  | Sí                     | Se reproduce la respuesta almacenada en caché con `x-idempotent-replay: true`. |
+| Sí          | Sí                  | No                     | La API devuelve `409 CONFLICT`.                                                |
+| Sí          | Sí                  | Solicitud aún en curso | La API devuelve `409 CONFLICT`.                                                |
+| Sí          | No                  | Cualquier cuerpo       | Se trata como una operación independiente.                                     |
+
+El ámbito de las claves se limita a la organización, la ruta, el método y el hash del cuerpo de la solicitud.
+
+## Ejemplo de reintento {#retry-example}
+
+```ts
+async function createPageWithRetry(productId: string, apiKey: string) {
+  const body = {
+    productId,
+    pages: [
+      {
+        slug: "docs/retry-safe-page",
+        title: "Retry-safe page",
+        content: "# Retry-safe page",
+      },
+    ],
+  };
+
+  const key = `site-page-create-${productId}-retry-safe-page`;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch("https://app.promptingco.com/api/v1/site/pages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "Idempotency-Key": key,
+        },
+        body: JSON.stringify(body),
+      });
+
+      return await response.json();
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+  }
+}
+```

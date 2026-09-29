@@ -1,0 +1,136 @@
+---
+title: "Señales"
+description: "Extrae métricas personalizadas de las ejecuciones con una configuración de señales en YAML"
+---
+
+Las señales convierten las transcripciones sin procesar de las ejecuciones en métricas. Las defines una sola vez en una configuración YAML asociada a un experimento: cada ejecución extrae sus propios valores y cada iteración los agrega en cifras comparables, sin necesidad de escribir código.
+
+Las señales no son lo mismo que los [objetivos](/es/guides/coding-agent-optimization/tasks#goals-and-criteria): un objetivo es el veredicto de éxito o fallo de una sola ejecución, mientras que una señal es una medición que se agrega a partir de todas las ejecuciones de una iteración. Los objetivos responden a «¿ha tenido éxito esta ejecución?»; las señales, a «¿en qué se diferencian los entornos?».
+
+## Tipos de señales y alcances {#signal-types-and-scopes}
+
+Una señal genera un valor por ejecución, de uno de estos tipos:
+
+* **boolean**: &quot;¿se inventó el agente una API?&quot;
+* **number**: &quot;¿cuántos tokens consumió la ejecución?&quot;
+* **category**: &quot;¿qué método de instalación eligió el agente?&quot; (requiere `category_enums`)
+
+Las señales se extraen en uno de estos dos **alcances**:
+
+* `run`: una observación por ejecución (valor predeterminado)
+* `message`: una observación por cada mensaje coincidente, que luego se **combina** en un único valor por ejecución (`sum`, `count`, `average`, `min`, `max` o `histogram`). Las señales con alcance de mensaje requieren un `target_role` (`assistant`, `user` o `tool`) y un `fold`.
+
+## Métodos de extracción {#extraction-methods}
+
+| Método    | Cómo funciona                                                                                                                                                   | Restricciones                                                                       |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `pattern` | Expresión regular aplicada al contenido del mensaje                                                                                                             | Solo alcance `message`; booleano (mediante `patterns`) o numérico (mediante `needle`) |
+| `stats`   | Métricas integradas de la ejecución: `duration`, `token_in`, `token_out`, `token_total`, `cost`, `tool_calls`, `turns`, `steps`, `status`, `termination_reason` | Solo alcance `run`                                                                    |
+| `llm`     | Un modelo juez evalúa el contenido según tu prompt                                                                                                              | Booleano o categoría; requiere `model` y `prompt`                                   |
+
+Las señales `pattern` y `llm` con alcance de ejecución también declaran un `source`, que indica qué parte de la transcripción se lee: `codeText`, `assistantText`, `userText`, `thinkingText`, `toolCalls`, `toolResults`, `finalAnswer` o `any`.
+
+## Agregados {#aggregates}
+
+Los agregados condensan los valores de señal de cada ejecución en métricas a nivel de iteración: `count`, `count_where`, `rate`, `sum`, `avg`, `min`, `max`, `median`, `mode`, `count_by_category`, `avg_by_category` y `distribution`. Cada agregado hace referencia a una señal mediante su id y recibe una etiqueta para mostrar. `rate` devuelve una fracción entre 0 y 1 (ejecuciones con valor verdadero ÷ total de ejecuciones), no un porcentaje.
+
+## Ejemplo de configuración {#example-config}
+
+```yaml
+version: 1
+
+signals:
+  # Patrón con ámbito de mensaje: cuenta los endpoints alucinados en cada ejecución
+  - id: fabricated-endpoint
+    name: "Fabricated API endpoint"
+    type: boolean
+    scope: message
+    target_role: assistant
+    extract:
+      method: pattern
+      patterns:
+        - name: legacy-v2-api
+          regex: "api\\.acme\\.com/v2/"
+    fold:
+      fn: count
+
+  # Estadística con ámbito de ejecución: total de tokens
+  - id: total-tokens
+    name: "Total tokens"
+    type: number
+    scope: run
+    extract:
+      method: stats
+      stat: token_total
+
+  # Juez LLM con ámbito de ejecución: ¿se rindió el agente?
+  - id: agent-gave-up
+    name: "Agent abandoned the task"
+    type: boolean
+    scope: run
+    extract:
+      method: llm
+      source: finalAnswer
+      model: deepseek/deepseek-v4-flash-0731
+      prompt: >
+        Did the agent abandon the task or deliver a workaround instead of
+        completing the instruction? Answer true if it gave up.
+
+aggregates:
+  - id: fabrication-rate
+    signal_id: fabricated-endpoint
+    fn: rate
+    label: "Share of runs with fabricated endpoints"
+  - id: avg-tokens
+    signal_id: total-tokens
+    fn: avg
+    label: "Average tokens per run"
+  - id: give-up-rate
+    signal_id: agent-gave-up
+    fn: rate
+    label: "Share of runs where the agent gave up"
+```
+
+Los ids de señales y agregados deben estar en kebab-case y ser únicos. La configuración se valida al subirla: si hay alcances que no coinciden, faltan pliegues (folds) o hay agregados que hacen referencia a señales desconocidas, se rechaza con errores específicos.
+
+Para la extracción `llm`, `model` es un id de modelo del gateway. El juez pequeño predeterminado es `deepseek/deepseek-v4-flash-0731`. Las configuraciones almacenadas que aún especifican Claude Haiku 4.5 se reescriben con ese id al resolverse.
+
+## Trabajar con configuraciones de señales desde la CLI {#working-with-signal-configs-from-the-cli}
+
+Valida la configuración localmente antes de subirla. La validación se ejecuta íntegramente en el cliente y no requiere autenticación:
+
+```bash
+tpc sim experiment validate-signal-config signals.yaml
+```
+
+El comando devuelve el código de salida `0` si la configuración es válida y `1`, junto con los errores concretos, si no lo es, por lo que puedes usarlo como comprobación de CI o como hook de pre-commit.
+
+Adjunta la configuración al crear el experimento o actualízala más adelante:
+
+```bash
+tpc sim experiment create --name "Docs friction" \
+  --task-ids task_abc --env-ids env_123 \
+  --signal-config signals.yaml
+
+tpc sim experiment update exp_789 --signal-config signals.yaml
+tpc sim experiment update exp_789 --clear-signal-config
+```
+
+Cuando finalice una iteración, consulta los valores extraídos:
+
+```bash
+# Valores agregados por iteración y valores de cada ejecución
+tpc sim experiment signals exp_789
+
+# Una iteración concreta (por defecto, la más reciente)
+tpc sim experiment signals exp_789 --iteration 1
+
+# Salida legible por máquina, para paneles o comprobaciones de regresión
+tpc --format json sim experiment signals exp_789
+```
+
+## Control de versiones {#versioning}
+
+La configuración de señales se almacena en el experimento junto con un hash de contenido. Cada iteración congela la configuración con la que se ejecutó, de modo que modificar la configuración posteriormente nunca reescribe los agregados históricos: la siguiente iteración simplemente utiliza la nueva versión.
+
+Además, cada valor extraído conserva **evidencias**: el evento de la transcripción del que procede y un fragmento breve, para que puedas auditar por qué se activó una señal.

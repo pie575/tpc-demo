@@ -1,0 +1,85 @@
+---
+title: "Cloudflare Logpush"
+description: "将 HTTP 请求日志从 Cloudflare 流式传输到 The Prompting Company，并在控制台中查看 AI 爬虫流量"
+---
+
+<Note>
+  **在控制台中完成设置：**[连接 Cloudflare Logpush](https://app.promptingco.com/traffic-onboarding/cloudflare-logpush) 会引导你完成以下步骤，等待接收到首次 AI 内容页访问，并确认流量已映射到正确的产品。本页可作为参考文档。
+</Note>
+
+Cloudflare Logpush 会将你的 zone 的 HTTP 请求日志分批直接推送到 The Prompting Company。任务启用后，来自 AI 爬虫和智能体 (GPTBot、ChatGPT-User、ClaudeBot、PerplexityBot 等) 的符合条件的内容页访问会自动计入 [AI 流量](/zh/guides/metrics#ai-traffic)指标。分类工作由我们完成，你只需发送全部日志，我们会筛选出真正有用的部分。
+
+没有使用 Cloudflare Enterprise？你可以改用[原始事件 API](/zh/guides/analytics/log-exporters/raw-events) 从任意日志源流式传输数据，或[一次性导出 CSV](/zh/guides/analytics/cf-traffic-export) 获取历史数据。
+
+## 开始之前 {#before-you-start}
+
+* 你需要在 **Settings → API Keys** 中获取一个 The Prompting Company **API 密钥** (组织密钥或服务账号密钥) 。
+* 该区域 (zone) 必须使用 Cloudflare **Enterprise** 套餐——HTTP 请求数据集的 Logpush 功能仅限 Enterprise 套餐使用。
+* 你的 DNS 记录必须开启**代理** (橙色云朵) ——Logpush 只能捕获经由 Cloudflare 的流量。
+
+## 配置目标位置 {#configure-the-destination}
+
+```text
+https://logs.promptingco.com/v1/events/cf-logpush?header_Authorization=Bearer%20YOUR_API_KEY
+```
+
+Cloudflare 会将 `header_*` 查询参数转换为请求头，因此每次推送时，你的密钥都会以 `Authorization: Bearer` 请求头的形式发送。请确保该值保持 URL 编码 (空格写作 `%20`) 。
+
+### 使用控制台 {#using-the-dashboard}
+
+1. 在 Cloudflare 控制台中打开你的区域 (zone) ，然后前往 **Analytics &amp; Logs → Logpush**。
+2. 点击 **Create a Logpush job**，然后选择 **HTTP requests** 数据集。
+3. 选择 **HTTP destination**，并粘贴上文中的目标 URL。
+4. 选择以下字段：`ClientIP`、`ClientRequestHost`、`ClientRequestMethod`、`ClientRequestReferer`、`ClientRequestSource`、`ClientRequestURI`、`ClientRequestUserAgent`、`WorkerSubrequest`、`EdgeStartTimestamp`、`EdgeResponseContentType`、`EdgeResponseStatus`。
+5. 保存并启用该任务。Cloudflare 会发送一条测试消息来验证目标地址，此验证会自动通过。
+
+### 使用 API {#using-the-api}
+
+```bash
+curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/logpush/jobs" \
+  -H "Authorization: Bearer $CF_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{
+    "name": "tpc-crawler-logs",
+    "dataset": "http_requests",
+    "enabled": true,
+    "destination_conf": "https://logs.promptingco.com/v1/events/cf-logpush?header_Authorization=Bearer%20YOUR_API_KEY",
+    "max_upload_bytes": 5000000,
+    "output_options": {
+      "field_names": [
+        "ClientIP", "ClientRequestHost", "ClientRequestMethod",
+        "ClientRequestReferer", "ClientRequestSource", "ClientRequestURI",
+        "ClientRequestUserAgent", "WorkerSubrequest", "EdgeStartTimestamp",
+        "EdgeResponseContentType", "EdgeResponseStatus"
+      ],
+      "timestamp_format": "rfc3339"
+    }
+  }'
+```
+
+`timestamp_format` 可设为任意值 (`unixnano`、`unix` 或 `rfc3339`) ，其中 `rfc3339` 最便于调试。
+
+## 采集哪些数据 {#what-gets-ingested}
+
+你无需预先过滤流量——直接发送全部数据即可，The Prompting Company 会在采集时识别 AI 爬虫和智能体。已识别的 AI 流量只有在符合内容页访问条件时才会保留：请求方法为 `GET`，状态码为 `200`–`299` (`204` 和 `205` 除外) 或 `304`，并且在存在内容类型字段时，其值为 HTML 或 XHTML。数值型状态值既可以是 JSON 数字，也可以是十进制字符串。
+
+对于看起来像页面的路径，如果 HTTP 元数据缺失或不是数值，则默认放行。如果任务省略了 `EdgeResponseContentType` 或 `EdgeResponseStatus`，那么除非路径匹配 Next.js 前缀或资源文件后缀，否则 JSON API 等非 HTML 的 AI 访问仍会被采集。标准 Next.js 前缀 (`/_next/static`、`/_next/image` 和 `/_next/data`，小写) 始终会被过滤；在缺少内容类型时，常见的脚本、样式表、源映射、图片、字体、媒体、Rive、WASM、JSON、XML、文本和 PDF 后缀也会被过滤。后缀匹配不区分大小写，并会忽略末尾的斜杠；只要内容类型为 HTML，路径中带点的合法页面就会被保留。
+
+为避免重复计算访问量，以下几类日志行会被自动跳过：Cloudflare 的目标验证测试消息、Worker 子请求 (`WorkerSubrequest: true`) 、非真实用户请求 (`ClientRequestSource` 值为 `edgeWorkerFetch` 或缓存清除等) ，以及没有 `ClientRequestHost` 的行。你也可以添加 Logpush 过滤器来减少数据量，但这并不影响结果的正确性。
+
+## 响应 {#responses}
+
+| 状态    | 含义                                                                                                                                  |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `200` | 批次已处理。响应体返回 `{"ok": true, "received": N, "ingested": N, "skipped": N, "filtered": N}`。`filtered` 计数大于 0 表示有非 AI 请求或非页面请求被有意跳过、未予存储。 |
+| `401` | 缺少 API 密钥或 API 密钥无效——请检查目标 URL 中的密钥                                                                                                 |
+| `429` | 密钥验证触发了速率限制——Cloudflare 会重试                                                                                                         |
+| `400` | 无法解码请求体                                                                                                                             |
+| `413` | 解压后的批次过大——请调低该任务的 `max_upload_bytes`                                                                                                |
+| `503` | 数据接收服务暂时中断——Cloudflare 会自动重试                                                                                                        |
+
+投递采用至少一次 (at-least-once) 语义：失败的批次会整批重新推送，偶尔出现重复数据属于正常现象，流量指标可以容忍这类重复。
+
+## 验证是否正常运行 {#verify-its-working}
+
+启用该任务后，几分钟内 [AI 流量](/zh/guides/metrics#ai-traffic)控制台中就会开始显示真实流量。如果想立即测试数据管道，而不必等待爬虫访问，可以通过[原始事件 API](/zh/guides/analytics/log-exporters/raw-events#verify-its-working) 发送一个测试事件。

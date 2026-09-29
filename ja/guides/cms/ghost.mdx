@@ -1,0 +1,57 @@
+---
+title: "Ghost を接続する"
+description: "カスタムインテグレーション の Admin API キーを使用して、TPC の下書きを Ghost に公開します"
+---
+
+The Prompting Company は、カスタムインテグレーション の Admin API キーを使用して Ghost に公開します。
+
+## 始める前に {#before-you-start}
+
+* Ghost サイトの Owner または Administrator ロール
+* Ghost 4.0 以降
+
+## カスタムインテグレーションを作成する {#create-a-custom-integration}
+
+1. Ghost の管理画面で、歯車アイコン (**Settings**) をクリックします。
+2. **Integrations** を開きます。
+3. **Custom integrations** までスクロールし、**Add custom integration** をクリックします。
+4. 名前に `TPC publisher` と入力し、**Create** をクリックします。
+
+## Admin API キーをコピーする {#copy-the-admin-api-key}
+
+インテグレーションページで **Admin API Key** をコピーします。キーは次のような形式です。
+
+```text
+xxxxxxxxxxxxxxxxxxxxxxxx:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+```
+
+<Warning>
+  Content API Key ではなく、**Admin API Key** をコピーしてください。TPC には書き込み権限が必要であり、下書きを作成できるのは Admin API Key のみです。
+</Warning>
+
+## TPC で接続する {#connect-in-tpc}
+
+1. TPC のプロダクトワークスペースで **Settings → Integrations** を開きます。
+2. **Ghost** を選択します。
+3. 次の項目を入力します。
+   * **Site URL** — Ghost ブログのルート URL (例: `https://blog.example.com`) 
+   * **Admin API key** — 先ほどコピーしたキー
+4. **Save** をクリックしてから、**Test connection** をクリックします。
+
+## トラブルシューティング {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+キーの種類が正しくありません。Content API キーは読み取り専用です。カスタムインテグレーションを再生成し、Admin API Key をコピーしてください。
+
+### 403 Forbidden {#403-forbidden}
+
+この Ghost サイトでは、カスタムインテグレーションの利用が制限されています。ご自身のロールが Owner または Administrator であることを確認してください。
+
+### 下書きは表示されるが画像が表示されない {#draft-appears-but-images-are-missing}
+
+Ghost は URL を指定して画像を取得します。TPC がホストする画像の URL が Ghost のネットワークポリシーでブロックされている場合、下書き自体は保存されますが、画像はリンク切れの状態で表示されます。
+
+## 関連リンク {#related-links}
+
+* [Ghost Admin API ドキュメント](https://ghost.org/docs/admin-api/)

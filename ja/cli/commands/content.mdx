@@ -1,0 +1,204 @@
+---
+title: "コンテンツ"
+description: "TPC CLI を使用して、コンテンツの作成、生成、レビュー、公開、管理を行います。"
+---
+
+# コンテンツ {#content}
+
+ターミナルから、プロダクトのコンテンツのライフサイクル全体を管理できます。下書きの作成・生成、レビューキューでの処理 (承認、却下、修正依頼) 、承認済み下書きの公開、公開中のページの編集を行えます。対象のプロダクトは `--scope <org-slug>/<product-slug>` で指定します。すべての JSON レスポンスには、解決後のスコープが含まれます。
+
+<Note>
+  `tpc content` は、廃止された `tpc site page` コマンドグループの後継です。公開にはレビューの承認が必要です。`create` と `generate` で作成した下書きはレビューキューに入り、承認されるまでは `publish` がコンフリクトエラーで失敗します。レビューを経ずに公開できた従来の `site page update --status published` による方法は使用できなくなりました。
+</Note>
+
+## ライフサイクル {#the-lifecycle}
+
+```
+作成 / 生成  →  レビュー（承認 / 却下 / 修正）  →  公開
+```
+
+レビューキューは、一覧をフィルターしたものにすぎません：`tpc content list --status pending-review`
+
+## コンテンツの一覧表示 {#list-content}
+
+公開済みのページを一覧表示します (デフォルト) ：
+
+```bash
+tpc --scope pro-org/my-product content list
+```
+
+公開済みコンテンツの一覧を絞り込むには、次のようにします (検索、パスプレフィックス、ページネーション、並べ替え) 。
+
+```bash
+tpc --scope pro-org/my-product content list \
+  --query pricing \
+  --path-prefix blog/ \
+  --page 2 --page-size 10 \
+  --order-by createdAt --order-dir asc
+```
+
+レビューキューやその他のライフサイクル状態にあるコンテンツを一覧表示します。
+
+```bash
+tpc --scope pro-org/my-product content list --status pending-review
+tpc --scope pro-org/my-product content list --status generating
+tpc --scope pro-org/my-product content list --status rejected   # 却下理由のフィードバックも含まれる
+tpc --scope pro-org/my-product content list --status failed
+tpc --scope pro-org/my-product content list --status approved
+```
+
+`--prompt <prompt-id>` は `published` を含むすべてのステータスで使用できます。公開済みのページにも生成元のプロンプトが保持されるため、「まだコンテンツが作成されていないプロンプトはどれか」を調べることができます：
+
+```bash
+# 特定のプロンプトから生成された公開済みページをすべて表示
+tpc --scope pro-org/my-product content list --prompt prompt_123
+
+# 同じプロンプトから生成され、まだレビュー中の下書き
+tpc --scope pro-org/my-product content list --status pending-review --prompt prompt_123
+```
+
+公開済みのアイテムには、`promptId` フィールド (手動で作成したページの場合は `null`) と、
+正規化された生成コンテンツの種類を格納する、許可リスト方式のメタデータエンベロープが
+含まれます。
+
+```json
+{
+  "metadata": {
+    "contentType": "decision-guide"
+  }
+}
+```
+
+`metadata.contentType` は、公開済みページとレビュー用下書きのどちらでも常に取得できます。
+手動で作成したページや、選択可能な生成タイプに対応しないコンテンツプラットフォームの場合は `null` になります。
+内部の生成メタデータは公開されません。
+
+## 1 件の項目を取得する {#get-one-item}
+
+`get` には下書き ID と公開済みドキュメント ID のどちらでも指定できます。どちらの種類として解決されたかは、レスポンスで確認できます。
+
+```bash
+tpc --scope pro-org/my-product content get adraft_123
+tpc --scope pro-org/my-product content get adoc_123
+```
+
+どちらのバリアントでも、JSON 出力には同じ正規化済みの `metadata.contentType` フィールドが含まれます。
+テキスト出力では、このフィールドがある場合は `Content type: <value>` と表示されます。
+
+## コンテンツを作成する {#create-content}
+
+作成したページは `pending_review` ステータスの下書きとしてレビューキューに追加され、承認されるまで公開されません。
+
+```bash
+tpc --scope pro-org/my-product content create \
+  --slug blog/hello-world \
+  --title "Hello" \
+  --content "# Hello"
+```
+
+ローカルのMarkdownファイルから作成するには：
+
+```bash
+tpc --scope pro-org/my-product content create \
+  --slug docs/install \
+  --title "Install" \
+  --content-file ./install.md
+```
+
+## コンテンツを生成する {#generate-content}
+
+1 つ以上のプロンプトに対してコンテンツ生成エージェントを実行します (Pro プラン) 。生成された下書きはレビューキューに追加されます。
+
+```bash
+tpc --scope pro-org/my-product content generate --prompt prompt_123
+tpc --scope pro-org/my-product content generate \
+  --prompt prompt_123 --prompt prompt_456 \
+  --type recommended \
+  --watch
+```
+
+`--watch` を指定すると、生成が完了または失敗するまで、各下書きを 5 秒ごとにポーリングします。
+
+生成中の下書き (またはワーカーの停止により生成中のまま止まっている下書き) をキャンセルします。キャンセルした下書きは `cancelled` とマークされ、生成キューから削除されます。なお、`generating` の状態が 6 時間を超えて続いている下書きは、サーバー側のリーパーによって `failed` に移行されます。
+
+```bash
+tpc --scope pro-org/my-product content cancel adraft_123
+tpc --scope pro-org/my-product content list --status failed
+```
+
+## キューを確認する {#review-the-queue}
+
+1 件以上の下書きを承認します (公開可能なコンテンツは、承認すると公開キューに追加されます) 。
+
+```bash
+tpc --scope pro-org/my-product content approve adraft_123
+tpc --scope pro-org/my-product content approve adraft_123 adraft_456
+```
+
+理由を添えて却下します (理由はレビュアーのフィードバックとして保存され、`list --status rejected` で確認できます) ：
+
+```bash
+tpc --scope pro-org/my-product content reject adraft_123 --reason "Wrong sources cited"
+```
+
+下書きを修正するには、編集済みの差し替え版を送信するか、フィードバックを送信してエージェントを再実行します (Pro プラン) 。いずれの場合も下書きはレビューキューに戻り、以前の却下は取り消されます。
+
+```bash
+tpc --scope pro-org/my-product content revise adraft_123 --content-file ./revised.md
+tpc --scope pro-org/my-product content revise adraft_123 --feedback "Tighten the intro and cite the pricing page"
+```
+
+## 公開と取り消し {#publish-and-revert}
+
+`publish` は、承認済みの下書きの公開処理をキューに追加します。下書きが未承認の場合は、コンフリクトエラーで失敗します：
+
+```bash
+tpc --scope pro-org/my-product content publish adraft_123
+```
+
+`revert` を実行すると、公開中のページが非公開になり、下書きがレビューキューに戻ります。
+
+```bash
+tpc --scope pro-org/my-product content revert adraft_123
+```
+
+## 公開中のページを更新する {#update-a-live-page}
+
+変更されるのは、指定したフラグの項目のみです。`--status` フラグはありません。公開する場合は approve/publish を使用してください。
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 --title "Updated title"
+tpc --scope pro-org/my-product content update adoc_123 --content-file ./page.md
+```
+
+任意フィールドをクリアするには、空文字列を渡します。
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 --redirect-url ""
+```
+
+ドメインの紐付けを管理します。
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 \
+  --attach-domain-id domain_123 \
+  --canonical-domain-id domain_123
+```
+
+## コンテンツを削除する {#delete-content}
+
+公開中のページを、紐づく下書きと追跡対象のURLとともに論理削除するか、未公開の下書きを削除します。`generating` 状態の下書きも削除できます。
+
+```bash
+tpc --scope pro-org/my-product content delete adoc_123
+tpc --scope pro-org/my-product content delete adoc_123 adraft_456
+tpc --scope pro-org/my-product content delete adraft_stuck_generating
+```
+
+`delete` は `status: generating` の状態でも実行できます。行を完全に削除せずに生成だけを停止したい場合は、`cancel` を使用してください。
+
+また、すべてのコマンドでスクリプト向けの `--format json` を利用できます。
+
+```bash
+tpc --scope pro-org/my-product content list --status pending-review --format json
+```

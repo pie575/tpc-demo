@@ -1,0 +1,63 @@
+---
+title: "Conectar Framer"
+description: "Publica borradores de TPC en una colección de Framer CMS con una clave de API de Framer"
+---
+
+The Prompting Company escribe en una colección de Framer CMS a través de la API de Framer.
+
+<Note>
+  Para acceder a la API de Framer CMS se necesita un **plan Framer Pro o superior**.
+</Note>
+
+## Antes de empezar {#before-you-start}
+
+* Acceso de administrador al proyecto de Framer.
+* Una colección del CMS creada en el proyecto.
+
+## Generar una clave de API {#generate-an-api-key}
+
+1. En Framer, abre tu proyecto.
+2. Haz clic en el nombre del proyecto (arriba a la izquierda) y abre **Settings**.
+3. Abre la pestaña **API**.
+4. Haz clic en **Generate API key**.
+5. Otorga el ámbito **CMS write**.
+6. Copia la clave. Framer solo la muestra una vez.
+
+## Copia la URL del proyecto y el ID de la colección {#copy-your-project-url-and-collection-id}
+
+* La **URL del proyecto** es la URL de `framer.com` del proyecto.
+* El **ID de la colección** aparece al seleccionar una colección del CMS en el editor de Framer: cópialo desde la URL o desde el panel de configuración de la colección.
+
+## Haz coincidir los nombres de los campos {#match-field-names}
+
+Los campos predeterminados son:
+
+* `title`
+* `body`
+
+Si cambiaste el nombre de algún campo de tu colección, pega el slug exacto del campo (no la etiqueta visible).
+
+## Conectar en TPC {#connect-in-tpc}
+
+1. Abre **Settings → Integrations** en el espacio de trabajo de tu producto en TPC.
+2. Selecciona **Framer**.
+3. Introduce la clave de API, la URL del proyecto, el ID de la colección y, si los hay, los slugs de los campos personalizados.
+4. Haz clic en **Save** y, a continuación, en **Test connection**.
+
+## Solución de problemas {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+Tu plan no incluye acceso a la API del CMS o se revocó el token. Comprueba que tienes el plan Pro o superior y vuelve a generar la clave.
+
+### 404: colección no encontrada {#404-collection-not-found}
+
+El ID de la colección no pertenece a la URL del proyecto que introdujiste. Comprueba ambos datos en Framer.
+
+### Los campos se guardan vacíos {#fields-save-empty}
+
+Los slugs de los campos distinguen entre mayúsculas y minúsculas, y deben coincidir exactamente con el esquema de la colección.
+
+## Enlaces relacionados {#related-links}
+
+* [Documentación para desarrolladores de Framer](https://www.framer.com/developers/)

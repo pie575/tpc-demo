@@ -1,0 +1,38 @@
+---
+title: "コンテンツ API の概要"
+description: "TPC のコンテンツ API が提供する機能と、主なワークフローについて説明します。"
+---
+
+# コンテンツ API の概要 {#content-api-overview}
+
+コンテンツ API は、TPC がコンテンツの取得、公開、および Markdown の一般公開に使用するコンテンツサーフェスを管理します。
+
+## サーフェス {#surfaces}
+
+| サーフェス                             | 用途                                                          | 主なスコープ                          |
+| --------------------------------- | ----------------------------------------------------------- | ------------------------------- |
+| コンテンツライフサイクル (`/api/v1/content`)  | プロダクトのコンテンツの作成、生成、レビュー (承認/却下/修正依頼) 、公開、管理を行います。            | `content:read`, `content:write` |
+| サイトページ (非推奨)                      | コンテンツサーフェスの旧 CRUD エイリアスです。代わりに `/api/v1/content` を使用してください。 | `content:read`, `content:write` |
+| エージェント型ドキュメント                     | ドキュメントのメタデータと下書きワークフローを読み取り、更新します。                          | `content:read`, `content:write` |
+| llms.txt                          | 生成された llms.txt リソースを読み取り、管理します。                             | `content:read`, `content:write` |
+| アプリとアプリルート                        | アプリの設定とルートリソースを管理します。                                       | `content:read`, `content:write` |
+
+プロダクトページ、ドキュメントページ、マーケティングコンテンツを扱う場合は、まず `/api/v1/content` から始めてください。作成・生成されたページはレビューキュー (`GET /api/v1/content?status=pending_review`) に入り、承認 (`POST /api/v1/content/{draftId}/review`) されて初めて公開されます。
+
+## 一般的なワークフロー {#common-workflow}
+
+1. `content:read` スコープを付与した API キーを作成します。
+2. プロダクトの既存リソースを一覧表示します。
+3. `content:write` は、インテグレーションで変更操作が必要な場合にのみ追加します。
+4. 書き込み時には `Idempotency-Key` を送信し、安全に再試行できるようにします。
+5. `x-request-id` はジョブログと一緒に保存しておきます。
+
+## 関連ガイド {#related-guides}
+
+<Card title="サイトページ" icon="file-text" href="/ja/api/content/site-pages" horizontal>
+  CMS または Markdown フォルダーからプロダクトのページを同期します。
+</Card>
+
+<Card title="エージェント型ドキュメント" icon="files" href="/ja/api/content/documents" horizontal>
+  生成されたコンテンツドキュメントやレビュー済みのコンテンツドキュメントを操作します。
+</Card>

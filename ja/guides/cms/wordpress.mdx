@@ -1,0 +1,67 @@
+---
+title: "WordPress と連携する"
+description: "TPC コネクタプラグインを使用して、TPC の下書きを WordPress に公開します"
+---
+
+The Prompting Company は、トークン認証のエンドポイントを提供する軽量なコネクタプラグインを介して、下書きを WordPress に公開します。この方法は、セルフホスト版の WordPress と、WordPress.com の Business プラン以上(カスタムプラグインを利用できるプラン)で利用できます。
+
+## 始める前に {#before-you-start}
+
+* WordPress サイトの管理者権限
+* プラグインのアップロードと有効化を行える権限
+
+## コネクタをインストールする {#install-the-connector}
+
+1. コネクタプラグインをダウンロードします。
+
+```text
+https://r2-assets.promptingco.com/tpc-wordpress-connector.php.zip
+```
+
+2. WordPress の管理画面で **Plugins → Add New → Upload Plugin** に移動します。
+3. `tpc-wordpress-connector.php.zip` をアップロードし、**Install Now** をクリックします。
+4. **Activate** をクリックします。**Settings → TPC Connector** という新しいメニュー項目が表示されます。
+
+## コネクタトークンを生成する {#generate-a-connector-token}
+
+1. **Settings → TPC Connector** を開きます。
+2. **Generate Token** をクリックします。
+3. トークンはすぐにコピーしてください。トークンは一度しか表示されません。
+
+<Warning>
+  トークンを紛失した場合は、新しいトークンを生成してください。新しいトークンを生成した時点で、古いトークンは無効になります。
+</Warning>
+
+## TPC で接続する {#connect-in-tpc}
+
+1. TPC のプロダクトワークスペースで **Settings → Integrations** を開きます。
+2. **WordPress** を選択します。
+3. 次の項目を入力します。
+   * **Site URL** — WordPress サイトのルート URL (例: `https://blog.example.com`) 
+   * **Connector token** — 先ほどコピーしたトークン
+4. **Save** をクリックしてから、**Test connection** をクリックします。
+
+## メタタイトルとメタディスクリプション {#meta-title-and-description}
+
+公開される各投稿には、TPC 上のドキュメントに設定されたメタタイトルとメタディスクリプションが反映されます。コネクタはこれらを有効な SEO プラグインに書き込むため、そのプラグインの投稿設定とレンダリングされたページの両方に表示されます。対応プラグインは次のとおりです。
+
+* Yoast SEO
+* Rank Math
+* All in One SEO
+* SEOPress
+
+これらのプラグインがいずれも有効でない場合は、コネクタが投稿ページ自体に `<title>` タグと `<meta name="description">` タグを設定します。この機能にはコネクタのバージョン 0.4.0 以降が必要です。それより前のバージョンでは、これらのフィールドは無視されます。
+
+## トラブルシューティング {#troubleshooting}
+
+### 接続テストが 401 で失敗する {#test-connection-fails-with-401}
+
+TPC に設定されたトークンが WordPress 側のトークンと一致していません。**Settings → TPC Connector** でトークンを再生成し、新しい値を TPC に貼り付けてください。
+
+### 接続テストが 404 で失敗する {#test-connection-fails-with-404}
+
+プラグインが有効化されていないか、サイト URL が正しくありません。**Plugins → Installed Plugins** でプラグインが有効になっていること、またサイト URL の末尾に余分なパスが付いていないことを確認してください。
+
+### 下書きは表示されるが画像が表示されない {#draft-appears-but-images-are-broken}
+
+WordPress へのアップロードでは、コネクタからメディアライブラリにアクセスできる必要があります。WordPress サイトがインターネットから公開アクセスできる状態になっているか確認してください。TPC は画像をバイナリ転送ではなく、URL 経由でアップロードします。

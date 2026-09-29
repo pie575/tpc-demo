@@ -1,0 +1,58 @@
+---
+title: "运行与迭代"
+description: "单次智能体尝试期间会发生什么、会记录哪些内容，以及多次运行如何组成迭代"
+---
+
+**运行** (run) 是一次单独的尝试：由一个环境在全新的沙箱中执行一个任务。**迭代** (iteration) 是实验中的一批运行，即每个已关联的任务都在每个已关联的环境中各执行一次。
+
+## 运行的生命周期 {#the-lifecycle-of-a-run}
+
+每次运行都会依次经历以下状态：
+
+```text
+queued → creating_sandbox → running → evaluating → analyzing → completed
+                                                              ↘ failed
+```
+
+1. **creating&#95;sandbox** — 预配一个全新的 sandbox，并用任务的文件、命令和密钥完成初始化
+2. **running** — agent 框架执行指令 (agent 执行时长上限为 60 分钟；完整运行包括评估和分析，最长可能需要约 70 分钟)
+3. **evaluating** — 对照 sandbox 和运行记录检查每个目标的标准，得出分数及通过/未通过的判定
+4. **analyzing** — 提取信号，并分析运行记录以找出摩擦点
+5. **completed** — 结果已确定；sandbox 会被归档并销毁
+
+基础设施步骤失败时会自动重试；只有在重试次数用尽后，运行才会被标记为 `failed`。
+
+## 每次运行记录的内容 {#what-each-run-records}
+
+* **分数与判定结果** — 0–100 的总分，以及本次运行是否达成目标
+* **运行记录** — 由智能体消息、思考过程、工具调用及结果组成的统一时间线
+* **目标结果** — 按目标和评估标准逐项给出的分数及评估详情
+* **沙盒归档** — 运行结束后智能体主目录的快照，可下载查看
+* **用量** — token 数、预估成本和耗时
+* **快照** — 运行时实际使用的任务定义和环境配置，在运行时即被固定
+
+由于每次运行都会在执行时为任务和环境配置创建快照，历史结果始终准确反映当时的配置——即使之后编辑任务，也不会改写旧结果。
+
+## 迭代 {#iterations}
+
+实验中的运行按编号分组为若干迭代。迭代不可变更：信号配置和汇总结果会在迭代运行时固定下来，因此你可以放心地将第 5 次迭代与第 1 次迭代进行对比，每次迭代都如实反映了当时的状态。
+
+有关如何触发迭代以及如何生成迭代结果，请参阅[实验](/zh/guides/coding-agent-optimization/experiments)。
+
+## 通过 CLI 查看运行 {#inspecting-runs-from-the-cli}
+
+```bash
+# 查找运行
+tpc sim run list --task-id task_abc --status failed
+
+# 查看单次运行
+tpc sim run get run_123        # 得分、判定结果、用量、快照
+tpc sim run logs run_123       # 执行日志时间线
+tpc sim run actions run_123    # 规范化的智能体操作
+
+# 深入分析单次运行或任务的历史记录
+tpc sim analysis get --run-id run_123
+tpc sim analysis get --task-id task_abc
+```
+
+以上任一命令均可加上 `--format json`，以便将结果输入脚本或 CI。

@@ -1,0 +1,80 @@
+---
+title: "API de eventos sin procesar"
+description: "Envía registros de rastreadores a The Prompting Company desde cualquier fuente de registros: nginx, CDN o un script de carga retroactiva"
+---
+
+<Note>
+  **Configúralo en el dashboard:** [Conectar la API de eventos sin procesar](https://app.promptingco.com/traffic-onboarding/raw) te muestra la solicitud que debes copiar, espera a que llegue tu primera visita de IA a una página de contenido y confirma que el tráfico se asigna al producto correcto. Usa esta página como referencia.
+</Note>
+
+La API de eventos sin procesar acepta registros de solicitudes de cualquier fuente: tu propio servidor web, una CDN sin exportación gestionada o un script que reproduzca registros históricos. Los eventos se incorporan a la misma métrica de [tráfico de IA](/es/guides/metrics#ai-traffic) que los de cualquier otro recolector, y nosotros nos encargamos de clasificar los rastreadores y agentes de IA.
+
+¿Usas Cloudflare Enterprise? [Cloudflare Logpush](/es/guides/analytics/log-exporters/cloudflare-logpush) transmite los mismos datos sin que tengas que ocuparte de ningún mantenimiento.
+
+## Antes de empezar {#before-you-start}
+
+* Necesitas una **clave de API** de The Prompting Company (de organización o de cuenta de servicio), que puedes obtener en **Settings → API Keys**.
+
+## Enviar eventos {#send-events}
+
+Envía mediante POST un array JSON (también se admite un único objeto), sin comprimir o comprimido con gzip, a `https://logs.promptingco.com/v1/events/raw`. Para autenticarte, usa un encabezado `X-API-Key` o `Authorization: Bearer`.
+
+```bash
+curl -X POST "https://logs.promptingco.com/v1/events/raw" \
+  -H "X-API-Key: $TPC_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '[
+    {
+      "timestamp": "2026-08-11T12:00:00.000Z",
+      "status_code": 200,
+      "request_method": "GET",
+      "request_path": "/pricing",
+      "query_string": "ref=x",
+      "content_type": "text/html",
+      "client_ip": "203.0.113.7",
+      "hostname": "example.com",
+      "user_agent": "GPTBot/1.2",
+      "referrer": "https://www.google.com"
+    }
+  ]'
+```
+
+| Campo                                                                                  | Obligatorio | Notas                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hostname`                                                                             | sí          | Los eventos sin este campo se contabilizan como omitidos                                                                                                                   |
+| `timestamp`                                                                            | no          | ISO 8601 o segundos/milisegundos/nanosegundos Unix; si se omite, se usa la hora de llegada                                                                                 |
+| `request_path`                                                                         | no          | Valor predeterminado: `/`; puede incluir la cadena de consulta directamente (`/pricing?ref=x`)                                                                             |
+| `query_string`                                                                         | no          | Alternativa a incluir la consulta directamente en `request_path`                                                                                                           |
+| `user_agent`, `client_ip`, `request_method`, `status_code`, `content_type`, `referrer` | no          | Recomendados: el agente de usuario y la IP del cliente determinan la clasificación de IA; el método, el estado y el tipo de contenido identifican las páginas de contenido |
+
+Las solicitudes pueden ocupar hasta 64 MB (tanto comprimidas como descomprimidas). Agrupa en cada solicitud todos los eventos que quepan.
+
+## Qué se ingiere {#what-gets-ingested}
+
+The Prompting Company conserva el tráfico de IA reconocido solo cuando cumple los requisitos de una visita a una página de contenido. Cuando están presentes, el método debe ser `GET`, el código de estado numérico debe estar entre `200` y `299`, excepto `204` y `205` (o ser `304`), y el tipo de contenido debe ser `text/html` o `application/xhtml+xml`. Los valores numéricos de `status_code` pueden llegar como números JSON o como cadenas decimales.
+
+Si los metadatos HTTP faltan o no son numéricos, el filtro deja pasar la solicitud (falla en modo abierto) en las rutas que parecen páginas. Los emisores que omitan `content_type` o `status_code` seguirán ingiriendo solicitudes de IA que no son HTML, como las de API JSON, salvo que la ruta coincida con un prefijo de Next.js o con un sufijo de recurso estático. Los prefijos canónicos de Next.js (`/_next/static`, `/_next/image` y `/_next/data`, en minúsculas) siempre se filtran, al igual que las rutas que terminan en sufijos habituales de scripts, hojas de estilo, mapas de código fuente, imágenes, fuentes, multimedia, Rive, WASM, JSON, XML, texto o PDF cuando falta el tipo de contenido. La coincidencia de sufijos no distingue entre mayúsculas y minúsculas e ignora la barra final; si el tipo de contenido es HTML, se conserva una página legítima que contenga un punto, como `/docs/node.js`.
+
+## Respuestas {#responses}
+
+| Estado | Significado                                                                                                                                                                                                                                                                   |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `200`  | Lote procesado. El cuerpo devuelve `{"ok": true, "received": N, "ingested": N, "skipped": N, "filtered": N}`. Si el recuento de `filtered` es positivo, significa que las solicitudes que no proceden de IA o que no corresponden a páginas se descartaron intencionadamente. |
+| `401`  | Falta la clave de API o no es válida                                                                                                                                                                                                                                          |
+| `429`  | Se superó el límite de frecuencia al verificar la clave: vuelve a intentarlo en unos instantes                                                                                                                                                                                |
+| `400`  | No se pudo decodificar el cuerpo o analizarlo como JSON                                                                                                                                                                                                                       |
+| `413`  | El cuerpo descomprimido es demasiado grande: envía lotes más pequeños                                                                                                                                                                                                         |
+| `503`  | Interrupción temporal de la ingesta: vuelve a enviar el lote                                                                                                                                                                                                                  |
+
+La entrega sigue el modelo «al menos una vez»: tras un `503`, vuelve a enviar el lote completo. Es normal que aparezcan duplicados ocasionales, y las métricas de tráfico están preparadas para tolerarlos.
+
+## Verifica que funcione {#verify-its-working}
+
+```bash
+curl -s -X POST "https://logs.promptingco.com/v1/events/raw" \
+  -H "X-API-Key: $TPC_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '[{"hostname": "example.com", "request_path": "/", "user_agent": "GPTBot/1.2", "client_ip": "203.0.113.7"}]'
+```
+
+Una respuesta `200` con `"ingested": 1` confirma que la canalización funciona, y la visita aparecerá poco después en tu dashboard de [tráfico de IA](/es/guides/metrics#ai-traffic).

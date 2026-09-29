@@ -1,0 +1,66 @@
+---
+title: "权限范围"
+description: "查看 TPC API 权限范围目录及最小权限范围示例。"
+---
+
+# 权限范围 {#scopes}
+
+权限范围决定了 API 密钥或 OAuth Bearer 令牌可以执行哪些操作。会话调用方不受权限范围检查限制，因为控制台改为在路由级别进行组织和产品授权。
+
+请仅授予完成工作流所需的最小权限范围。
+
+## 目录 {#catalog}
+
+| 权限范围                | 描述                              |
+| ------------------- | ------------------------------- |
+| `content:read`      | 读取站点页面、Markdown 内容和 llms.txt 文件 |
+| `content:write`     | 创建、更新和删除站点页面及内容                 |
+| `prompts:read`      | 读取提示词、主题、提示词建议以及提示词分析结果         |
+| `prompts:write`     | 创建、更新、归档提示词，以及生成、编辑或审核提示词建议     |
+| `simulations:read`  | 读取智能体模拟的任务、运行记录、环境和分析数据         |
+| `simulations:write` | 创建并触发模拟运行                       |
+| `logs:read`         | 读取 AI 流量日志和请求级审计事件              |
+| `analytics:read`    | 读取分析汇总数据，包括排名、提及、来源和声量份额 (SOV)  |
+| `analytics:write`   | 向分析系统写入事件                       |
+| `products:read`     | 读取产品元数据和竞品数据                    |
+| `products:write`    | 更新产品设置和竞品列表                     |
+
+<Note>
+  此目录复制自 `apps/client/src/lib/api/scopes.ts`。新增、重命名或移除权限范围时，
+  请同步更新这两处。
+</Note>
+
+## 最小权限范围示例 {#minimum-scope-examples}
+
+| 任务           | 最小权限范围                                 |
+| ------------ | -------------------------------------- |
+| 只读控制台集成      | `content:read`                         |
+| 写入页面的内容同步流水线 | `content:read`、`content:write`         |
+| 分析数据导出任务     | `analytics:read`                       |
+| 提示词报告任务      | `prompts:read`                         |
+| 模拟运行器        | `simulations:read`、`simulations:write` |
+| 技术支持或合规审计导出  | `logs:read`                            |
+
+## 请求被拒绝 {#denied-requests}
+
+如果基于令牌的调用方缺少所需的权限范围 (scope) ，TPC 会返回 `403`：
+
+```json
+{
+  "ok": false,
+  "code": "FORBIDDEN",
+  "message": "insufficient_scope",
+  "details": {
+    "requiredScopes": ["content:write"],
+    "missingScopes": ["content:write"]
+  }
+}
+```
+
+可在以下位置创建新密钥，或轮换现有的集成密钥：
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+仅用于控制台或报表的密钥，请勿为其添加写入权限范围。

@@ -1,0 +1,197 @@
+---
+title: "快速入门"
+description: "使用 API 密钥成功发起您的首个 TPC API 请求。"
+---
+
+# 快速入门 {#quickstart}
+
+如果你已有 TPC 组织的访问权限，不到五分钟就能发出第一个内容请求。
+
+## 第 1 步：创建 API 密钥 {#step-1-create-an-api-key}
+
+打开组织的 API 密钥设置页面：
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+创建一个具有以下权限范围的密钥：
+
+```text
+content:read
+content:write
+```
+
+请立即复制该密钥。TPC 仅显示一次密钥。
+
+<Note>
+  如果您的集成暂时无需创建、更新或删除内容，请使用仅包含 `content:read` 权限的只读密钥。
+</Note>
+
+## 第 2 步：发出第一个请求 {#step-2-make-your-first-request}
+
+导出你的密钥和 product ID：
+
+```bash
+export TPC_API_KEY="tpc_api_key_here"
+export TPC_PRODUCT_ID="product_123"
+```
+
+列出该产品已发布的内容：
+
+```bash
+curl "https://app.promptingco.com/api/v1/content?productId=$TPC_PRODUCT_ID&page=1&pageSize=10" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+请求成功时，响应会返回 `ok: true`：
+
+```json
+{
+  "ok": true,
+  "data": {
+    "scope": {
+      "product": {
+        "id": "product_123",
+        "name": "Example Product",
+        "slug": "example"
+      },
+      "organization": {
+        "id": "org_123",
+        "name": "Example Org",
+        "slug": "example-org"
+      }
+    },
+    "page": 1,
+    "pageSize": 10,
+    "total": 1,
+    "totalPages": 1,
+    "items": [
+      {
+        "id": "page_123",
+        "title": "Pricing",
+        "filePath": "pricing",
+        "sourceUrl": "/pricing",
+        "status": "published",
+        "type": "manual",
+        "isManual": true,
+        "metaTitle": "Pricing",
+        "metaDescription": null,
+        "publishedAt": "2026-04-30T00:00:00.000Z",
+        "createdAt": "2026-04-30T00:00:00.000Z",
+        "updatedAt": "2026-04-30T00:00:00.000Z",
+        "domains": []
+      }
+    ]
+  }
+}
+```
+
+## 第 3 步：解析响应信封 {#step-3-parse-the-envelope}
+
+每个 JSON 端点都会返回 `ApiResult<T>`：
+
+```ts
+type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; code: string; message: string; details?: unknown };
+```
+
+请分别显式处理这两个分支：
+
+```ts
+const response = await fetch(
+  `https://app.promptingco.com/api/v1/content?productId=${productId}`,
+  {
+    headers: {
+      "x-api-key": process.env.TPC_API_KEY!,
+    },
+  },
+);
+
+const result = await response.json();
+
+if (!result.ok) {
+  throw new Error(`${result.code}: ${result.message}`);
+}
+
+console.log(result.data.items);
+```
+
+## 第 4 步：添加分页和筛选条件 {#step-4-add-pagination-and-filters}
+
+内容列表端点支持通过查询字符串参数进行筛选：
+
+```bash
+curl "https://app.promptingco.com/api/v1/content?productId=$TPC_PRODUCT_ID&query=pricing&status=published&page=1&pageSize=25&orderBy=updatedAt&orderByDirection=desc" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+常用筛选条件：
+
+| 查询参数                | 用途                                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `query` 或 `q`       | 搜索页面标题和内容元数据。                                                                                                   |
+| `status`            | 已上线页面可设为 `published` (默认) 或 `draft`；审核队列中的草稿可设为 `pending_review`、`generating`、`failed`、`rejected` 或 `approved`。 |
+| `pathPrefix`        | 返回指定路径下的页面，例如 `blog/`。                                                                                          |
+| `hasContent`        | 按是否已存储内容筛选页面。                                                                                                   |
+| `page` 和 `pageSize` | 分页获取结果，每次请求最多返回 100 项。                                                                                          |
+
+## 第 5 步：创建页面 {#step-5-create-a-page}
+
+使用 `content:write` 创建页面：
+
+```bash
+curl "https://app.promptingco.com/api/v1/content" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: content-create-pricing-2026-04-30" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "slug": "docs/api-quickstart",
+        "title": "API quickstart",
+        "content": "# API quickstart\n\nCreated from the TPC API."
+      }
+    ]
+  }'
+```
+
+预期响应：
+
+```json
+{
+  "ok": true,
+  "data": {
+    "createdCount": 1,
+    "failedCount": 0,
+    "created": [
+      {
+        "id": "page_456",
+        "slug": "docs/api-quickstart",
+        "title": "API quickstart",
+        "sourceUrl": null,
+        "status": "pending_review",
+        "domains": []
+      }
+    ],
+    "failed": []
+  }
+}
+```
+
+新创建的页面会进入审核队列。调用 `POST /api/v1/content/{draftId}/review` (`{"action": "approve"}`) 即可审核通过并发布页面 (审核通过后会自动加入发布队列) ；也可以调用 `GET /api/v1/content?status=pending_review` 查看审核队列。
+
+## 故障排除 {#troubleshooting}
+
+| 状态码   | 错误                   | 检查事项                                |
+| ----- | -------------------- | ----------------------------------- |
+| `401` | `UNAUTHORIZED`       | 密钥缺失、已被吊销、输入有误，或使用了错误的请求头发送。        |
+| `403` | `insufficient_scope` | 添加缺失的权限范围 (scope) ，或改用专为此工作流创建的密钥。  |
+| `404` | `NOT_FOUND`          | 确认该产品属于密钥所在的组织。                     |
+| `409` | `CONFLICT`           | 你对不同的请求体重复使用了同一个 `Idempotency-Key`。 |
+| `429` | `TOO_MANY_REQUESTS`  | 等待 `Retry-After` 指定的时间后，再按退避策略重试。   |
+
+每个响应都包含 `x-request-id`。联系支持团队时，请附上该值。

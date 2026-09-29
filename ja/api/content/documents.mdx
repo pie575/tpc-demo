@@ -1,0 +1,65 @@
+---
+title: "エージェント型ドキュメント"
+description: "TPC のドキュメントエンドポイントを使用して、生成コンテンツや下書きワークフローを扱います。"
+---
+
+# エージェント型ドキュメント {#agentic-documents}
+
+エージェント型ドキュメントは、プロダクトに紐づく、生成済みまたはレビュー済みのコンテンツレコードです。サイトページとは役割が異なります。サイトページはコンテンツを安定して同期するための基盤であるのに対し、エージェント型ドキュメントは生成コンテンツ、下書き、メタデータの提案、レビューフローを支えます。
+
+## ドキュメントを読み取る {#read-a-document}
+
+`content:read` スコープが必要です。
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+## パスでドキュメントを検索する {#find-a-document-by-path}
+
+ソースシステムがドキュメント ID ではなくプロダクトのパスを保持している場合は、パスで検索します：
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/by-path?brandId=$TPC_PRODUCT_ID&path=docs/install" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+このレガシーエンドポイントでは、クエリパラメーター名が `brandId` のまま残っています。値にはプロダクト ID を指定してください。
+
+## ドキュメントを更新する {#update-a-document}
+
+`content:write` 権限が必要です。
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -X PUT \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: document-update-$DOCUMENT_ID" \
+  --data '{
+    "title": "Install The Prompting Company",
+    "content": "# Install The Prompting Company\n\nSet up TPC and publish content.",
+    "metaTitle": "Install The Prompting Company",
+    "metaDescription": "Set up TPC and publish content."
+  }'
+```
+
+## 優先度を更新する {#update-priority}
+
+ドキュメントの優先度だけを変更する場合は、`PATCH` を使用します。
+
+```bash
+curl "https://app.promptingco.com/api/v1/content/$DOCUMENT_ID" \
+  -X PATCH \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: document-priority-$DOCUMENT_ID" \
+  --data '{
+    "priority": 80
+  }'
+```
+
+## レビューワークフロー {#review-workflows}
+
+下書きの作成、メタデータの提案、ドメインの紐付けに関するエンドポイントは、現時点ではダッシュボード用または内部用のルートです。API キーでルートを呼び出す前に、自動生成された Reference セクションで、そのルートが公開されているかどうかを確認してください。

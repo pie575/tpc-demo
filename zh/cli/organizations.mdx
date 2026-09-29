@@ -1,0 +1,26 @@
+---
+title: "组织"
+description: "列出组织，并在 TPC CLI 命令中传入 --scope。"
+---
+
+# 组织 {#organizations}
+
+列出你的账户可用的组织：
+
+```bash
+tpc org list
+```
+
+CLI 不会保存当前使用的组织或产品。因此，每条限定在组织或产品范围内的命令都需要传入 `--scope`：
+
+```bash
+tpc product list --scope prompting-co
+tpc sim experiment list --scope cloudflare-dev/browser-run
+tpc analytics sov --scope nvidia-com/nvidia-dgx-spark --last 30d
+```
+
+格式为 `<org-slug>/<product-slug>`，与控制台 URL (`https://app.promptingco.com/<org-slug>/p/<product-slug>/...`) 中的顺序一致。你可以直接将该 URL 粘贴为 `--scope` 的值。仅作用于组织的命令可以省略产品部分：`--scope <org-slug>`。
+
+旧的 `<product-slug>/<org-slug>` 顺序在过渡期内仍可使用，但会输出警告。
+
+`--scope` 是持久标志，放在子命令之前或之后均可——`tpc --scope pro-org/my-product content list` 与 `tpc content list --scope pro-org/my-product` 效果相同。对于禁用了 Cobra 标志解析的命令 (`tpc alpha …`) ，仍可在子命令之前传入 `--scope`。

@@ -1,0 +1,63 @@
+---
+title: "简介"
+description: "借助功能强大的 TypeScript SDK，访问您面向 AI 智能体的 Markdown 文档数据"
+---
+
+# TypeScript SDK {#the-typescript-sdk}
+
+这是官方 TypeScript SDK，用于从 The Prompting Company 平台获取面向智能体的 Markdown 文档数据。它提供完整的类型安全和出色的开发者体验，助你充分利用组织文档，构建功能强大的应用。
+
+## 快速入门 {#getting-started}
+
+只需几分钟，即可快速上手 SDK。
+
+<Card title="开始使用 SDK" icon="rocket" href="/zh/ts-sdk/installation" horizontal>
+  安装 SDK 并配置你的开发环境。
+</Card>
+
+## 主要功能 {#key-features}
+
+集成文档数据所需的一切，尽在于此。
+
+<Columns cols={2}>
+  <Card title="TypeScript SDK" icon="code" href="/zh/ts-sdk/introduction">
+    全面支持 TypeScript，提供完整的类型安全与自动补全。
+  </Card>
+
+  <Card title="轻松安装" icon="download" href="/zh/ts-sdk/installation">
+    使用 npm、yarn 或 pnpm 安装，几分钟即可完成配置。
+  </Card>
+
+  <Card title="快速入门指南" icon="play" href="/zh/ts-sdk/quickstart">
+    按照分步说明，构建你的第一个集成。
+  </Card>
+
+  <Card title="高级用法" icon="settings" href="/zh/ts-sdk/advanced-usage">
+    了解高级模式、缓存及优化技巧。
+  </Card>
+</Columns>
+
+## 轻松集成 {#simple-integration}
+
+只需几行代码，即可访问您的文档数据：
+
+```typescript
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: "your-product-slug",
+  organizationSlug: "your-organization-slug",
+});
+
+const doc = await client.document.getByPath("en-us/contact");
+
+if (doc.ok) {
+  console.log(doc.data?.content);
+}
+```
+
+## 后续步骤 {#next-steps}
+
+<Card title="查看完整指南" icon="book-open" href="/zh/ts-sdk/introduction" horizontal>
+  了解 SDK 的全部功能。
+</Card>

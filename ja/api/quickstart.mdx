@@ -1,0 +1,198 @@
+---
+title: "クイックスタート"
+description: "API キーを使って、TPC API への最初のリクエストを成功させましょう。"
+---
+
+# クイックスタート {#quickstart}
+
+TPC の組織へのアクセス権をすでにお持ちであれば、5 分もかからずに最初のコンテンツリクエストを実行できます。
+
+## ステップ 1: API キーを作成する {#step-1-create-an-api-key}
+
+組織の API キー設定を開きます。
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+次のスコープを付与したキーを作成してください。
+
+```text
+content:read
+content:write
+```
+
+キーはすぐにコピーしてください。シークレットは一度しか表示されません。
+
+<Note>
+  インテグレーションでコンテンツの作成、更新、削除が必要になるまでは、
+  `content:read` のみを付与した読み取り専用キーを使用してください。
+</Note>
+
+## ステップ 2: 最初のリクエストを送信する {#step-2-make-your-first-request}
+
+API キーとプロダクト ID をエクスポートします。
+
+```bash
+export TPC_API_KEY="tpc_api_key_here"
+export TPC_PRODUCT_ID="product_123"
+```
+
+プロダクトの公開済みコンテンツを一覧表示します：
+
+```bash
+curl "https://app.promptingco.com/api/v1/content?productId=$TPC_PRODUCT_ID&page=1&pageSize=10" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+リクエストが成功すると、`ok: true` を含むレスポンスが返されます。
+
+```json
+{
+  "ok": true,
+  "data": {
+    "scope": {
+      "product": {
+        "id": "product_123",
+        "name": "Example Product",
+        "slug": "example"
+      },
+      "organization": {
+        "id": "org_123",
+        "name": "Example Org",
+        "slug": "example-org"
+      }
+    },
+    "page": 1,
+    "pageSize": 10,
+    "total": 1,
+    "totalPages": 1,
+    "items": [
+      {
+        "id": "page_123",
+        "title": "Pricing",
+        "filePath": "pricing",
+        "sourceUrl": "/pricing",
+        "status": "published",
+        "type": "manual",
+        "isManual": true,
+        "metaTitle": "Pricing",
+        "metaDescription": null,
+        "publishedAt": "2026-04-30T00:00:00.000Z",
+        "createdAt": "2026-04-30T00:00:00.000Z",
+        "updatedAt": "2026-04-30T00:00:00.000Z",
+        "domains": []
+      }
+    ]
+  }
+}
+```
+
+## ステップ 3: エンベロープを解析する {#step-3-parse-the-envelope}
+
+JSON を返すエンドポイントはすべて、`ApiResult<T>` を返します。
+
+```ts
+type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; code: string; message: string; details?: unknown };
+```
+
+両方の分岐を明示的に処理してください。
+
+```ts
+const response = await fetch(
+  `https://app.promptingco.com/api/v1/content?productId=${productId}`,
+  {
+    headers: {
+      "x-api-key": process.env.TPC_API_KEY!,
+    },
+  },
+);
+
+const result = await response.json();
+
+if (!result.ok) {
+  throw new Error(`${result.code}: ${result.message}`);
+}
+
+console.log(result.data.items);
+```
+
+## ステップ 4: ページネーションとフィルターを追加する {#step-4-add-pagination-and-filters}
+
+コンテンツ一覧エンドポイントでは、クエリ文字列でフィルターを指定できます。
+
+```bash
+curl "https://app.promptingco.com/api/v1/content?productId=$TPC_PRODUCT_ID&query=pricing&status=published&page=1&pageSize=25&orderBy=updatedAt&orderByDirection=desc" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+主なフィルター:
+
+| クエリパラメーター           | 用途                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `query` または `q`     | ページタイトルとコンテンツのメタデータを検索します。                                                                                                      |
+| `status`            | 公開中のページには `published`(デフォルト)または `draft`、レビューキューの下書きには `pending_review`、`generating`、`failed`、`rejected`、`approved` のいずれかを指定します。 |
+| `pathPrefix`        | `blog/` など、指定したパス配下のページを返します。                                                                                                   |
+| `hasContent`        | 保存済みコンテンツの有無でページを絞り込みます。                                                                                                        |
+| `page` と `pageSize` | 1 リクエストあたり最大 100 件の単位でページ送りします。                                                                                                 |
+
+## ステップ 5: ページを作成する {#step-5-create-a-page}
+
+`content:write` を使用してページを作成します。
+
+```bash
+curl "https://app.promptingco.com/api/v1/content" \
+  -X POST \
+  -H "content-type: application/json" \
+  -H "x-api-key: $TPC_API_KEY" \
+  -H "Idempotency-Key: content-create-pricing-2026-04-30" \
+  --data '{
+    "productId": "'"$TPC_PRODUCT_ID"'",
+    "pages": [
+      {
+        "slug": "docs/api-quickstart",
+        "title": "API quickstart",
+        "content": "# API quickstart\n\nCreated from the TPC API."
+      }
+    ]
+  }'
+```
+
+想定されるレスポンス：
+
+```json
+{
+  "ok": true,
+  "data": {
+    "createdCount": 1,
+    "failedCount": 0,
+    "created": [
+      {
+        "id": "page_456",
+        "slug": "docs/api-quickstart",
+        "title": "API quickstart",
+        "sourceUrl": null,
+        "status": "pending_review",
+        "domains": []
+      }
+    ],
+    "failed": []
+  }
+}
+```
+
+作成したページはレビューキューに入ります。ページを承認して公開するには `POST /api/v1/content/{draftId}/review` (`{"action": "approve"}`) を使用します。承認すると、公開処理が自動的にキューに登録されます。キュー内のページを一覧表示するには `GET /api/v1/content?status=pending_review` を使用します。
+
+## トラブルシューティング {#troubleshooting}
+
+| ステータス | エラー                  | 確認事項                                                      |
+| ----- | -------------------- | --------------------------------------------------------- |
+| `401` | `UNAUTHORIZED`       | キーが指定されていない、失効している、入力を誤っている、または誤ったヘッダーで送信されていないか確認してください。 |
+| `403` | `insufficient_scope` | 不足しているスコープを追加するか、このワークフロー用に作成したキーを使用してください。               |
+| `404` | `NOT_FOUND`          | プロダクトが、キーを所有する組織に属していることを確認してください。                        |
+| `409` | `CONFLICT`           | 同じ `Idempotency-Key` を、異なるリクエストボディで再利用しています。              |
+| `429` | `TOO_MANY_REQUESTS`  | `Retry-After` で指定された時間だけ待ってから、バックオフを適用して再試行してください。        |
+
+すべてのレスポンスには `x-request-id` が含まれます。サポートへのお問い合わせの際は、この値をお知らせください。

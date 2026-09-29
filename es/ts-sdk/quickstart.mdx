@@ -1,0 +1,361 @@
+---
+title: "Guía de inicio rápido"
+description: "Crea tu primera integración con el SDK de TypeScript de The Prompting Company en una aplicación Next.js"
+---
+
+# Guía de inicio rápido {#quickstart-guide}
+
+Empieza a usar el SDK de TypeScript de The Prompting Company con el **patrón Next.js Agent MD**. En esta guía verás paso a paso cómo crear un sistema dinámico para servir markdown que permite a los usuarios acceder a tu documentación agéntica a través de URL `.md` limpias.
+
+## Lo que vas a crear {#what-youll-build}
+
+Al terminar esta guía, tendrás:
+
+* **Enrutamiento con URL limpias**: los usuarios pueden acceder a documentos como `yoursite.com/docs/guide.md`
+* **Entrega dinámica de contenido**: los documentos se obtienen de la plataforma de The Prompting Company
+* **Middleware automático**: la reescritura de URL gestiona las extensiones `.md` de forma transparente
+* **Arquitectura escalable**: compatibilidad con estructuras de documentos anidadas
+
+## Cómo funciona {#how-it-works}
+
+La implementación se basa en un sistema de dos partes:
+
+1. **Middleware**: intercepta las solicitudes que terminan en `.md` y las reescribe internamente
+2. **Controlador de ruta de API**: obtiene el contenido Markdown real mediante el SDK
+
+**Ejemplo de flujo:**
+
+```
+El usuario visita: /docs/getting-started.md
+↓ (el middleware la reescribe)
+Ruta interna: /md/docs/getting-started
+↓ (el controlador de la API la procesa)
+Devuelve: contenido en Markdown de tu organización
+```
+
+## Requisitos previos {#prerequisites}
+
+Antes de empezar, asegúrate de tener:
+
+* ✅ [El SDK instalado](/es/ts-sdk/installation)
+* ✅ Una aplicación de Next.js 13 o posterior con App Router
+* ✅ Tu clave de API, el slug de tu organización y el slug de tu producto
+
+## Paso 1: Crear el middleware {#step-1-create-the-middleware}
+
+Primero, crea un archivo de middleware que se encargue de reescribir las URL con extensión `.md`:
+
+```typescript
+// src/middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+export function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  
+  // Comprobar si la URL termina con la extensión .md
+  if (pathname.endsWith(".md")) {
+    // Quitar la extensión .md de la ruta
+    const pathWithoutMd = pathname.slice(0, -3);
+    
+    // Crear la nueva URL con el prefijo /md
+    const newUrl = new URL(`/md${pathWithoutMd}`, request.url);
+    
+    // Reescribir la solicitud hacia la nueva ruta
+    return NextResponse.rewrite(newUrl);
+  }
+  
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Aplicar a todas las rutas de solicitud excepto las que empiezan por:
+     * - api (rutas de API)
+     * - _next/static (archivos estáticos)
+     * - _next/image (archivos de optimización de imágenes)
+     * - favicon.ico (archivo de favicon)
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
+```
+
+### Cómo funciona el middleware {#how-the-middleware-works}
+
+1. **Intercepta las solicitudes**: captura todas las solicitudes, excepto las rutas de API y los archivos estáticos
+2. **Detecta las extensiones .md**: comprueba si la URL termina en `.md`
+3. **Reescritura de URL**: transforma internamente `/docs/guide.md` → `/md/docs/guide`
+4. **Proceso transparente**: los usuarios ven URL limpias, mientras el enrutamiento interno se encarga de la lógica
+
+## Paso 2: Crear el controlador de ruta MD {#step-2-create-the-md-route-handler}
+
+Crea el controlador de ruta de la API que procesará las URL reescritas y obtendrá el contenido en Markdown:
+
+```typescript
+// src/app/md/[[...path]]/route.ts
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+  // El SDK lee TPC_API_KEY automáticamente
+});
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ path?: string[] }> }
+) {
+  // Espera a que se resuelva la promesa de params (patrón de Next.js 15+)
+  const { path } = await params;
+  const pathArray = path || [];
+  
+  // Une los segmentos de la ruta para formar la ruta del documento
+  const documentPath = pathArray.join("/");
+  
+  try {
+    const document = await client.document.getByPath(documentPath);
+    
+    if (!document.ok || !document.data) {
+      return new Response("Document not found", { status: 404 });
+    }
+    
+    return new Response(document.data.content, {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching document:', error);
+    return new Response("Internal server error", { status: 500 });
+  }
+}
+```
+
+### Cómo funciona el controlador de ruta {#understanding-the-route-handler}
+
+* **Ruta dinámica**: `[[...path]]` captura varios segmentos de ruta (catch-all opcional)
+* **Patrón de Next.js 15+**: `params` ahora es una Promise que hay que esperar con `await`
+* **Desestructuración de parámetros**: `{ path } = await params` extrae los segmentos de la ruta
+* **Procesamiento de rutas**: une segmentos como `['docs', 'api', 'auth']` → `"docs/api/auth"`
+* **Integración con el SDK**: usa el SDK de TypeScript para obtener los documentos
+* **Gestión de errores**: devuelve los códigos de estado HTTP adecuados (404, 500)
+* **Tipo de contenido**: establece el tipo MIME correcto (`text/markdown; charset=utf-8`)
+
+## Paso 3: Comprender el flujo completo {#step-3-understanding-the-complete-flow}
+
+Así funciona el sistema en conjunto:
+
+### 1. Solicitud del usuario {#1-user-request}
+
+```
+El usuario visita: https://yoursite.com/docs/getting-started.md
+```
+
+### 2. Procesamiento en el middleware {#2-middleware-processing}
+
+```typescript
+// src/middleware.ts procesa la solicitud
+"/docs/getting-started.md" 
+  ↓ (removes .md extension)
+"/docs/getting-started"
+  ↓ (adds /md prefix)  
+"/md/docs/getting-started"
+```
+
+### 3. Ejecución del controlador de ruta {#3-route-handler-execution}
+
+```typescript
+// src/app/md/[[...path]]/route.ts recibe:
+const { path } = await params; // Next.js 15+ requiere await
+pathArray = ["docs", "getting-started"]
+  ↓ (joins path segments)
+documentPath = "docs/getting-started"
+  ↓ (calls SDK)
+client.document.getByPath("docs/getting-started")
+```
+
+### 4. Respuesta {#4-response}
+
+```
+Devuelve: contenido Markdown sin procesar con el tipo MIME correcto
+Content-Type: text/markdown; charset=utf-8
+```
+
+## Paso 4: Estructura de directorios {#step-4-directory-structure}
+
+Tu proyecto debería tener esta estructura:
+
+```
+src/
+├── middleware.ts                 # Lógica de reescritura de URL
+├── app/
+│   ├── md/
+│   │   └── [[...path]]/
+│   │       └── route.ts         # Controlador de Markdown
+│   ├── layout.tsx
+│   └── page.tsx
+└── (otros archivos)
+```
+
+### Puntos clave: {#key-points}
+
+* **Ubicación del middleware**: Debe estar en `src/middleware.ts` (o en `middleware.ts` en la raíz)
+* **Ruta dinámica**: `[[...path]]` captura cualquier número de segmentos de ruta
+* **Controlador de ruta**: Solo necesita el método `GET` para servir markdown
+* **Gestión de errores**: Códigos de estado HTTP adecuados para los documentos que no existen
+
+## Paso 5: Prueba tu implementación {#step-5-testing-your-implementation}
+
+### 1. Inicia tu servidor de desarrollo {#1-start-your-development-server}
+
+```bash
+npm run dev
+```
+
+### 2. Prueba el patrón de URL {#2-test-the-url-pattern}
+
+Ahora tu implementación debería admitir estos patrones de URL:
+
+**✅ URL que funcionan:**
+
+```
+http://localhost:3000/docs/getting-started.md
+http://localhost:3000/api/auth.md  
+http://localhost:3000/guides/installation.md
+http://localhost:3000/nested/folder/structure/document.md
+```
+
+**Cómo probarlo:**
+
+1. Visita cualquier URL que termine en `.md`
+2. Revisa la pestaña de red del navegador; deberías ver:
+   * Una solicitud a `yoursite.com/docs/guide.md`
+   * Una respuesta con `Content-Type: text/markdown`
+   * El contenido en Markdown sin procesar en pantalla
+
+### 3. Verifica las rutas de los documentos {#3-verify-document-paths}
+
+La estructura de las URL se corresponde con las rutas de los documentos de tu organización:
+
+```
+URL: /docs/getting-started.md
+  ↓ 
+Document Path: "docs/getting-started"
+  ↓
+SDK Call: client.document.getByPath("docs/getting-started")
+```
+
+Asegúrate de que las rutas de tus documentos en la plataforma de The Prompting Company coincidan con la estructura de URL que quieres usar.
+
+### 4. Prueba la gestión de errores {#4-test-error-handling}
+
+**Pruebas de 404:**
+
+* Visita `/nonexistent/document.md`
+* Debería devolver &quot;Document not found&quot; con el código de estado 404
+
+**Pruebas de rutas:**
+
+* Nivel raíz: `/readme.md` → ruta del documento: `"readme"`
+* Ruta anidada: `/api/auth/oauth.md` → ruta del documento: `"api/auth/oauth"`
+
+## Paso 6: Pruebas desde la línea de comandos (opcional) {#step-6-command-line-testing-optional}
+
+Para depurar, puedes probar el SDK directamente:
+
+```typescript
+// test-sdk.ts
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: process.env.TPC_PRODUCT_SLUG!,
+  organizationSlug: process.env.TPC_ORG_SLUG!,
+  // El SDK lee TPC_API_KEY automáticamente
+});
+
+const doc = await client.document.getByPath("docs/getting-started");
+
+if (!doc.ok) {
+  console.error('Error:', doc);
+  process.exit(1);
+}
+
+console.log('Success! Document content:');
+console.log(doc.data?.content?.substring(0, 200) + '...');
+```
+
+Ejecútalo con:
+
+```bash
+npx tsx test-sdk.ts
+```
+
+## Ventajas de este patrón {#benefits-of-this-pattern}
+
+El patrón Next.js Agent MD ofrece varias ventajas:
+
+### ✅ **URL optimizadas para SEO** {#seo-friendly-urls}
+
+Los motores de búsqueda indexan fácilmente URL limpias como `/docs/guide.md`
+
+### ✅ **Contenido dinámico** {#dynamic-content}
+
+Los documentos se obtienen de tu CMS en tiempo real, sin necesidad de generarlos de forma estática
+
+### ✅ **Arquitectura escalable** {#scalable-architecture}
+
+Admite estructuras de documentos con anidamiento ilimitado sin necesidad de enrutamiento adicional
+
+### ✅ **Tipos MIME correctos** {#proper-mime-types}
+
+Los navegadores reciben el tipo de contenido `text/markdown` correcto para procesarlo adecuadamente
+
+### ✅ **Gestión de errores** {#error-handling}
+
+Gestión integrada de errores 404 para documentos inexistentes, con los códigos de estado HTTP adecuados
+
+## Próximos pasos {#next-steps}
+
+¡Enhorabuena! Ya tienes una implementación funcional de Agent MD en Next.js. Estas son algunas formas de mejorarla:
+
+<Columns cols={2}>
+  <Card title="Uso avanzado" icon="settings" href="/es/ts-sdk/advanced-usage">
+    Descubre técnicas de almacenamiento en caché, gestión de errores y optimización.
+  </Card>
+
+  <Card title="Repositorio de GitHub" icon="github" href="https://github.com/promptingcompany/nextjs-agent-md">
+    Consulta la implementación de referencia completa en GitHub.
+  </Card>
+</Columns>
+
+## Solución de problemas {#troubleshooting}
+
+### Problemas comunes {#common-issues}
+
+**El middleware no funciona:**
+
+* Asegúrate de que `middleware.ts` esté en la ubicación correcta (`src/middleware.ts` o `middleware.ts` en la raíz)
+* Comprueba que tu versión de Next.js sea compatible con middleware (12.2+)
+* Verifica que la configuración del matcher excluya las rutas necesarias
+
+**Errores 404 en documentos válidos:**
+
+* Confirma que las rutas de los documentos de tu organización coincidan con la estructura de las URL
+* Comprueba que las variables de entorno estén bien configuradas (`TPC_API_KEY`, `TPC_ORG_SLUG`, `TPC_PRODUCT_SLUG`)
+* Verifica que la clave de API tenga el permiso `read:documentation`
+
+**No se encuentra el controlador de ruta:**
+
+* Asegúrate de que la estructura de directorios sea correcta: `src/app/md/[[...path]]/route.ts`
+* Comprueba que el archivo de ruta exporte una función `GET`
+* Verifica que el App Router de Next.js esté habilitado (Next.js 13+)
+
+**Problemas de conexión del SDK:**
+
+* Prueba el SDK directamente con el ejemplo de línea de comandos
+* Comprueba la conectividad de red y la disponibilidad del endpoint de la API
+* Verifica que los slugs de la organización y del producto sean correctos
+
+¿Necesitas ayuda? Escribe a [support@promptingco.com](mailto:support@promptingco.com) o visita nuestra [plataforma](https://app.promptingco.com).

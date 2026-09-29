@@ -1,0 +1,57 @@
+---
+title: "Conectar Ghost"
+description: "Publica borradores de TPC en Ghost con la clave de API de administración de una integración personalizada"
+---
+
+The Prompting Company publica en Ghost con la clave de API de administración (Admin API key) de una integración personalizada (Custom Integration).
+
+## Antes de empezar {#before-you-start}
+
+* Rol de propietario (Owner) o administrador (Administrator) en el sitio de Ghost.
+* Ghost 4.0 o una versión posterior.
+
+## Crear una integración personalizada {#create-a-custom-integration}
+
+1. En el panel de administración de Ghost, haz clic en el icono del engranaje (**Settings**).
+2. Abre **Integrations**.
+3. Desplázate hasta **Custom integrations** y haz clic en **Add custom integration**.
+4. Ponle el nombre `TPC publisher` y haz clic en **Create**.
+
+## Copia la clave de API de administración {#copy-the-admin-api-key}
+
+En la página de la integración, copia la **clave de API de administración**. Tiene un aspecto similar a este:
+
+```text
+xxxxxxxxxxxxxxxxxxxxxxxx:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+```
+
+<Warning>
+  Copia la **clave de API de administración**, no la Content API Key. TPC necesita permisos de escritura y solo la clave de administrador puede crear borradores.
+</Warning>
+
+## Conectar en TPC {#connect-in-tpc}
+
+1. Abre **Settings → Integrations** en el espacio de trabajo de tu producto en TPC.
+2. Selecciona **Ghost**.
+3. Introduce:
+   * **Site URL**: la URL raíz de tu blog de Ghost, p. ej., `https://blog.example.com`
+   * **Admin API key**: la clave que copiaste
+4. Haz clic en **Save** y, después, en **Test connection**.
+
+## Solución de problemas {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+Tipo de clave incorrecto: las claves de Content API son de solo lectura. Vuelve a generar una integración personalizada y copia la Admin API Key.
+
+### 403 Forbidden {#403-forbidden}
+
+El sitio de Ghost restringe las integraciones personalizadas. Comprueba que tu rol sea Owner o Administrator.
+
+### El borrador aparece, pero faltan las imágenes {#draft-appears-but-images-are-missing}
+
+Ghost obtiene las imágenes a partir de su URL. Si la política de red de Ghost bloquea las URL de las imágenes alojadas por TPC, el borrador se guarda de todos modos, pero las imágenes aparecen rotas.
+
+## Enlaces relacionados {#related-links}
+
+* [Documentación de la Admin API de Ghost](https://ghost.org/docs/admin-api/)

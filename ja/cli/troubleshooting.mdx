@@ -1,0 +1,36 @@
+---
+title: "トラブルシューティング"
+description: "TPC CLI のインストール、ログイン、アップデートでよく発生する問題の解決方法を説明します。"
+---
+
+# トラブルシューティング {#troubleshooting}
+
+## `tpc` コマンドが見つからない {#tpc-command-not-found}
+
+* インストール後に新しいシェルを開いてください。
+* インストーラーがバイナリのディレクトリを `PATH` に追加したかどうかを確認してください。
+* インストーラーを再実行し、シェルプロファイルの更新方法に関する案内が表示されないか確認してください。
+* Windows では、`PATH` の変更は新しく開いた PowerShell または cmd のセッションにのみ反映されます。
+
+## ブラウザーでログインが完了しても CLI に反映されない {#login-completes-in-the-browser-but-cli-does-not-update}
+
+* `tpc auth login` を再度実行してください
+* デバイスフローは、CLI を実行しているのと同じマシン上で完了してください
+* ブラウザーがコールバックをブロックしていないか、または古いセッションにリダイレクトされていないかを確認してください
+
+## 実験が存在するのに「Experiment not found」と表示される {#experiment-not-found-but-the-experiment-exists}
+
+実験が、コマンドの `--scope` で指定したものとは別の組織またはプロダクトに属している可能性があります。CLI は組織やプロダクトを `~/.tpc/config.json` に保存しません。
+
+コマンドに `--scope <org-slug>/<product-slug>` を指定してください。
+
+```bash
+tpc sim experiment get <experiment-id> --scope <org-slug>/<product-slug>
+tpc sim experiment run <experiment-id> --scope <org-slug>/<product-slug>
+```
+
+## 更新時にリリースが見つからない {#update-does-not-find-a-release}
+
+* `tpc update --check` を実行します
+* 想定しているチャネルまたは固定バージョンを使用しているか確認します
+* プレリリース版をインストールした場合は、そのプレリリースのメタデータが存在するか確認します

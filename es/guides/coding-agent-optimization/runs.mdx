@@ -1,0 +1,58 @@
+---
+title: "Ejecuciones e iteraciones"
+description: "Qué ocurre durante un único intento de un agente, qué registra y cómo se agrupan las ejecuciones en iteraciones"
+---
+
+Una **ejecución** es un único intento: un entorno que ejecuta una tarea en un sandbox nuevo. Una **iteración** es un lote de ejecuciones dentro de un experimento, en el que cada tarea asociada se ejecuta en todos los entornos asociados.
+
+## El ciclo de vida de una ejecución {#the-lifecycle-of-a-run}
+
+Cada ejecución pasa por los siguientes estados:
+
+```text
+queued → creating_sandbox → running → evaluating → analyzing → completed
+                                                              ↘ failed
+```
+
+1. **creating&#95;sandbox**: se aprovisiona un sandbox nuevo y se inicializa con los archivos, comandos y secretos de la tarea
+2. **running**: el entorno del agente ejecuta la instrucción (la ejecución del agente tiene un límite de 60 minutos; una ejecución completa, incluidos la evaluación y el análisis, puede tardar hasta ~70 minutos)
+3. **evaluating**: los criterios de cada objetivo se comprueban con respecto al sandbox y la transcripción, lo que genera una puntuación y un veredicto de aprobado/suspendido
+4. **analyzing**: se extraen señales y se analiza la transcripción en busca de puntos de fricción
+5. **completed**: los resultados son definitivos; el sandbox se archiva y se destruye
+
+Los pasos de infraestructura que fallan se reintentan automáticamente; una ejecución solo se marca como `failed` cuando se agotan los reintentos.
+
+## Qué registra cada ejecución {#what-each-run-records}
+
+* **Puntuación y veredicto**: puntuación global de 0 a 100 e indicación de si la ejecución cumplió sus objetivos
+* **Transcripción**: la cronología unificada de los mensajes, el razonamiento, las llamadas a herramientas y los resultados del agente
+* **Resultados de los objetivos**: puntuaciones por objetivo y por criterio, con detalles de la evaluación
+* **Archivo del sandbox**: una instantánea del directorio personal del agente tras la ejecución, que puedes descargar para inspeccionarla
+* **Uso**: tokens, coste estimado y duración
+* **Instantáneas**: la definición exacta de la tarea y la configuración del entorno utilizadas, fijadas en el momento de la ejecución
+
+Como cada ejecución guarda una instantánea de la configuración de su tarea y su entorno en el momento de ejecutarse, los resultados históricos siempre reflejan la configuración exacta que los generó: si más adelante editas una tarea, los resultados anteriores no se modifican.
+
+## Iteraciones {#iterations}
+
+Las ejecuciones de un experimento se agrupan en iteraciones numeradas. Las iteraciones son inmutables: la configuración de señales y los resultados agregados quedan fijados en el momento en que se ejecuta la iteración, así que puedes comparar la iteración 5 con la 1 con la certeza de que cada una refleja el estado de ese momento.
+
+Consulta [Experimentos](/es/guides/coding-agent-optimization/experiments) para saber cómo se activan las iteraciones y cómo se generan sus resultados.
+
+## Inspeccionar ejecuciones desde la CLI {#inspecting-runs-from-the-cli}
+
+```bash
+# Buscar ejecuciones
+tpc sim run list --task-id task_abc --status failed
+
+# Inspeccionar una ejecución
+tpc sim run get run_123        # puntuación, veredicto, uso, instantáneas
+tpc sim run logs run_123       # cronología del registro de ejecución
+tpc sim run actions run_123    # acciones normalizadas del agente
+
+# Análisis detallado de una ejecución o del historial de una tarea
+tpc sim analysis get --run-id run_123
+tpc sim analysis get --task-id task_abc
+```
+
+Usa `--format json` con cualquiera de estos comandos para enviar los resultados a scripts o a tu CI.

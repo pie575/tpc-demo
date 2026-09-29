@@ -1,0 +1,136 @@
+---
+title: "シグナル"
+description: "YAML のシグナル設定を使って実行結果からカスタムメトリクスを抽出する"
+---
+
+シグナルは、実行の生のトランスクリプトをメトリクスに変換する機能です。エクスペリメントに紐付けた YAML 設定でシグナルを一度定義するだけで、各実行がそれぞれの値を抽出し、各イテレーションがそれらを比較可能な数値に集計します。コードを書く必要はありません。
+
+シグナルは[ゴール](/ja/guides/coding-agent-optimization/tasks#goals-and-criteria)とは別物です。ゴールは個々の実行に対する合否判定ですが、シグナルはイテレーション内のすべての実行を通じて集計される測定値です。ゴールが「この実行は成功したか?」に答えるのに対し、シグナルは「環境ごとにどのような違いがあるか?」に答えます。
+
+## シグナルの型とスコープ {#signal-types-and-scopes}
+
+シグナルは実行ごとに 1 つの値を生成します。型は次のいずれかです。
+
+* **boolean** — 「エージェントは存在しない API をでっち上げたか？」
+* **number** — 「この実行で使用したトークン数はいくつか？」
+* **category** — 「エージェントはどのインストール方法を選んだか？」 (`category_enums` が必要)
+
+シグナルは、次の 2 つの**スコープ**のいずれかで抽出されます。
+
+* `run` — 実行ごとに 1 つの観測値 (デフォルト)
+* `message` — 条件に一致するメッセージごとに観測値を取得し、それらを実行ごとの単一の値に**集約**します (`sum`、`count`、`average`、`min`、`max`、`histogram` のいずれか) 。メッセージスコープのシグナルでは、`target_role` (`assistant`、`user`、`tool` のいずれか) と `fold` を指定する必要があります。
+
+## 抽出方法 {#extraction-methods}
+
+| 方法        | 仕組み                                                                                                                            | 制約                                                                   |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `pattern` | メッセージ内容を正規表現で照合                                                                                                                | `message` スコープのみ。boolean (`patterns` を使用) または number (`needle` を使用)  |
+| `stats`   | 組み込みの実行メトリクス：`duration`、`token_in`、`token_out`、`token_total`、`cost`、`tool_calls`、`turns`、`steps`、`status`、`termination_reason` | `run` スコープのみ                                                         |
+| `llm`     | 判定モデルが、指定したプロンプトに基づいて内容を評価                                                                                                     | boolean または category。`model` と `prompt` が必須                          |
+
+実行スコープの `pattern` シグナルと `llm` シグナルでは、トランスクリプトのどの部分を読み取るかを指定する `source` も宣言します。指定できる値は `codeText`、`assistantText`、`userText`、`thinkingText`、`toolCalls`、`toolResults`、`finalAnswer`、`any` のいずれかです。
+
+## 集計 {#aggregates}
+
+集計は、実行ごとのシグナル値をイテレーション単位のメトリクスに集約します。使用できる集計は `count`、`count_where`、`rate`、`sum`、`avg`、`min`、`max`、`median`、`mode`、`count_by_category`、`avg_by_category`、`distribution` です。各集計は ID でシグナルを参照し、表示ラベルを持ちます。`rate` はパーセンテージではなく、0～1 の割合 (真と評価された実行数 ÷ 総実行数) を返します。
+
+## 設定例 {#example-config}
+
+```yaml
+version: 1
+
+signals:
+  # メッセージスコープのパターン: 実行ごとにハルシネーションによる架空のエンドポイントを数える
+  - id: fabricated-endpoint
+    name: "Fabricated API endpoint"
+    type: boolean
+    scope: message
+    target_role: assistant
+    extract:
+      method: pattern
+      patterns:
+        - name: legacy-v2-api
+          regex: "api\\.acme\\.com/v2/"
+    fold:
+      fn: count
+
+  # 実行スコープの統計: 合計トークン数
+  - id: total-tokens
+    name: "Total tokens"
+    type: number
+    scope: run
+    extract:
+      method: stats
+      stat: token_total
+
+  # 実行スコープの LLM 判定: エージェントがタスクを放棄したか?
+  - id: agent-gave-up
+    name: "Agent abandoned the task"
+    type: boolean
+    scope: run
+    extract:
+      method: llm
+      source: finalAnswer
+      model: deepseek/deepseek-v4-flash-0731
+      prompt: >
+        Did the agent abandon the task or deliver a workaround instead of
+        completing the instruction? Answer true if it gave up.
+
+aggregates:
+  - id: fabrication-rate
+    signal_id: fabricated-endpoint
+    fn: rate
+    label: "Share of runs with fabricated endpoints"
+  - id: avg-tokens
+    signal_id: total-tokens
+    fn: avg
+    label: "Average tokens per run"
+  - id: give-up-rate
+    signal_id: agent-gave-up
+    fn: rate
+    label: "Share of runs where the agent gave up"
+```
+
+シグナルと集計の ID は kebab-case で、かつ一意である必要があります。設定はアップロード時に検証され、スコープの不一致、fold の欠落、未知のシグナルを参照する集計などがあると、それぞれ具体的なエラーとともに拒否されます。
+
+`llm` 抽出の場合、`model` にはゲートウェイのモデル ID を指定します。デフォルトの小規模ジャッジは `deepseek/deepseek-v4-flash-0731` です。保存済みの設定で Claude Haiku 4.5 が指定されたままになっている場合は、解決時にこの ID へ書き換えられます。
+
+## CLI でシグナル設定を扱う {#working-with-signal-configs-from-the-cli}
+
+アップロード前にローカルで検証してください。検証は完全にクライアント側で実行されるため、認証は不要です。
+
+```bash
+tpc sim experiment validate-signal-config signals.yaml
+```
+
+このコマンドは、設定が有効な場合は `0` で終了し、無効な場合は具体的なエラーを出力して `1` で終了します。そのため、CI チェックや pre-commit フックとして利用できます。
+
+設定はエクスペリメントの作成時にアタッチすることも、後から更新することもできます。
+
+```bash
+tpc sim experiment create --name "Docs friction" \
+  --task-ids task_abc --env-ids env_123 \
+  --signal-config signals.yaml
+
+tpc sim experiment update exp_789 --signal-config signals.yaml
+tpc sim experiment update exp_789 --clear-signal-config
+```
+
+イテレーションが完了したら、抽出された値を読み取ります：
+
+```bash
+# イテレーション単位の集計値と、各実行の値
+tpc sim experiment signals exp_789
+
+# 特定のイテレーションを指定（省略時は最新）
+tpc sim experiment signals exp_789 --iteration 1
+
+# 機械可読形式で出力（ダッシュボードや回帰チェック向け）
+tpc --format json sim experiment signals exp_789
+```
+
+## バージョン管理 {#versioning}
+
+シグナル設定は、コンテンツハッシュとともにエクスペリメントに保存されます。各イテレーションは実行時の設定を固定するため、後から設定を変更しても過去の集計結果が書き換えられることはありません。変更後の設定は、次のイテレーションから新しいバージョンとして使われます。
+
+抽出された各値には**エビデンス**も保持されます。エビデンスは、値の取得元であるトランスクリプトのイベントと短い抜粋で構成されており、シグナルが発火した理由を後から監査できます。

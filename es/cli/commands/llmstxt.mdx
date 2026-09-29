@@ -1,0 +1,249 @@
+---
+title: "Generación de llms.txt"
+description: "Genera archivos llms.txt para cualquier sitio a partir de su sitemap con la CLI de TPC."
+---
+
+# Generación de llms.txt {#llmstxt-generation}
+
+Convierte un sitemap en uno o varios archivos [llms.txt](https://llmstxt.org) en dos pasos: `tpc llmstxt init` lee el sitemap y crea un archivo de configuración YAML editable que agrupa las páginas en secciones, y `tpc llmstxt generate` genera los archivos en disco a partir de esa configuración. Ambos comandos se ejecutan íntegramente en local, sin necesidad de autenticación ni de un ámbito de organización o producto.
+
+<Note>
+  La configuración YAML es la fuente de verdad. `init` solo te da un punto de partida: edita la configuración con total libertad (cambia el nombre de las secciones, mueve páginas, divide archivos) y vuelve a ejecutar `generate`. `generate` nunca reagrupa ni descarga nada.
+</Note>
+
+## Crear una configuración a partir de un sitemap {#create-a-config-from-a-sitemap}
+
+Analiza un sitemap y genera `llmstxt.yaml`:
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml
+```
+
+`tpc llmstxt <sitemap-url>` es una forma abreviada de hacer lo mismo (sin opciones). Los índices de sitemaps anidados se recorren hasta 5 niveles de profundidad y los sitemaps comprimidos con gzip se procesan automáticamente.
+
+Las páginas se agrupan en secciones según la ruta de la URL: la CLI elimina el prefijo de ruta común a todas las URL y luego agrupa por el siguiente segmento de la ruta (`/docs/deployment/aws.html` → una sección &quot;Deployment&quot;). Las páginas que están en el prefijo común o directamente debajo de él van a parar a una sección &quot;Overview&quot;.
+
+Define el contenido del encabezado del archivo raíz durante la inicialización:
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml \
+  --name "Example" \
+  --title "Example Docs" \
+  --description "Docs for agents." \
+  --details "This index covers the latest release."
+```
+
+`--title` se representa como el encabezado `# ...`, `--description` como la cita en bloque `> ...` y `--details` como el párrafo de formato libre que precede a la primera sección.
+
+## Filtrar qué páginas se incluyen {#filter-which-pages-are-included}
+
+Los patrones glob se aplican a la ruta de la URL: `**` abarca varios segmentos de la ruta y `*` coincide dentro de un único segmento:
+
+```bash
+tpc llmstxt init https://example.com/sitemap.xml \
+  --include '/docs/**' \
+  --exclude '/docs/internal/**'
+```
+
+Las expresiones regulares (sintaxis de Go) se evalúan contra la URL completa:
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml \
+  --include-regex '/docs/latest(/|$)' \
+  --exclude-regex '/docs/(es|fr|ja)(/|$)'
+```
+
+Si hay alguna regla de inclusión, cada URL debe coincidir con al menos una de ellas; las URL que coincidan con cualquier regla de exclusión se descartan. Usa `--max-urls` (5000 de forma predeterminada) para limitar el número de páginas que se leen del sitemap.
+
+## Obtener títulos y descripciones reales {#fetch-real-titles-and-descriptions}
+
+De forma predeterminada, los títulos de los enlaces se generan a partir de los slugs de las URL. Con `--enrich`, la CLI descarga cada página (con 8 workers concurrentes) y completa los metadatos reales:
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --enrich
+```
+
+El enriquecimiento obtiene los valores en el siguiente orden de prioridad:
+
+* **Título**: `<title>` y, después, `og:title` / `twitter:title`
+* **Descripción**: `<meta name="description">`, después `og:description` / `twitter:description` y, por último, el primer párrafo relevante dentro de la región de contenido `<main>` de la página
+
+Las descripciones se truncan a 400 caracteres sin cortar palabras. Puedes aumentar o reducir ese límite con `--max-description`:
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --enrich --max-description 800
+```
+
+El límite cuenta caracteres, no bytes, por lo que el presupuesto es el mismo en cualquier sistema de escritura.
+
+El enriquecimiento también sigue las etiquetas `<meta http-equiv="refresh">` y las redirecciones HTTP (algo habitual en documentación alojada en S3 cuyos sitemaps incluyen URL obsoletas), descarta las páginas que se resuelven en la misma URL que otra y reagrupa las secciones a partir de las URL finales. Cada página descartada aparece en la lista junto con el destino en el que se fusionó; usa `--no-dedup` para conservarlas todas. Los errores de obtención se omiten sin aviso y se mantiene el título derivado del slug.
+
+<Note>
+  Cuando hay reglas de reescritura configuradas, el enriquecimiento obtiene la URL **reescrita**, es decir, el enlace que `generate` emitirá realmente. Esto es importante en sitios que redirigen las antiguas rutas `.html` pero siguen sirviendo el contenido en las rutas `.md` correspondientes: los enlaces emitidos están activos y son distintos, así que se conservan en lugar de fusionarse. Los títulos y las descripciones se leen tanto de documentos Markdown como HTML.
+</Note>
+
+## El archivo de configuración {#the-config-file}
+
+```yaml
+version: 1
+sitemap: https://docs.example.com/sitemap.xml
+site:
+  name: Example
+  baseUrl: https://docs.example.com
+  urlRewrites:
+    - match: \.html$
+      replace: .md
+files:
+  - path: llms.txt
+    title: Example Docs
+    summary: Docs for agents.
+    info: This index covers the latest release.
+    sections:
+      - title: Get Started
+        pages:
+          - url: https://docs.example.com/get-started/quickstart.html
+            title: Quickstart
+            description: Run your first request in five minutes.
+          - file: guides/llms.txt
+  - path: guides/llms.txt
+    title: Example Guides
+    sections:
+      - title: Guides
+        pages:
+          - url: /guides/streaming.html
+            title: Streaming
+```
+
+Reglas clave:
+
+* `files` puede declarar cualquier número de salidas, de modo que una sola ejecución de `generate` puede generar un `llms.txt` raíz y, además, archivos por categoría. Las rutas de salida deben ser relativas, terminar en `.txt` y no pueden salir del directorio de salida.
+* Cada página define exactamente uno de estos dos campos: `url` (absoluta o relativa a `site.baseUrl`) o `file` (la `path` de otra entrada de `files`, que se representa como un enlace a ese archivo generado; así es como un llms.txt principal enlaza a los anidados).
+* La `description` de una página se muestra como el sufijo `: ...` después del enlace y se omite si está vacía. Las secciones sin páginas no se incluyen.
+
+## Reescribir URL {#rewrite-urls}
+
+`site.urlRewrites` contiene reglas ordenadas de búsqueda y reemplazo con expresiones regulares que se aplican a cada URL de página resuelta al generar; por ejemplo, para que los enlaces apunten a las variantes en markdown añadiendo `.md`. Los grupos de captura (`$1`, `${name}`) funcionan igual que en `Regexp.ReplaceAllString` de Go. Puedes definir reglas iniciales desde init con `--rewrite 'PATTERN=>REPLACEMENT'` (repetible):
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --rewrite '\.html$=>.md'
+```
+
+Si necesitas una lógica de reescritura que no se pueda expresar con una expresión regular, asigna a `site.urlRewriteCommand` tu propio programa como una lista argv (sin shell):
+
+```yaml
+site:
+  urlRewriteCommand: ["python3", "scripts/rewrite-urls.py"]
+```
+
+Durante la generación se ejecuta una sola vez, recibe por stdin todas las URL de página resueltas (después de `urlRewrites`), una por línea, y debe imprimir exactamente una línea por cada entrada: la URL reescrita o una línea en blanco para dejarla sin cambios. Los códigos de salida distintos de cero y las discrepancias en el número de líneas se consideran errores. Los enlaces generados por referencias `file:` nunca se reescriben.
+
+## Generar los archivos {#generate-the-files}
+
+```bash
+tpc llmstxt generate
+```
+
+Escribe los archivos en un directorio específico o genera una vista previa sin escribirlos:
+
+```bash
+tpc llmstxt generate --config docs/llmstxt.yaml --out public
+tpc llmstxt generate --dry-run
+```
+
+Cada archivo se genera con el formato estándar de llms.txt:
+
+```markdown
+# Documentación de ejemplo
+
+> Documentación para agentes.
+
+Este índice corresponde a la versión más reciente.
+
+## Primeros pasos
+
+- [Inicio rápido](https://docs.example.com/get-started/quickstart.md): Ejecuta tu primera solicitud en cinco minutos.
+- [Guías de ejemplo](https://docs.example.com/guides/llms.txt)
+```
+
+Usa `--format json` en cualquier comando de llmstxt para obtener una salida en un formato legible por máquina.
+
+## Comprobar todos los enlaces {#check-every-link}
+
+`doctor` comprueba cualquier documento llms.txt, ya sea un archivo local o una URL publicada, lo haya generado o no esta CLI. Extrae todos los enlaces Markdown y los comprueba por HTTP; cualquiera que responda con un error de transporte o con un código de estado igual o superior a 400 se notifica junto con su sección, el título del enlace y el número de línea:
+
+```bash
+tpc llmstxt doctor https://docs.example.com/llms.txt
+```
+
+```text
+BROKEN  https://docs.example.com/guides/old-page.md  (HTTP 404)
+        https://docs.example.com/llms.txt:14  Guides › Old page
+Checked 58 links: 57 OK, 1 broken
+```
+
+Revisa los archivos generados antes de publicarlos (los enlaces relativos de los archivos locales requieren `--base-url`; en las URL descargadas, los enlaces relativos se resuelven automáticamente tomando como base la propia URL):
+
+```bash
+tpc llmstxt doctor ./out/llms.txt ./out/guides/llms.txt --base-url https://docs.example.com
+```
+
+Los enlaces se comprueban con `HEAD` (o con `GET` si el servidor rechaza `HEAD`), de 8 en 8 (`--concurrency`). Los anclajes y los enlaces `mailto:` se ignoran, y las URL duplicadas se comprueban una sola vez. El comando termina con el código 1 si hay algún enlace roto, así que puedes usarlo para bloquear CI o un paso de publicación.
+
+## Referencia de opciones {#flags-reference}
+
+### tpc llmstxt init {#tpc-llmstxt-init}
+
+```bash
+tpc llmstxt init <sitemap-url>
+```
+
+| Opción              | Valor predeterminado           | Descripción                                                                                                                                                                                                                |
+| ------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--config`, `-c`    | `llmstxt.yaml`                 | Ruta donde se escribe la configuración YAML.                                                                                                                                                                               |
+| `--name`            | se deriva del host del sitemap | Nombre del sitio que se usa en la configuración y en el título del archivo raíz.                                                                                                                                           |
+| `--title`           | el nombre del sitio            | Título del archivo raíz (el encabezado `# ...`).                                                                                                                                                                           |
+| `--description`     | —                              | Descripción del archivo raíz, que se muestra como la cita `> ...` debajo del título.                                                                                                                                       |
+| `--details`         | —                              | Detalles del archivo raíz, que se muestran como texto libre entre la descripción y la primera sección.                                                                                                                     |
+| `--include`         | —                              | Conserva solo las URL cuya ruta coincida con este patrón glob (repetible). `**` abarca varios segmentos y `*` coincide dentro de uno solo.                                                                                 |
+| `--exclude`         | —                              | Descarta las URL cuya ruta coincida con este patrón glob (repetible).                                                                                                                                                      |
+| `--include-regex`   | —                              | Conserva solo las URL que coincidan con esta expresión regular de Go, que se evalúa sobre la URL completa (repetible).                                                                                                     |
+| `--exclude-regex`   | —                              | Descarta las URL que coincidan con esta expresión regular de Go, que se evalúa sobre la URL completa (repetible).                                                                                                          |
+| `--rewrite`         | —                              | Regla de reescritura de URL con el formato `PATTERN=>REPLACEMENT` (regex de Go, repetible). Se escribe en `site.urlRewrites` y la aplica `generate`.                                                                       |
+| `--enrich`          | `false`                        | Descarga cada página y rellena los títulos y descripciones reales; sigue las redirecciones y elimina las páginas duplicadas que se resuelven en la misma URL. Si se aplican reglas `--rewrite`, descarga la URL reescrita. |
+| `--no-dedup`        | `false`                        | Conserva todas las páginas durante `--enrich`, incluso cuando varias se resuelven en la misma URL tras las redirecciones.                                                                                                  |
+| `--max-description` | `400`                          | Longitud máxima, en caracteres, de las descripciones que se generan durante `--enrich`.                                                                                                                                    |
+| `--max-urls`        | `5000`                         | Número máximo de URL de páginas que se leen del sitemap.                                                                                                                                                                   |
+| `--force`           | `false`                        | Sobrescribe el archivo de configuración si ya existe.                                                                                                                                                                      |
+
+### tpc llmstxt generate {#tpc-llmstxt-generate}
+
+```bash
+tpc llmstxt generate
+```
+
+| Opción           | Valor predeterminado | Descripción                                                                   |
+| ---------------- | -------------------- | ----------------------------------------------------------------------------- |
+| `--config`, `-c` | `llmstxt.yaml`       | Ruta al archivo de configuración YAML.                                        |
+| `--out`, `-o`    | `.`                  | Directorio donde se escriben los archivos llms.txt generados.                 |
+| `--dry-run`      | `false`              | Muestra los archivos renderizados en stdout en lugar de escribirlos en disco. |
+
+### tpc llmstxt doctor {#tpc-llmstxt-doctor}
+
+```bash
+tpc llmstxt doctor <llms.txt file or URL> [more...]
+```
+
+| Opción          | Valor predeterminado                                    | Descripción                                                                                                           |
+| --------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `--base-url`    | la URL de entrada, en el caso de documentos descargados | URL absoluta que se usa para resolver los enlaces relativos. Obligatoria para archivos locales con enlaces relativos. |
+| `--concurrency` | `8`                                                     | Número de enlaces que se comprueban en paralelo (1–64).                                                               |
+
+### Opciones globales {#global-flags}
+
+Disponibles en todos los comandos de `tpc`.
+
+| Opción           | Valor predeterminado                 | Descripción                                                                                        |
+| ---------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `--format`, `-f` | `text`                               | Formato de salida de los resultados y la ayuda de los comandos: `text`, `json` o `csv`.            |
+| `--api`, `-a`    | `https://app.promptingco.com/api/v1` | URL base de la API para todas las solicitudes (`llmstxt` no la usa, ya que se ejecuta localmente). |
+| `--token`, `-t`  | —                                    | Token de acceso para una única ejecución de un comando (`llmstxt` no lo usa).                      |

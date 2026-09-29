@@ -1,0 +1,77 @@
+---
+title: "プロンプト"
+description: "TPC CLI でプロンプトとプロンプト候補の一覧表示、作成、確認を行います。"
+---
+
+# プロンプト {#prompts}
+
+プロダクトの追跡対象のプロンプト、トピッククラスター、および生成されたプロンプト候補を管理します。対象のプロダクトを選択するには、`--scope <product-slug>/<org-slug>` を指定します。
+
+```bash
+tpc --scope my-product/pro-org prompts list
+tpc --scope my-product/pro-org prompts topics list
+tpc --scope my-product/pro-org prompts suggestions list
+```
+
+## 提案 {#suggestions}
+
+提案は、自動生成されたプロンプトの候補です。提案を承認すると、追跡対象のプロンプトが作成され、選択した回答エンジンへの会話クエリが開始されます。
+
+```
+generate  →  list / update  →  approve または reject
+```
+
+### 提案の一覧を取得 {#list-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions list
+tpc --scope my-product/pro-org prompts suggestions list --topic-id <topic-id>
+tpc --scope my-product/pro-org prompts suggestions list --view <view-id>
+tpc --scope my-product/pro-org prompts suggestions list --format json
+```
+
+`--view` を省略すると、スコープで絞り込まれていないプロダクトライブラリ全体が返されます。
+
+### 提案を生成する {#generate-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions generate
+tpc --scope my-product/pro-org prompts suggestions generate --topic-id <topic-id>
+tpc --scope my-product/pro-org prompts suggestions generate --language es
+```
+
+生成を実行すると、選択したプロダクトまたはトピックの既存の提案ライブラリが置き換えられます。プロダクトにはコンテキストが設定されている必要があります。
+
+### 提案を更新する {#update-a-suggestion}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions update <id> --message "Updated text"
+tpc --scope my-product/pro-org prompts suggestions update <id> --engine chatgpt --engine gemini
+tpc --scope my-product/pro-org prompts suggestions update <id> --persona-id <persona-id>
+```
+
+`--message`、`--engine`、`--persona-id` のうち、少なくとも 1 つを指定する必要があります。これらの値は、提案の承認時に使用されます。
+
+### 提案を承認する {#approve-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions approve <id> --yes
+tpc --scope my-product/pro-org prompts suggestions approve <id> <id> --engine chatgpt --yes
+```
+
+承認すると、追跡対象のプロンプトと会話クエリがすぐに作成されます。プロンプトを追加すると、今後の Share of Voice の結果が変わる可能性があります。プロダクト単位の Share of Voice では、各プロンプトは実行対象のエンジン数に応じて重み付けされます。確定するには `--yes` を指定するか、確認プロンプトで `yes` と入力してください。
+
+### 提案を却下する {#reject-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions reject <id>
+tpc --scope my-product/pro-org prompts suggestions reject <id> --feedback "off topic"
+```
+
+## 追跡対象のプロンプト {#tracked-prompts}
+
+```bash
+tpc --scope my-product/pro-org prompts list
+tpc --scope my-product/pro-org prompts create --message "What is the best pricing tool?"
+tpc --scope my-product/pro-org prompts topics list
+```

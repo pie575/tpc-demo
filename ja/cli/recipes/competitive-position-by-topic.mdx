@@ -1,0 +1,302 @@
+---
+title: "トピック別の競合ポジション"
+description: "TPC CLI で、追跡中の各トピックにおける業界内ランキングを確認できます。"
+---
+
+# トピック別の競合ポジション {#competitive-position-across-topics}
+
+ダッシュボードの業界ランキングウィジェットには、追跡しているすべての会話を通じて最も多く言及されている競合が表示されます。ただ、もっと細かく見たい場合もあるでしょう。たとえば、追跡しているトピックごとに自社が実際に何位なのか、といったことです。
+
+このレシピでは、[`tpc analytics sov`](/ja/cli/commands/analytics) を使い、1 つのスクリプトでこの疑問に答えます。ダッシュボードをクリックして回る必要はありません。
+
+## 前提条件 {#prerequisites}
+
+* CLI がインストールされ、認証済みであること。[インストール](/ja/cli/installation)および[認証](/ja/cli/authentication)を参照してください。
+* 確認対象のプロダクトを `--scope <org-slug>/<product-slug>` で指定できること。
+* ローカル環境に [`jq`](https://jqlang.org) がインストールされていること。
+
+## スクリプト {#the-script}
+
+ランキングはトピックごとに個別に取得する必要があるため、このスクリプトでは1つずつ順番に処理せず、並行して実行します。並列実行の出力が混ざらないよう各結果を一時ファイルに書き出し、最後に元のトピック順で出力します。
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCOPE="${SCOPE:?set SCOPE to <org-slug>/<product-slug>}"
+ORG="${SCOPE%%/*}"
+SLUG="${SCOPE##*/}"
+YOUR_PRODUCT=$(tpc --format json product list --scope "$ORG" \
+  | jq -r --arg slug "$SLUG" '.[] | select(.slug == $slug) | .name')
+if [ -z "$YOUR_PRODUCT" ]; then
+  echo "product $SLUG was not found in org $ORG" >&2
+  exit 1
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+check_topic() {
+  local topic_id="$1" topic="$2"
+  local you
+  you=$(tpc analytics sov --scope "$SCOPE" --by competitor --topic "$topic_id" --top 100 --json \
+    | jq -r --arg name "$YOUR_PRODUCT" '.[] | select(.label == $name) | "\(.rank)\t\(.sov)"')
+  if [ -n "$you" ]; then
+    local rank sov
+    rank=$(echo "$you" | cut -f1)
+    sov=$(echo "$you" | cut -f2)
+    printf "%-14s rank #%-4s sov %s%%\n" "$topic" "$rank" "$sov"
+  else
+    printf "%-14s not in top 100\n" "$topic"
+  fi
+}
+
+topic_ids=()
+while IFS=$'\t' read -r topic_id topic; do
+  topic_ids+=("$topic_id")
+  check_topic "$topic_id" "$topic" > "$tmpdir/$topic_id" &
+done < <(tpc analytics sov --scope "$SCOPE" --by topic --json | jq -r '.[] | [.key, .label] | @tsv')
+
+wait
+
+for topic_id in "${topic_ids[@]}"; do
+  cat "$tmpdir/$topic_id"
+done
+```
+
+実行します。
+
+```bash
+chmod +x competitive-position.sh
+./competitive-position.sh
+```
+
+出力例：
+
+```text
+comparison     rank #1    sov 58.8%
+feature        rank #2    sov 42.4%
+use-case       rank #3    sov 36.0%
+budget         rank #2    sov 34.2%
+industry       rank #22   sov 18.0%
+```
+
+## 仕組み {#how-it-works}
+
+1. `$SCOPE` は `<org-slug>/<product-slug>` の形式です。スクリプトは最初のセグメントから組織 (`ORG="${SCOPE%%/*}"`) を、2 番目のセグメントからプロダクトのスラッグ (`SLUG="${SCOPE##*/}"`) を取り出し、その組織内のプロダクトを一覧取得して、一致するプロダクトの表示名を使用します。ランキングの各行では、この表示名が `label` として使われます。
+2. `tpc analytics sov --scope "$SCOPE" --by topic` は、追跡中のすべてのトピックを、各トピックの ID (`key`) と名前 (`label`) とともに一覧表示します。
+3. 各トピックについて、バックグラウンドで `check_topic` が呼び出され、`tpc analytics sov --scope "$SCOPE" --by competitor --topic <topicId>` を実行します。これはダッシュボードの業界ランキングウィジェットと同じランキングビューですが、全体ではなく 1 つのトピックに絞り込まれています。トピックを 1 つずつ順番に待つのではなく、すべてのトピックを並行して取得します。
+4. `jq` が自社プロダクトの表示名に一致する行を抽出し、その順位とシェア・オブ・ボイスを該当トピックの一時ファイルに書き込みます。
+5. `wait` はすべてのバックグラウンド処理が完了するまで待機し、その後、結果を (完了順ではなく) 元のトピック順で出力します。
+
+<Note>
+  高速化の効果は、追跡しているトピック数に応じて大きくなります。トピックが数個程度なら、実時間の大半は呼び出しごとのオーバーヘッド (認証と組織の解決) が占めるため、並列化しても思ったほど短縮されません。トピックが数十個あれば、順次実行から並行実行に切り替えるだけで、数分かかっていた処理が数秒で終わります。
+</Note>
+
+<Note>
+  `--top 100` は、この固定コマンドで指定できる最大のページサイズです。追跡対象の競合が 100 を超えるトピックで自社が表示されない場合は、ランク外と決めつけずに `tpc analytics explore --scope "$SCOPE" --metric sov --by competitor --topic <topicId> --page 2` で確認してください。
+</Note>
+
+## バリエーション {#variations}
+
+トピック別の内訳ではなく、全体のランキングだけを知りたい場合
+
+```bash
+tpc analytics sov --scope <org-slug>/<product-slug> --by competitor --last 30d
+```
+
+整形済みの表ではなく、ダッシュボードや Slack のダイジェスト用に生の JSON を使いたい場合は、`printf` の行を削除し、`jq` の出力をそのままパイプで渡してください。このレシピのコマンドはすべて `--json` に対応しています。
+
+特定の 2、3 個のトピックだけを確認したい場合は、トピック一覧を取得する手順を省略し、把握済みのトピック ID をハードコードしてください。
+
+```bash
+tpc analytics sov --scope "$SCOPE" --by competitor --topic <topicId>
+```
+
+## 自社の順位前後にいる競合を表示する {#show-competitors-around-your-rank}
+
+トピックにおける自社の順位とシェア・オブ・ボイスがわかっても、その順位で実際に競い合っている相手が誰なのかまではわかりません。このスクリプトは 1 つのトピックを対象に、自社のすぐ上とすぐ下にランクインしている競合を表示します。使用するのは、上記のメインスクリプトとまったく同じ `tpc analytics sov --by competitor --topic` のレスポンスです。すべての競合の順位はこの 1 回の呼び出しで取得済みのため、追加の API リクエストは不要です。
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+TOPIC_ID="$1"
+WINDOW="${2:-2}"
+
+SCOPE="${SCOPE:?set SCOPE to <org-slug>/<product-slug>}"
+ORG="${SCOPE%%/*}"
+SLUG="${SCOPE##*/}"
+YOUR_PRODUCT=$(tpc --format json product list --scope "$ORG" \
+  | jq -r --arg slug "$SLUG" '.[] | select(.slug == $slug) | .name')
+if [ -z "$YOUR_PRODUCT" ]; then
+  echo "product $SLUG was not found in org $ORG" >&2
+  exit 1
+fi
+
+rows=$(tpc analytics sov --scope "$SCOPE" --by competitor --topic "$TOPIC_ID" --top 100 --json \
+  | jq -r --arg name "$YOUR_PRODUCT" --argjson window "$WINDOW" '
+      . as $rows
+      | ($rows | map(.label) | index($name)) as $idx
+      | if $idx == null then empty else
+          $rows[(if $idx - $window < 0 then 0 else $idx - $window end):($idx + $window + 1)][]
+          | [.rank, .label, .sov, (if .label == $name then "you" else "" end)] | @tsv
+        end
+    ')
+
+if [ -z "$rows" ]; then
+  echo "$YOUR_PRODUCT is not in the top 100 for this topic"
+  exit 0
+fi
+
+echo "$rows" | while IFS=$'\t' read -r rank label sov marker; do
+  if [ "$marker" = "you" ]; then
+    printf "%-4s %-20s %s%%  <-- you\n" "$rank" "$label" "$sov"
+  else
+    printf "%-4s %-20s %s%%\n" "$rank" "$label" "$sov"
+  fi
+done
+```
+
+トピック ID を指定して実行します (トピック ID は `tpc analytics sov --scope <org-slug>/<product-slug> --by topic --json` を実行するか、上記スクリプトのトピック一覧を取得するステップで確認できます) 。
+
+```bash
+chmod +x competitors-around-rank.sh
+./competitors-around-rank.sh a8bbcb6f-1ee3-462b-98f1-abe8e05e5437
+```
+
+出力例：
+
+```text
+19   MongoDB              21.15%
+20   Cassandra            19.23%
+21   Planetscale          19.23%  <-- you
+22   AlloyDB              17.31%
+23   ClickHouse           17.31%
+```
+
+2 番目の引数を渡すと、表示範囲を広げたり狭めたりできます (デフォルトは前後 2 行ずつ) 。
+
+```bash
+./competitors-around-rank.sh a8bbcb6f-1ee3-462b-98f1-abe8e05e5437 5
+```
+
+<Note>
+  トピック内で1位(または追跡リストの最下位付近)の場合、表示範囲はその方向に存在する行までに自動的に制限されます。その側に表示される前後の競合が少なくなるだけで、エラーにはなりません。
+</Note>
+
+## 全トピックと、自社の順位付近の競合 {#all-topics-with-competitors-around-your-rank}
+
+上記の 2 つのスクリプトを組み合わせたものです。[最初のスクリプト](#the-script)と同様にすべてのトピックを並行してループ処理しつつ、直前のスクリプトと同様に、各トピックで自社の行だけでなく自社の順位の前後にいる競合も表示します。バックグラウンドジョブがトピックごとの一時ファイルに書き込み、それを元の順序で出力し直すという並列検索の構造はそのままで、トピックごとに表示される行数が増えます。
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+WINDOW="${1:-2}"
+
+SCOPE="${SCOPE:?set SCOPE to <org-slug>/<product-slug>}"
+ORG="${SCOPE%%/*}"
+SLUG="${SCOPE##*/}"
+YOUR_PRODUCT=$(tpc --format json product list --scope "$ORG" \
+  | jq -r --arg slug "$SLUG" '.[] | select(.slug == $slug) | .name')
+if [ -z "$YOUR_PRODUCT" ]; then
+  echo "product $SLUG was not found in org $ORG" >&2
+  exit 1
+fi
+
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+check_topic() {
+  local topic_id="$1" topic="$2"
+  local rows
+  rows=$(tpc analytics sov --scope "$SCOPE" --by competitor --topic "$topic_id" --top 100 --json \
+    | jq -r --arg name "$YOUR_PRODUCT" --argjson window "$WINDOW" '
+        . as $rows
+        | ($rows | map(.label) | index($name)) as $idx
+        | if $idx == null then empty else
+            $rows[(if $idx - $window < 0 then 0 else $idx - $window end):($idx + $window + 1)][]
+            | [.rank, .label, .sov, (if .label == $name then "you" else "" end)] | @tsv
+          end
+      ')
+
+  echo "$topic"
+  if [ -z "$rows" ]; then
+    printf "  %s not in top 100\n" "$YOUR_PRODUCT"
+  else
+    echo "$rows" | while IFS=$'\t' read -r rank label sov marker; do
+      if [ "$marker" = "you" ]; then
+        printf "  %-4s %-20s %s%%  <-- you\n" "$rank" "$label" "$sov"
+      else
+        printf "  %-4s %-20s %s%%\n" "$rank" "$label" "$sov"
+      fi
+    done
+  fi
+  echo
+}
+
+topic_ids=()
+while IFS=$'\t' read -r topic_id topic; do
+  topic_ids+=("$topic_id")
+  check_topic "$topic_id" "$topic" > "$tmpdir/$topic_id" &
+done < <(tpc analytics sov --scope "$SCOPE" --by topic --json | jq -r '.[] | [.key, .label] | @tsv')
+
+wait
+
+for topic_id in "${topic_ids[@]}"; do
+  cat "$tmpdir/$topic_id"
+done
+```
+
+実行します：
+
+```bash
+chmod +x competitive-position-with-window.sh
+./competitive-position-with-window.sh
+```
+
+第 1 引数にウィンドウサイズを指定します (デフォルトは 2) ：
+
+```bash
+./competitive-position-with-window.sh 5
+```
+
+出力例：
+
+```text
+comparison
+  1    Planetscale          58.82%  <-- you
+  2    Vitess               47.06%
+  3    MySQL                44.12%
+
+feature
+  1    PostgreSQL           45.45%
+  2    Planetscale          42.42%  <-- you
+  3    MySQL                42.42%
+  4    Google Cloud Spanner 33.33%
+
+use-case
+  1    Amazon Aurora        38%
+  2    Redis                38%
+  3    Planetscale          36%  <-- you
+  4    Google Cloud Spanner 34%
+  5    AWS                  34%
+
+budget
+  1    PostgreSQL           34.15%
+  2    Planetscale          34.15%  <-- you
+  3    Google Cloud SQL     31.71%
+  4    Neon                 31.71%
+
+industry
+  19   MongoDB              21.15%
+  20   Cassandra            19.23%
+  21   Planetscale          19.23%  <-- you
+  22   AlloyDB              17.31%
+  23   ClickHouse           17.31%
+```
+
+<Note>
+  トピックごとに同時リクエストを1件ずつ送信する仕組みのため、スクリプトの調整中などに短時間で何度も再実行すると、API のレート制限 (`429 Too many requests`) に達することがあります。その場合は数秒待ってから再試行してください。これはリクエスト量に対するレート制限であり、データやアカウントの問題ではありません。
+</Note>

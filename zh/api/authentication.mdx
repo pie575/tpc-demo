@@ -1,0 +1,118 @@
+---
+title: "身份验证"
+description: "了解如何为 TPC API 选择会话 Cookie、OAuth Bearer 令牌或 API 密钥。"
+---
+
+# 身份验证 {#authentication}
+
+TPC 按固定顺序识别调用方：先是 API 密钥，其次是 bearer 令牌，最后是会话 Cookie。如果同时发送了多个凭据，以 `x-api-key` 为准。
+
+## 选择凭据 {#choose-your-credential}
+
+| 凭据              | 适用场景             | 说明                                                   |
+| --------------- | ---------------- | ---------------------------------------------------- |
+| 会话 Cookie       | 第一方控制台调用。        | 仅限浏览器使用。使用会话的调用方依赖路由级别的组织和产品校验。                      |
+| OAuth Bearer 令牌 | CLI 和 OAuth 客户端。 | `tpc auth login` 通过浏览器完成设备授权流程，之后 CLI 会发送 Bearer 凭据。 |
+| API 密钥          | 服务器间集成。          | 作用于组织级别，支持轮换，并受显式声明的权限范围限制。                          |
+
+## 会话 Cookie {#session-cookie}
+
+会话 Cookie 适用于 The Prompting Company 控制台。浏览器会自动发送 `better-auth.session_token` Cookie。
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "Cookie: better-auth.session_token=session_token_here"
+```
+
+```ts
+const response = await fetch("/api/v1/site/pages?productId=product_123", {
+  credentials: "include",
+});
+```
+
+会话 Cookie 仅限用于第一方浏览器流程。
+
+## OAuth Bearer 令牌 {#oauth-bearer}
+
+CLI 通过基于浏览器的设备授权流程进行身份验证：
+
+```bash
+tpc auth login
+```
+
+登录后，CLI 会将令牌保存在本地，并以 bearer 凭据的形式发送该令牌：
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "Authorization: Bearer $TPC_ACCESS_TOKEN"
+```
+
+```ts
+const response = await fetch(
+  "https://app.promptingco.com/api/v1/site/pages?productId=product_123",
+  {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  },
+);
+```
+
+使用 Bearer 令牌的调用方必须具备该路由所需的权限范围。
+
+## API 密钥 {#api-key}
+
+对于集成，推荐使用 API 密钥作为凭据。
+
+可在以下位置创建组织 API 密钥：
+
+```text
+https://app.promptingco.com/{orgSlug}/settings/api-keys
+```
+
+然后通过 `x-api-key` 请求头发送：
+
+```bash
+curl "https://app.promptingco.com/api/v1/site/pages?productId=product_123" \
+  -H "x-api-key: $TPC_API_KEY"
+```
+
+```ts
+const response = await fetch(
+  "https://app.promptingco.com/api/v1/site/pages?productId=product_123",
+  {
+    headers: {
+      "x-api-key": process.env.TPC_API_KEY!,
+    },
+  },
+);
+```
+
+## 优先级 {#precedence}
+
+`resolveCaller` 按以下顺序检查凭据：
+
+1. `x-api-key`
+2. `Authorization: Bearer <token>`
+3. 会话 Cookie
+
+按照这一优先级，服务器集成的行为始终是确定的。即使后台任务意外携带了浏览器 Cookie，系统仍会通过 API 密钥识别该集成。
+
+## 轮换与吊销 {#rotation-and-revocation}
+
+当有团队成员离职、密钥可能已泄露，或集成边界发生变化时，请轮换 API 密钥。
+
+1. 创建一个权限范围相同或更小的新密钥。
+2. 将新密钥部署到你的集成中。
+3. 确认使用新密钥的请求均能成功。
+4. 在 API 密钥设置页面吊销旧密钥。
+
+使用已吊销的密钥发起请求时，会返回以下错误：
+
+```json
+{
+  "ok": false,
+  "code": "UNAUTHORIZED",
+  "message": "invalid api key"
+}
+```

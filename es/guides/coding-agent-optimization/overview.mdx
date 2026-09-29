@@ -1,0 +1,88 @@
+---
+title: "Descripción general"
+description: "Evalúa y optimiza la experiencia de los agentes de programación con tu producto en entornos aislados (sandbox)"
+---
+
+Agent experience te permite ejecutar agentes de programación reales —Claude Code, Codex y OpenCode— sobre tu producto dentro de sandboxes aislados, puntuar cada intento según los objetivos que definas y convertir los resultados en correcciones concretas para tu documentación, tus API y tu proceso de incorporación.
+
+Si a los agentes de IA les cuesta instalar tu SDK, autenticarse o seguir tu documentación, recomendarán otra opción. Este producto te muestra exactamente dónde se produce esa fricción y qué debes cambiar.
+
+## Cómo funciona {#how-it-works}
+
+1. **Define una tarea**: qué debe lograr el agente con tu producto (p. ej., «instalar el SDK y enviar un primer evento»), junto con los objetivos que definen el éxito
+2. **Define los entornos**: qué harness de agente y qué modelo intentan realizar la tarea, y en qué sandbox se ejecuta
+3. **Lanza un experimento**: ejecuta todas las tareas en todos los entornos en paralelo, cada una en un sandbox nuevo
+4. **Revisa los resultados**: puntuaciones por ejecución, transcripciones completas, señales extraídas y grupos de fallos con sus causas raíz y las correcciones recomendadas
+
+## Cómo encajan todas las piezas {#how-the-pieces-fit-together}
+
+```text
+Experiment
+├── Tasks         (qué hacer + cómo se mide el éxito)
+├── Environments  (qué agente/modelo la intenta)
+└── Iterations    (lotes numerados de ejecuciones)
+    └── Runs      (tarea × entorno, un sandbox por ejecución)
+        ├── puntuación, aprobado/fallido, transcripción, costo
+        └── valores de señales → agregados por iteración
+```
+
+Cada concepto tiene su propia página en la sección **Core concepts** de la barra lateral y un grupo de comandos correspondiente en la [CLI de tpc](/es/cli/overview):
+
+| Concepto                                                            | Grupo de comandos    | Comandos habituales                                            |
+| ------------------------------------------------------------------- | -------------------- | -------------------------------------------------------------- |
+| [Tareas](/es/guides/coding-agent-optimization/tasks)                   | `tpc sim task`       | `create --file task.json`, `list`, `get`, `update`, `run`      |
+| [Entornos](/es/guides/coding-agent-optimization/environments)          | `tpc sim env`        | `create`, `list`, `update`, `task attach/detach`, `secret set` |
+| [Ejecuciones e iteraciones](/es/guides/coding-agent-optimization/runs) | `tpc sim run`        | `list`, `get`, `logs`, `actions`                               |
+| [Experimentos](/es/guides/coding-agent-optimization/experiments)       | `tpc sim experiment` | `create`, `run --watch`, `results`                             |
+| [Señales](/es/guides/coding-agent-optimization/signals)                | `tpc sim experiment` | `validate-signal-config`, `signals`                            |
+
+## Qué obtienes de cada ejecución {#what-you-get-from-each-run}
+
+* Un veredicto de aprobado/fallido y una puntuación de 0 a 100 en función de tus objetivos
+* La transcripción completa del agente: cada mensaje, llamada a herramientas y paso de razonamiento
+* Un archivo comprimido del sandbox tras la ejecución, para que puedas inspeccionar exactamente lo que ha construido el agente
+* Uso de tokens, coste y duración
+* Valores de señales: métricas personalizadas que defines en YAML y que se extraen automáticamente de la ejecución
+
+## Pruébalo desde la CLI {#try-it-from-the-cli}
+
+Con la [CLI de tpc](/es/cli/overview), una tarea y el agente que intenta resolverla viven en un pequeño directorio, y basta un solo comando para ejecutarlo todo:
+
+```bash
+# Configuración única
+curl -fsSL https://cli.promptingco.com/install.sh | bash
+tpc auth login
+```
+
+```text
+my-task/
+├── task.json        # qué hacer + cómo se evalúa el éxito
+├── instruction.md   # el prompt que recibe el agente
+└── environment.json # qué agente/modelo intenta resolverla (opcional)
+```
+
+```bash
+# Crea la tarea y el entorno si hace falta y luego los ejecuta: un solo comando, desde cero
+tpc sim run ./my-task --scope pro-org/my-product
+```
+
+`tpc sim run ./my-task --scope pro-org/my-product` es idempotente: reutiliza la tarea y el entorno correspondientes si ya existen, los actualiza si los archivos han cambiado y los crea si son nuevos, así que volver a ejecutarlo nunca genera duplicados. Ejecuta `tpc sim spec` para mostrar el contrato completo de `task.json`, o `tpc sim task export <task-id>` para convertir una tarea existente en un directorio como este.
+
+Para comparar varios agentes con las mismas tareas, agrúpalos en un [experimento](/es/guides/coding-agent-optimization/experiments):
+
+```bash
+tpc sim experiment create --name "Quickstart friction" --task-ids task_abc --env-ids env_1,env_2 --scope pro-org/my-product
+tpc sim experiment run exp_789 --watch --scope pro-org/my-product      # lanzar y seguir hasta que termine
+tpc sim experiment results exp_789 --scope pro-org/my-product
+```
+
+Todos los comandos aceptan `--format json` para usarlos en scripts. En las siguientes guías se describe el flujo de trabajo de la CLI para cada abstracción.
+
+## Por dónde empezar {#where-to-start}
+
+* [Tareas](/es/guides/coding-agent-optimization/tasks): cómo definir lo que deben hacer los agentes y cómo se mide el éxito
+* [Entornos](/es/guides/coding-agent-optimization/environments): cómo configurar agentes y sandboxes
+* [Ejecuciones e iteraciones](/es/guides/coding-agent-optimization/runs): qué ocurre durante un intento y qué se registra
+* [Experimentos](/es/guides/coding-agent-optimization/experiments): cómo ejecutar iteraciones e interpretar los resultados
+* [Señales](/es/guides/coding-agent-optimization/signals): cómo extraer métricas personalizadas de las ejecuciones
+* [Límites y restricciones](/es/guides/coding-agent-optimization/limits): el modelo de ejecución y los límites estrictos que condicionan cómo se escriben las tareas

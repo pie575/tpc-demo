@@ -1,0 +1,249 @@
+---
+title: "llms.txt の生成"
+description: "TPC CLI を使って、任意のサイトのサイトマップから llms.txt ファイルを生成します。"
+---
+
+# llms.txt の生成 {#llmstxt-generation}
+
+サイトマップから 1 つ以上の [llms.txt](https://llmstxt.org) ファイルを 2 ステップで作成できます。まず `tpc llmstxt init` がサイトマップを読み込み、ページをセクションに分類した編集可能な YAML 設定ファイルを書き出します。次に `tpc llmstxt generate` がその設定をもとにファイルをディスクに出力します。どちらのコマンドも完全にローカルで動作するため、認証や organization・product のスコープ指定は必要ありません。
+
+<Note>
+  信頼できる唯一の情報源は YAML 設定ファイルです。`init` はたたき台を用意するだけなので、設定ファイルは自由に編集してください (セクション名の変更、ページの移動、ファイルの分割など) 。編集後に `generate` を再実行します。`generate` がページを再分類したり、外部から何かを取得したりすることはありません。
+</Note>
+
+## サイトマップから設定を作成する {#create-a-config-from-a-sitemap}
+
+サイトマップを解析し、`llmstxt.yaml` を書き出します。
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml
+```
+
+`tpc llmstxt <sitemap-url>` は、同じ処理を行う短縮形です (フラグは指定できません) 。ネストされたサイトマップインデックスは最大 5 階層までたどり、gzip 圧縮されたサイトマップも自動的に処理します。
+
+ページは URL パスに基づいてセクションに分類されます。CLI はすべての URL に共通するパスのプレフィックスを取り除き、その次のパスセグメントごとにグループ化します (`/docs/deployment/aws.html` → &quot;Deployment&quot; セクション) 。共通プレフィックスそのもの、またはその直下にあるページは &quot;Overview&quot; セクションに分類されます。
+
+初期化時にルートファイルのヘッダーコンテンツを設定するには、次のようにします。
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml \
+  --name "Example" \
+  --title "Example Docs" \
+  --description "Docs for agents." \
+  --details "This index covers the latest release."
+```
+
+`--title` は `# ...` の見出しとして、`--description` は `> ...` の引用ブロックとして、`--details` は最初のセクションの前にある自由形式の段落として出力されます。
+
+## 含めるページを絞り込む {#filter-which-pages-are-included}
+
+グロブは URL パスに対して照合されます。`**` は複数のパスセグメントにまたがって一致し、`*` は 1 つのセグメント内でのみ一致します。
+
+```bash
+tpc llmstxt init https://example.com/sitemap.xml \
+  --include '/docs/**' \
+  --exclude '/docs/internal/**'
+```
+
+正規表現 (Go の構文) は URL 全体に対して照合されます。
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml \
+  --include-regex '/docs/latest(/|$)' \
+  --exclude-regex '/docs/(es|fr|ja)(/|$)'
+```
+
+include ルールが 1 つでも指定されている場合、URL は少なくともいずれか 1 つのルールに一致する必要があります。また、exclude ルールのいずれかに一致する URL は除外されます。サイトマップから読み込むページ数に上限を設けるには、`--max-urls` (デフォルトは 5000) を使用します。
+
+## 実際のタイトルと説明を取得する {#fetch-real-titles-and-descriptions}
+
+デフォルトでは、リンクのタイトルは URL の slug から生成されます。`--enrich` を指定すると、CLI はすべてのページを取得し (並行ワーカー数は 8) 、実際のメタデータを反映します：
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --enrich
+```
+
+エンリッチメントでは、次の優先順位で値を決定します。
+
+* **タイトル**: `<title>`、次に `og:title` / `twitter:title`
+* **説明**: `<meta name="description">`、次に `og:description` / `twitter:description`、最後にページの `<main>` コンテンツ領域内にある、ある程度の長さを持つ最初の段落
+
+説明は 400 文字を上限として、単語の区切りで切り詰められます。この上限を変更するには `--max-description` を指定します。
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --enrich --max-description 800
+```
+
+この上限はバイト数ではなく文字数で数えるため、どの文字体系でも使える量は同じです。
+
+エンリッチメントでは、`<meta http-equiv="refresh">` や HTTP リダイレクト (サイトマップに古い URL が残っている S3 ホストのドキュメントでよく見られます) も追跡し、別のページと同じ URL に解決されるページを除外したうえで、最終的な URL に基づいてセクションを再グループ化します。除外されたページはすべて、統合先のページとともに一覧表示されます。すべてのページを残したい場合は `--no-dedup` を指定してください。取得に失敗したページは通知なくスキップされ、slug から導出されたタイトルがそのまま使われます。
+
+<Note>
+  リライトルールが設定されている場合、エンリッチメントは**リライト後の** URL、つまり `generate` が実際に出力するリンクを取得します。これが重要になるのは、古い `.html` パスはリダイレクトしつつ、対応する `.md` パスでは引き続きコンテンツを配信しているサイトです。この場合、出力されるリンクは有効かつそれぞれ異なるため、統合されずにそのまま残ります。タイトルと説明は、HTML だけでなく Markdown ドキュメントからも読み取られます。
+</Note>
+
+## 設定ファイル {#the-config-file}
+
+```yaml
+version: 1
+sitemap: https://docs.example.com/sitemap.xml
+site:
+  name: Example
+  baseUrl: https://docs.example.com
+  urlRewrites:
+    - match: \.html$
+      replace: .md
+files:
+  - path: llms.txt
+    title: Example Docs
+    summary: Docs for agents.
+    info: This index covers the latest release.
+    sections:
+      - title: Get Started
+        pages:
+          - url: https://docs.example.com/get-started/quickstart.html
+            title: Quickstart
+            description: Run your first request in five minutes.
+          - file: guides/llms.txt
+  - path: guides/llms.txt
+    title: Example Guides
+    sections:
+      - title: Guides
+        pages:
+          - url: /guides/streaming.html
+            title: Streaming
+```
+
+主なルール:
+
+* `files` では出力をいくつでも宣言できるため、1 回の `generate` 実行でルートの `llms.txt` とカテゴリごとのファイルをまとめて出力できます。出力パスは相対パスで、末尾を `.txt` にする必要があります。また、出力ディレクトリの外を指すことはできません。
+* 各ページには、`url`(絶対 URL、または `site.baseUrl` からの相対パス)と `file`(`files` 内の別エントリの `path`。生成されたそのファイルへのリンクとして出力されます。親の llms.txt からネストされた llms.txt へのリンクは、この仕組みで作成します)のどちらか一方だけを指定します。
+* ページの `description` はリンクの後ろに `: ...` という形の接尾辞として出力され、空の場合は省略されます。ページを含まないセクションはスキップされます。
+
+## URLの書き換え {#rewrite-urls}
+
+`site.urlRewrites` には、生成時に解決されたすべてのページURLに適用する正規表現の検索・置換ルールを、適用順に指定します。たとえば、URLの末尾に `.md` を付けて、リンク先をMarkdown版に向けるといった使い方ができます。キャプチャグループ (`$1`、`${name}`) は、Goの `Regexp.ReplaceAllString` と同じように動作します。init時に `--rewrite 'PATTERN=>REPLACEMENT'` を指定すると、ルールを初期設定できます (複数回指定可) 。
+
+```bash
+tpc llmstxt init https://docs.example.com/sitemap.xml --rewrite '\.html$=>.md'
+```
+
+正規表現では表現できない書き換えロジックが必要な場合は、`site.urlRewriteCommand` に独自のプログラムを argv リスト形式 (シェルは経由しません) で指定します。
+
+```yaml
+site:
+  urlRewriteCommand: ["python3", "scripts/rewrite-urls.py"]
+```
+
+生成時に一度だけ実行され、解決済みのすべてのページ URL (`urlRewrites` 適用後) を標準入力から 1 行に 1 つずつ受け取ります。入力 1 行につき必ずちょうど 1 行を出力してください。出力するのは書き換え後の URL、または URL を変更しない場合は空行です。終了コードがゼロ以外の場合や、行数が一致しない場合はエラーになります。`file:` 参照から生成されたリンクが書き換えられることはありません。
+
+## ファイルを生成する {#generate-the-files}
+
+```bash
+tpc llmstxt generate
+```
+
+特定のディレクトリに書き出すことも、書き出さずにプレビューすることもできます：
+
+```bash
+tpc llmstxt generate --config docs/llmstxt.yaml --out public
+tpc llmstxt generate --dry-run
+```
+
+各ファイルは、標準的な llms.txt の形式で出力されます：
+
+```markdown
+# Example Docs
+
+> エージェント向けドキュメント。
+
+このインデックスは最新リリースを対象としています。
+
+## はじめに
+
+- [クイックスタート](https://docs.example.com/get-started/quickstart.md): 5分で最初のリクエストを実行しましょう。
+- [Example ガイド](https://docs.example.com/guides/llms.txt)
+```
+
+機械可読な形式で出力するには、どの llmstxt コマンドでも `--format json` を指定してください。
+
+## すべてのリンクを確認する {#check-every-link}
+
+`doctor` は、あらゆる llms.txt ドキュメントを検査できます。対象はローカルファイルでも公開中の URL でもよく、この CLI で生成したものである必要はありません。Markdown リンクをすべて抽出して HTTP で確認し、通信エラーが発生したものや 400 以上のステータスを返したものを、セクション、リンクタイトル、行番号とともに報告します：
+
+```bash
+tpc llmstxt doctor https://docs.example.com/llms.txt
+```
+
+```text
+BROKEN  https://docs.example.com/guides/old-page.md  (HTTP 404)
+        https://docs.example.com/llms.txt:14  Guides › Old page
+Checked 58 links: 57 OK, 1 broken
+```
+
+公開前に、生成されたファイルをチェックします (ローカルファイル内の相対リンクを解決するには `--base-url` の指定が必要です。取得した URL の場合、相対リンクはその URL 自体を基準に自動で解決されます) 。
+
+```bash
+tpc llmstxt doctor ./out/llms.txt ./out/guides/llms.txt --base-url https://docs.example.com
+```
+
+リンクは `HEAD` でチェックされ、これを拒否するサーバーに対しては `GET` にフォールバックします。同時にチェックするのは 8 件です (`--concurrency` で変更可能) 。アンカーと `mailto:` リンクは無視され、重複する URL は 1 回だけチェックされます。リンク切れが 1 つでもあると、コマンドは終了コード 1 で終了します。そのため、この結果を CI や公開ステップの実行条件として利用できます。
+
+## フラグリファレンス {#flags-reference}
+
+### tpc llmstxt init {#tpc-llmstxt-init}
+
+```bash
+tpc llmstxt init <sitemap-url>
+```
+
+| Flag                | Default           | Description                                                                                                 |
+| ------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| `--config`, `-c`    | `llmstxt.yaml`    | YAML 設定ファイルの書き込み先パス。                                                                                        |
+| `--name`            | サイトマップのホスト名から自動設定 | 設定ファイルおよびルートファイルのタイトルに使用するサイト名。                                                                             |
+| `--title`           | サイト名              | ルートファイルのタイトル (`# ...` 見出し) 。                                                                                |
+| `--description`     | —                 | ルートファイルの説明。タイトルの下に `> ...` 引用ブロックとして出力されます。                                                                 |
+| `--details`         | —                 | ルートファイルの詳細。説明と最初のセクションの間に自由形式のテキストとして出力されます。                                                                |
+| `--include`         | —                 | パスがこのグロブに一致する URL のみを残します (複数指定可) 。`**` は複数のセグメントにまたがって一致し、`*` は 1 つのセグメント内でのみ一致します。                     |
+| `--exclude`         | —                 | パスがこのグロブに一致する URL を除外します (複数指定可) 。                                                                       |
+| `--include-regex`   | —                 | この Go 正規表現に一致する URL のみを残します。照合は URL 全体に対して行われます (複数指定可) 。                                                   |
+| `--exclude-regex`   | —                 | この Go 正規表現に一致する URL を除外します。照合は URL 全体に対して行われます (複数指定可) 。                                                    |
+| `--rewrite`         | —                 | `PATTERN=>REPLACEMENT` 形式の URL 書き換えルール (Go 正規表現、複数指定可) 。`site.urlRewrites` に書き込まれ、`generate` の実行時に適用されます。   |
+| `--enrich`          | `false`           | 各ページを取得し、実際のタイトルと説明を設定します。リダイレクトをたどり、最終的に同じ URL になるページは重複を排除します。`--rewrite` ルールが適用される場合は、書き換え後の URL を取得します。 |
+| `--no-dedup`        | `false`           | `--enrich` の実行時に、リダイレクト後に複数のページが同じ URL になる場合でも、すべてのページを保持します。                                               |
+| `--max-description` | `400`             | `--enrich` の実行時に取得される説明の最大文字数。                                                                              |
+| `--max-urls`        | `5000`            | サイトマップから読み込むページ URL の最大数。                                                                                   |
+| `--force`           | `false`           | 設定ファイルが既に存在する場合は上書きします。                                                                                     |
+
+### tpc llmstxt generate {#tpc-llmstxt-generate}
+
+```bash
+tpc llmstxt generate
+```
+
+| フラグ              | デフォルト          | 説明                              |
+| ---------------- | -------------- | ------------------------------- |
+| `--config`, `-c` | `llmstxt.yaml` | YAML 設定ファイルのパス。                 |
+| `--out`, `-o`    | `.`            | 生成した llms.txt ファイルの出力先ディレクトリ。   |
+| `--dry-run`      | `false`        | ファイルを書き込まず、レンダリング結果を標準出力に表示します。 |
+
+### tpc llmstxt doctor {#tpc-llmstxt-doctor}
+
+```bash
+tpc llmstxt doctor <llms.txt file or URL> [more...]
+```
+
+| フラグ             | デフォルト                | 説明                                          |
+| --------------- | -------------------- | ------------------------------------------- |
+| `--base-url`    | 取得したドキュメントの場合は入力 URL | 相対リンクの解決に使用する絶対 URL。相対リンクを含むローカルファイルでは必須です。 |
+| `--concurrency` | `8`                  | 並列でチェックするリンク数 (1～64) 。                      |
+
+### グローバルフラグ {#global-flags}
+
+すべての `tpc` コマンドで使用できます。
+
+| フラグ              | デフォルト                                | 説明                                                            |
+| ---------------- | ------------------------------------ | ------------------------------------------------------------- |
+| `--format`, `-f` | `text`                               | コマンド結果とヘルプの出力形式 (`text`、`json`、`csv` のいずれか) 。                 |
+| `--api`, `-a`    | `https://app.promptingco.com/api/v1` | すべてのリクエストで使用する API のベース URL (`llmstxt` はローカルで実行されるため使用しません) 。 |
+| `--token`, `-t`  | —                                    | そのコマンドの実行時にのみ使用するアクセストークン (`llmstxt` では使用しません) 。              |

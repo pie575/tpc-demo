@@ -1,0 +1,64 @@
+---
+title: "Límites y restricciones"
+description: "Cómo el sandbox lleva a cabo una ejecución y los límites estrictos que condicionan la forma de escribir las tareas"
+---
+
+Algunas propiedades del modelo de ejecución condicionan la forma en que debes escribir las tareas. Conocerlas de antemano marca la diferencia entre una ejecución que da un resultado limpio y otra que no aporta nada útil. Esta página reúne en un solo lugar las restricciones de comportamiento y los límites estrictos; las páginas de [conceptos principales](/es/guides/coding-agent-optimization/overview) tratan cada aspecto en profundidad.
+
+## Modelo de ejecución {#execution-model}
+
+### Cada ejecución es un sandbox nuevo y aislado {#every-run-is-a-fresh-isolated-sandbox}
+
+Cada ejecución aprovisiona un sandbox nuevo, lo inicializa y lo destruye al finalizar (consulta [Ejecuciones e iteraciones](/es/guides/coding-agent-optimization/runs)). No se conserva nada entre ejecuciones ni entre tareas: ni archivos, ni paquetes instalados, ni variables de entorno, ni contexto.
+
+Escribe cada [tarea](/es/guides/coding-agent-optimization/tasks) de forma que sea **autónoma**. Una tarea no puede depender de que otra se haya ejecutado antes, y una instrucción como «usa el SDK que instalaste antes» fallará. Todo lo que el agente necesite en disco o instalado debe provenir de los archivos de inicialización y los comandos de inicialización de la tarea, o bien debe hacerlo el propio agente durante la ejecución.
+
+### La instrucción se da una sola vez {#the-instruction-is-one-shot}
+
+El agente recibe la instrucción de la tarea una única vez y se ejecuta hasta terminar o alcanzar el límite de tiempo. **No hay conversación de varios turnos**: no puedes responder a una pregunta aclaratoria ni enviar un mensaje de seguimiento a mitad de la ejecución. La instrucción debe incluir todo lo que el agente necesita.
+
+### Sin pantalla interactiva {#no-interactive-display}
+
+Los sandboxes son **Linux sin interfaz gráfica** (headless): no hay navegador interactivo ni entorno de escritorio. Diseña las tareas en torno a resultados que el agente pueda lograr desde la línea de comandos, el sistema de archivos o HTTP. (Internamente se usa un navegador sin interfaz gráfica para la evaluación basada en capturas de pantalla, pero el agente no puede usarlo como herramienta).
+
+### Termina el trabajo y deja un artefacto {#finish-the-work-and-leave-an-artifact}
+
+Una ejecución finaliza cuando el proceso del agente termina, y el sandbox se destruye justo después. **Cualquier proceso que el agente deje ejecutándose en segundo plano se elimina** y su salida se pierde. El fallo más habitual es un agente que termina su turno con «el servidor de desarrollo ya está en ejecución»: el servidor muere junto con el sandbox y no se captura nada.
+
+Redacta las instrucciones y los objetivos de modo que el agente **complete el trabajo y deje un artefacto persistente** en lugar de mantener un proceso abierto:
+
+* Haz que el agente escriba la salida en un archivo, capture la respuesta HTTP o guarde los registros, y luego evalúa ese artefacto.
+* Para tareas del tipo «levantar un servidor», indica al agente que lo inicie, le haga una petición, guarde la respuesta en un archivo y lo detenga, todo dentro de la ejecución.
+* Evalúa el artefacto guardado (por ejemplo, con un [objetivo](/es/guides/coding-agent-optimization/tasks#goals-and-criteria) `bash_command` o `script_judge`), no el proceso en vivo.
+
+## Límites estrictos {#hard-limits}
+
+| Área                                              | Límite                                                                                                                                                                                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ejecución del agente                              | Hasta 60 minutos por ejecución (la ejecución completa, incluidas la evaluación y el análisis, puede durar hasta ~70 minutos)                                                                                      |
+| Comando de inicialización — longitud              | De 1 a 10.000 caracteres cada uno                                                                                                                                                                                 |
+| Comando de inicialización — cantidad              | Hasta 50 por tarea y hasta 50 por entorno (se aplican por separado); se ejecutan de forma secuencial y se detienen ante el primer fallo (el primer código de salida distinto de cero interrumpe la configuración) |
+| Comando de inicialización — tiempo de espera      | De 1 segundo a 30 minutos cada uno (5 minutos por defecto)                                                                                                                                                        |
+| Comando de inicialización — directorio de trabajo | Debe estar dentro de `/home/agent-user/`                                                                                                                                                                          |
+| Archivo de inicialización — tamaño del zip        | Hasta 500 MB; se extrae automáticamente                                                                                                                                                                           |
+| Archivo de inicialización — ruta de destino       | Debe estar dentro de `/home/agent-user/`                                                                                                                                                                          |
+| Recursos del sandbox                              | CPU de 1 a 4, memoria de 1 a 8 GB, disco de 1 a 10 GB; consulta [Entornos](/es/guides/coding-agent-optimization/environments#sandbox-resources)                                                                      |
+| Objetivo `script_judge`                           | Tiempo de espera de 120 segundos por defecto, configurable por objetivo (el código de salida 124 indica que se agotó el tiempo)                                                                                   |
+
+Los valores de recursos del sandbox fuera de rango no se rechazan, sino que se ajustan al rango permitido. Si se solicita cualquier GPU, la ejecución se deriva automáticamente a una infraestructura con GPU.
+
+## Secretos y aislamiento {#secrets-and-isolation}
+
+Los secretos se limitan al ámbito de un entorno y se inyectan como variables de entorno en tiempo de ejecución; consulta [Entornos](/es/guides/coding-agent-optimization/environments#secrets-from-the-cli). Hay dos restricciones que debes tener en cuenta:
+
+* **Los nombres reservados no se pueden sobrescribir.** Las variables gestionadas por la plataforma, como `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `AWS_*`, `HOME` y `PATH`, están protegidas.
+* **Los secretos de la plataforma se revocan mientras se ejecuta un `script_judge`**, de modo que un script de verificación no puede leerlos ni exfiltrarlos.
+
+El acceso de red saliente está permitido de forma predeterminada, ya que el entorno de ejecución del agente lo necesita para comunicarse con el proveedor del modelo.
+
+## Uso de `script_judge` {#using-script_judge}
+
+El [tipo de evaluación](/es/guides/coding-agent-optimization/tasks#goals-and-criteria) `script_judge` ejecuta tu propio script de shell en el sandbox cuando el agente termina (código de salida 0 = aprobado). Antes de confiar en él:
+
+* Requiere que el **indicador de funcionalidad `script_judge`** esté habilitado en tu organización. Si no lo tienes, usa una alternativa determinista (`bash_command`, `file_exists`) o un `llm_judge`.
+* Cada script **pasa por una revisión de seguridad al registrar la tarea**: se marcan los scripts que leen secretos de la plataforma, exfiltran datos, descargan y ejecutan código remoto o agotan recursos.

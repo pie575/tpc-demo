@@ -1,0 +1,37 @@
+---
+title: "Registro de auditoría"
+description: "Descubre qué registra TPC de las solicitudes de escritura a la API."
+---
+
+# Registro de auditoría {#audit-log}
+
+TPC registra una entrada en el registro de auditoría de la API por cada solicitud distinta de GET que devuelve una respuesta 2xx y pertenece a una organización.
+
+## Qué se registra {#what-is-logged}
+
+Cada fila de auditoría almacena:
+
+| Campo                   | Descripción                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| ID de organización      | La organización determinada a partir de tu credencial.                         |
+| ID de usuario           | El usuario humano, si la credencial tiene uno asociado.                        |
+| ID de clave de API      | El ID de la clave de API, cuando la llamada se autentica con una clave de API. |
+| ID de principal         | ID de cuenta de servicio, ID de clave de API, ID de sesión o ID de usuario.    |
+| Ruta y método           | La ruta del endpoint y el método HTTP.                                         |
+| Estado                  | El código de estado de la respuesta.                                           |
+| Método de autenticación | `session`, `bearer` o `api_key`.                                               |
+| ID de solicitud         | El encabezado de respuesta `x-request-id`.                                     |
+| Hash del cuerpo         | Un hash SHA-256 del cuerpo de la solicitud.                                    |
+| Vencimiento             | La fecha límite de retención de la fila.                                       |
+
+## Qué no se registra {#what-is-not-logged}
+
+TPC no almacena los cuerpos completos de las solicitudes en la tabla de auditoría. Solo guarda el hash del cuerpo de la solicitud, lo que te permite demostrar qué carga útil se utilizó sin copiar el contenido de los clientes en el registro de auditoría.
+
+## Retención {#retention}
+
+Las entradas del registro de auditoría de la API se conservan durante 180 días.
+
+## Consulta {#lookup}
+
+Todavía no hay un endpoint público de registro de auditoría. Por ahora, para consultar una solicitud, envía al equipo de soporte el `x-request-id`, la marca de tiempo aproximada y el slug de la organización.

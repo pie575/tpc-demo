@@ -1,0 +1,123 @@
+---
+title: "アナリティクス"
+description: "TPC CLI でシェア・オブ・ボイス、センチメント、トラフィック、引用を確認したり、explore でカスタムクエリを作成したりできます。"
+---
+
+# アナリティクス {#analytics}
+
+ターミナルから、アクティブなプロダクトのアナリティクスを取得できます。アナリティクスコマンドは読み取り専用で、`analytics:read` スコープを持つトークンまたは API キーが必要です。
+
+<Note>
+  アナリティクスコマンドには `--scope <org-slug>/<product-slug>` の指定が必要です。
+</Note>
+
+```bash
+# 過去30日間のプロダクトのシェア・オブ・ボイス
+tpc analytics sov --scope pro-org/my-product
+
+# 業界ランキング（競合他社のシェア・オブ・ボイス）
+tpc analytics sov --scope pro-org/my-product --by competitor
+
+# プロンプトごとのセンチメントと前週比の推移
+tpc analytics sentiment --scope pro-org/my-product --wow
+
+# ページ別の AI トラフィック
+tpc analytics traffic --scope pro-org/my-product --by page
+
+# 引用元のランキング
+tpc analytics citations --scope pro-org/my-product --last 30d --top 25
+```
+
+## シェア・オブ・ボイス {#share-of-voice}
+
+`tpc analytics sov` は、選択した期間について1つの値を返します。プロダクトに言及した
+完了済みの実行数を、同じスコープと期間内における完了済みの全実行数で割り、
+100を掛けて算出します。デフォルトの期間は、今日とその前の29日間 (暦日) を
+合わせた範囲です。
+
+```bash
+# 明示的に指定した期間の累積値を 1 つ取得
+tpc analytics sov --scope pro-org/my-product --from 2026-04-01 --to 2026-04-30
+
+# グラフ描画用に 30 日間のローリングスナップショットを取得
+tpc analytics sov --scope pro-org/my-product --timeseries --last 90d
+
+# 直近 30 日分のスナップショット日付について 7 日間のローリングスナップショットを取得
+tpc analytics sov --scope pro-org/my-product --timeseries --rolling-window 7 --last 30d
+
+# 月曜始まりの週単位バケットで 4 週間のローリングスナップショットを取得
+tpc analytics sov --scope pro-org/my-product --timeseries --granularity week --rolling-window 4 --last 90d
+
+# ランキング形式の内訳は時系列アナリティクスエンドポイントを使用
+tpc analytics sov --scope pro-org/my-product --by competitor --last 30d
+
+# 特定のトピック内での競合ランキング
+tpc analytics sov --scope pro-org/my-product --by competitor --topic <topicId>
+```
+
+`--timeseries`、`--by`、`--prompt`、`--topic` はローリングスナップショットを返します。これらの
+モードでは、`--from`、`--to`、`--last` でスナップショットの日付を指定します。
+プロダクト単位または `--by engine` のリクエストでは、`--granularity day|week|month` で UTC
+の暦に基づく集計単位を選択し、`--rolling-window 1..30` で各ポイントに含める集計単位の数を
+指定します。デフォルトはそれぞれ `day` と `30` です。隣接するスナップショットは
+期間が重複するため、`mentions` や `runs` の値を合算しないでください。
+
+## Explore：独自のアナリティクスクエリを作成する {#explore-build-your-own-analytics-query}
+
+`tpc analytics explore` は、上記の固定コマンドの基盤となる柔軟なクエリインターフェースです。メトリクスを 1 つ選び、`--by` で最大 1 つの値ごとにグループ化したうえで、フィルターと期間を指定して対象を絞り込みます。このコマンドは `POST /api/v1/analytics/explore` エンドポイントを呼び出すため、ここでできることはすべて API や `exploreAnalytics` MCP ツールからも実行できます。
+
+| メトリクス       | グループ化 (`--by`)                                          | フィルター                                                                                                                    |
+| ----------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `sov`       | `date`, `prompt`, `topic`, `engine`, `competitor`       | `--view`, `--prompt`, `--topic`, `--engine`, `--region`                                                                  |
+| `citations` | `source`, `category`, `type`, `author`, `model`, `date` | `--view`, `--topic`, `--region`, `--category`, `--content-type`, `--model`, `--author`, `--query`, `--product-mentioned` |
+| `traffic`   | `date`, `page`, `model`, `category`                     | `--traffic-type`, `--provider`, `--category`                                                                             |
+| `sentiment` | `prompt`                                                | `--view`, `--prompt`, `--topic`                                                                                          |
+
+```bash
+# プロダクトのシェア・オブ・ボイスの最新スナップショット
+tpc analytics explore --scope pro-org/my-product --metric sov
+
+# 7日間ローリングのシェア・オブ・ボイス推移
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --rolling-window 7 --last 30d
+
+# 4週間ローリングのシェア・オブ・ボイス推移
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --granularity week --rolling-window 4 --last 90d
+
+# 回答エンジン別の4週間ローリングのシェア・オブ・ボイス
+tpc analytics explore --scope pro-org/my-product --metric sov --by engine --granularity week --rolling-window 4 --last 90d
+
+# 業界ランキング：全競合のシェア・オブ・ボイスを順位付け
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --last 30d
+
+# 特定トピック内の業界ランキング（カテゴリランキング）
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --topic <topicId>
+
+# 特定プロンプトのシェア・オブ・ボイスの時系列
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --prompt <promptId>
+
+# 過去90日間の引用をソースカテゴリ別に集計
+tpc analytics explore --scope pro-org/my-product --metric citations --by category --last 90d
+
+# 引用数上位のソースをユニーク会話数順に表示
+tpc analytics explore --scope pro-org/my-product --metric citations --by source --sort-by mentions --top 25
+
+# 週単位で集計したAIトラフィック
+tpc analytics explore --scope pro-org/my-product --metric traffic --by date --granularity week
+
+# ページ別の人間のトラフィック
+tpc analytics explore --scope pro-org/my-product --metric traffic --by page --traffic-type human
+
+# プロンプト別のセンチメント（前週比付き）
+tpc analytics explore --scope pro-org/my-product --metric sentiment --compare wow
+```
+
+日付範囲はデフォルトで直近30日間です。範囲を指定するには、`--last 7d|30d|90d` を使用するか、`--from` と `--to` を組み合わせて指定します。柔軟に集計できる `explore` の SoV クエリでは、スナップショットのセマンティクスが維持されます。`--by` を省略すると利用可能な最新のローリングスナップショットのみが返され、`--by date` を指定すると、期間が重なり合うローリングスナップショットが日付ごとに1つずつ返されます。`--granularity day|week|month` で UTC の集計単位を選択し、`--rolling-window 1..30` で各 SOV スナップショットに含める集計単位の数を指定します。デフォルト値はそれぞれ `day` と `30` です。カスタム設定は、プロダクト別、日付別、エンジン別の SOV 系列で使用できます。`explore` から返される SoV の `mentions` と `runs` は期間の開始から終了までの合計値ではないため、日付ごとの行を合算しないでください。日付範囲全体の累積値を1つだけ取得したい場合は、固定形式の `tpc analytics sov` コマンドを使用してください。
+
+レスポンスは汎用的なテーブル形式です。API はフラットな行とあわせて列のメタデータを返すため、どの指標も同じ形式で表示されます。スクリプトで利用する場合は、`--json` を付けて機械可読なレスポンスを取得してください。
+
+```bash
+# 上位3社の競合をJSONの行形式で取得
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --top 3 --json | jq '.rows'
+```
+
+選択したメトリクスに適用できないフィルターを指定すると、サポートされているフィルターの一覧を含むエラーが返されます。これにより、エージェントやスクリプトは誤ったデータを気付かないまま受け取るのではなく、修正の手がかりとなるエラーを受け取れます。すべてのフラグについては、`tpc analytics explore --help` を参照してください。

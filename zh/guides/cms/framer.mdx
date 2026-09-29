@@ -1,0 +1,63 @@
+---
+title: "连接 Framer"
+description: "使用 Framer API 密钥将 TPC 草稿发布到 Framer CMS 集合"
+---
+
+The Prompting Company 通过 Framer API 将内容写入 Framer CMS 集合。
+
+<Note>
+  访问 Framer CMS API 需要 **Framer Pro 或更高级别的套餐**。
+</Note>
+
+## 开始之前 {#before-you-start}
+
+* 拥有该 Framer 项目的管理员权限。
+* 已在该项目中创建 CMS 集合。
+
+## 生成 API 密钥 {#generate-an-api-key}
+
+1. 在 Framer 中打开你的项目。
+2. 点击左上角的项目名称，然后打开 **Settings**。
+3. 打开 **API** 选项卡。
+4. 点击 **Generate API key**。
+5. 授予 **CMS write** 权限范围。
+6. 复制密钥。该密钥仅显示一次。
+
+## 复制项目 URL 和集合 ID {#copy-your-project-url-and-collection-id}
+
+* **项目 URL** 即该项目的 `framer.com` URL。
+* **集合 ID** 会在你于 Framer 编辑器中选中某个 CMS 集合时显示，可从 URL 或集合设置面板中复制。
+
+## 匹配字段名称 {#match-field-names}
+
+默认字段为：
+
+* `title`
+* `body`
+
+如果你在集合中重命名过字段，请粘贴准确的字段 slug (而非显示名称) 。
+
+## 在 TPC 中连接 {#connect-in-tpc}
+
+1. 在您的 TPC 产品工作区中打开 **Settings → Integrations**。
+2. 选择 **Framer**。
+3. 输入 API 密钥、项目 URL、集合 ID，以及各自定义字段的 slug (如有) 。
+4. 点击 **Save**，然后点击 **Test connection**。
+
+## 故障排除 {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+当前套餐不包含 CMS API 访问权限，或令牌已被撤销。请确认你使用的是 Pro 或更高级别的套餐，并重新生成密钥。
+
+### 404 collection not found {#404-collection-not-found}
+
+该集合 ID 不属于你输入的项目 URL。请在 Framer 中仔细核对这两项信息。
+
+### 字段保存后为空 {#fields-save-empty}
+
+字段 slug 区分大小写，且必须与集合 schema 完全匹配。
+
+## 相关链接 {#related-links}
+
+* [Framer 开发者文档](https://www.framer.com/developers/)

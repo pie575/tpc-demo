@@ -1,0 +1,93 @@
+---
+title: "错误"
+description: "处理 The Prompting Company API 的结果封装、错误码和请求 ID。"
+---
+
+# 错误 {#errors}
+
+The Prompting Company 的 JSON 端点无论请求成功还是失败，都会返回 `ApiResult<T>` 封装结构。
+
+## 结果结构 {#result-shape}
+
+```ts
+type ApiSuccess<T> = {
+  ok: true;
+  data: T;
+};
+
+type ApiError = {
+  ok: false;
+  code: ApiErrorCode;
+  message: string;
+  details?: unknown;
+};
+
+type ApiResult<T> = ApiSuccess<T> | ApiError;
+```
+
+读取 `data` 之前，请先检查 `ok`：
+
+```ts
+const result = await response.json();
+
+if (!result.ok) {
+  console.error(result.code, result.message, result.details);
+  return;
+}
+
+console.log(result.data);
+```
+
+## 错误码 {#error-codes}
+
+| 错误码                      | 默认状态码 |
+| ------------------------ | ----- |
+| `BAD_REQUEST`            | 400   |
+| `UNAUTHORIZED`           | 401   |
+| `PAYMENT_REQUIRED`       | 402   |
+| `FORBIDDEN`              | 403   |
+| `NOT_FOUND`              | 404   |
+| `METHOD_NOT_ALLOWED`     | 405   |
+| `NOT_ACCEPTABLE`         | 406   |
+| `REQUEST_TIMEOUT`        | 408   |
+| `CONFLICT`               | 409   |
+| `GONE`                   | 410   |
+| `PAYLOAD_TOO_LARGE`      | 413   |
+| `UNSUPPORTED_MEDIA_TYPE` | 415   |
+| `UNPROCESSABLE_ENTITY`   | 422   |
+| `TOO_MANY_REQUESTS`      | 429   |
+| `INTERNAL`               | 500   |
+| `NOT_IMPLEMENTED`        | 501   |
+| `BAD_GATEWAY`            | 502   |
+| `SERVICE_UNAVAILABLE`    | 503   |
+| `GATEWAY_TIMEOUT`        | 504   |
+| `VALIDATION_ERROR`       | 422   |
+| `BUSINESS_LOGIC_ERROR`   | 422   |
+| `EXTERNAL_SERVICE_ERROR` | 502   |
+| `RATE_LIMITED`           | 429   |
+| `MAINTENANCE_MODE`       | 503   |
+| `LIVE_INDEX_NOT_FOUND`   | 404   |
+| `SCOPE_INVALID`          | 422   |
+
+## 常见消息 {#common-messages}
+
+| 消息                        | 含义                                     |
+| ------------------------- | -------------------------------------- |
+| `authentication required` | 未找到有效的会话、bearer token 或 API key。       |
+| `invalid api key`         | 无法验证 `x-api-key` 的值。                   |
+| `public_api_only`         | 使用 API key 调用了内部路由。                    |
+| `auth_method_not_allowed` | 该端点不接受你所使用的凭据类型。                       |
+| `insufficient_scope`      | 你的 bearer token 或 API key 缺少所需的 scope。 |
+| `rate_limited`            | 你已超出当前速率限制桶的配额。                        |
+
+## 请求 ID {#request-ids}
+
+每个包装器响应中都包含：
+
+```text
+x-request-id: 6efaa25e-3ef6-4a34-91c1-7ff3e0fd4cc8
+```
+
+你也可以自行发送 `x-request-id`，前提是它仅包含字母、数字、`_`、`.`、`-` 或 `:`，且长度不超过 128 个字符。如果该值不安全，TPC 会将其替换为新生成的 ID。
+
+如需协助追踪失败的请求，请将请求 ID 提供给支持团队。

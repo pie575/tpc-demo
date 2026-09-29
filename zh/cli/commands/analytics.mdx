@@ -1,0 +1,120 @@
+---
+title: "分析数据"
+description: "通过 TPC CLI 查看声量份额、情感倾向、流量和引用来源，或使用 explore 构建自定义查询。"
+---
+
+# 分析 {#analytics}
+
+通过终端读取当前产品的分析数据。分析命令均为只读，所用令牌或 API 密钥需具备 `analytics:read` 权限范围。
+
+<Note>
+  使用分析命令时须指定 `--scope <org-slug>/<product-slug>`。
+</Note>
+
+```bash
+# 过去 30 天的产品声量份额
+tpc analytics sov --scope pro-org/my-product
+
+# 行业排名（竞争对手声量份额）
+tpc analytics sov --scope pro-org/my-product --by competitor
+
+# 各提示词的情感倾向及周环比变化
+tpc analytics sentiment --scope pro-org/my-product --wow
+
+# 按页面分组的 AI 流量
+tpc analytics traffic --scope pro-org/my-product --by page
+
+# 引用来源排行榜
+tpc analytics citations --scope pro-org/my-product --last 30d --top 25
+```
+
+## 声量份额 {#share-of-voice}
+
+`tpc analytics sov` 会针对所选日期范围返回一个值：先统计提及该产品的已完成运行次数，再除以同一作用域和日期范围内的全部已完成运行次数，最后乘以 100。默认日期范围为今天及之前的 29 个自然日。
+
+```bash
+# 返回指定日期范围内的单个累计值
+tpc analytics sov --scope pro-org/my-product --from 2026-04-01 --to 2026-04-30
+
+# 生成 30 天滚动快照，用于绘制图表
+tpc analytics sov --scope pro-org/my-product --timeseries --last 90d
+
+# 最近 30 个快照日期的 7 天滚动快照
+tpc analytics sov --scope pro-org/my-product --timeseries --rolling-window 7 --last 30d
+
+# 4 周滚动快照，按以周一为起始的周分桶汇总
+tpc analytics sov --scope pro-org/my-product --timeseries --granularity week --rolling-window 4 --last 90d
+
+# 排名细分数据使用时间序列 analytics 端点
+tpc analytics sov --scope pro-org/my-product --by competitor --last 30d
+
+# 单个主题内的竞争对手排名
+tpc analytics sov --scope pro-org/my-product --by competitor --topic <topicId>
+```
+
+`--timeseries`、`--by`、`--prompt` 和 `--topic` 返回滚动快照。在
+这些模式下，`--from`、`--to` 和 `--last` 用于选择快照日期。对于
+产品级别或 `--by engine` 请求，`--granularity day|week|month` 用于选择 UTC
+日历分桶，`--rolling-window 1..30` 则控制每个数据点包含多少个分桶。
+二者的默认值分别为 `day` 和 `30`。相邻快照
+之间存在重叠，因此请勿将它们的 `mentions` 或 `runs` 值相加。
+
+## Explore：构建自定义分析查询 {#explore-build-your-own-analytics-query}
+
+`tpc analytics explore` 是上述固定命令背后的灵活查询入口。先选择一个指标，再用 `--by` 按最多一个维度分组，然后通过筛选条件和日期范围限定查询范围。该命令调用 `POST /api/v1/analytics/explore` 端点，因此这里能做的所有操作，都同样可以通过 API 或 `exploreAnalytics` MCP 工具完成。
+
+| 指标          | 分组依据 (`--by`)                                           | 筛选条件                                                                                                                     |
+| ----------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `sov`       | `date`, `prompt`, `topic`, `engine`, `competitor`       | `--view`, `--prompt`, `--topic`, `--engine`, `--region`                                                                  |
+| `citations` | `source`, `category`, `type`, `author`, `model`, `date` | `--view`, `--topic`, `--region`, `--category`, `--content-type`, `--model`, `--author`, `--query`, `--product-mentioned` |
+| `traffic`   | `date`, `page`, `model`, `category`                     | `--traffic-type`, `--provider`, `--category`                                                                             |
+| `sentiment` | `prompt`                                                | `--view`, `--prompt`, `--topic`                                                                                          |
+
+```bash
+# 产品最新的声量份额快照
+tpc analytics explore --scope pro-org/my-product --metric sov
+
+# 7 天滚动声量份额序列
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --rolling-window 7 --last 30d
+
+# 4 周滚动声量份额序列
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --granularity week --rolling-window 4 --last 90d
+
+# 按回答引擎分组的 4 周滚动声量份额
+tpc analytics explore --scope pro-org/my-product --metric sov --by engine --granularity week --rolling-window 4 --last 90d
+
+# 行业排名：所有竞争对手的声量份额排名
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --last 30d
+
+# 单个主题内的行业排名（类别排名）
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --topic <topicId>
+
+# 单个 prompt 的声量份额时间序列
+tpc analytics explore --scope pro-org/my-product --metric sov --by date --prompt <promptId>
+
+# 过去 90 天的引用，按来源类别分组
+tpc analytics explore --scope pro-org/my-product --metric citations --by category --last 90d
+
+# 被引用最多的来源，按去重对话数排序
+tpc analytics explore --scope pro-org/my-product --metric citations --by source --sort-by mentions --top 25
+
+# 按周分桶的 AI 流量
+tpc analytics explore --scope pro-org/my-product --metric traffic --by date --granularity week
+
+# 按页面统计的真人流量
+tpc analytics explore --scope pro-org/my-product --metric traffic --by page --traffic-type human
+
+# 每个 prompt 的情感倾向及周环比
+tpc analytics explore --scope pro-org/my-product --metric sentiment --compare wow
+```
+
+日期窗口默认为最近 30 天。可使用 `--last 7d|30d|90d` 选择范围，也可同时使用 `--from` 和 `--to` 指定范围。灵活的 `explore` SoV 查询沿用快照语义：省略 `--by` 时仅返回最新可用的滚动快照，而使用 `--by date` 时会为每个日期各返回一个滚动快照，这些快照彼此重叠。`--granularity day|week|month` 用于选择 UTC 时间桶，`--rolling-window 1..30` 控制每个 SOV 快照包含的时间桶数量；两者默认值分别为 `day` 和 `30`。自定义设置适用于按产品、日期和引擎划分的 SOV 序列。`explore` 返回的 SoV `mentions` 和 `runs` 并非整个起止区间的总计，因此切勿将各日期行的值相加。如需获取整个日期范围的单个累计值，请使用固定的 `tpc analytics sov` 命令。
+
+响应是一个通用表格：API 在返回扁平行数据的同时附带列元数据，因此所有指标都以相同方式呈现。添加 `--json` 可获取机器可读的响应，便于编写脚本：
+
+```bash
+# 以 JSON 行的形式输出排名前三的竞争对手
+tpc analytics explore --scope pro-org/my-product --metric sov --by competitor --top 3 --json | jq '.rows'
+```
+
+如果筛选条件不适用于所选指标，请求会被拒绝，并返回支持的筛选条件列表。这样，智能体和脚本会收到可据以修正的错误提示，而不是在毫无察觉的情况下拿到错误数据。完整的参数说明请参阅 `tpc analytics explore --help`。

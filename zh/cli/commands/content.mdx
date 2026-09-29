@@ -1,0 +1,203 @@
+---
+title: "内容"
+description: "使用 TPC CLI 创建、生成、审阅、发布和管理内容。"
+---
+
+# 内容 {#content}
+
+在终端中管理产品内容的完整生命周期：创建或生成草稿，处理审核队列 (批准、拒绝、退回修订) ，发布已批准的草稿，以及编辑线上页面。传入 `--scope <org-slug>/<product-slug>` 即可选择产品。每个 JSON 响应都会包含解析后的作用域。
+
+<Note>
+  `tpc content` 取代了已移除的 `tpc site page` 命令组。发布前必须先通过审核：`create` 和 `generate` 会将草稿放入审核队列，草稿获批之前，`publish` 会因冲突而失败。旧的免审核发布方式 `site page update --status published` 已不复存在。
+</Note>
+
+## 生命周期 {#the-lifecycle}
+
+```
+创建 / 生成  →  审核（批准 / 拒绝 / 修改）  →  发布
+```
+
+审核队列其实就是一个列表筛选条件：`tpc content list --status pending-review`。
+
+## 列出内容 {#list-content}
+
+列出已发布的页面 (默认行为) ：
+
+```bash
+tpc --scope pro-org/my-product content list
+```
+
+筛选已发布内容列表 (支持搜索、路径前缀、分页和排序) ：
+
+```bash
+tpc --scope pro-org/my-product content list \
+  --query pricing \
+  --path-prefix blog/ \
+  --page 2 --page-size 10 \
+  --order-by createdAt --order-dir asc
+```
+
+列出审核队列及其他生命周期状态下的内容：
+
+```bash
+tpc --scope pro-org/my-product content list --status pending-review
+tpc --scope pro-org/my-product content list --status generating
+tpc --scope pro-org/my-product content list --status rejected   # 附带驳回反馈
+tpc --scope pro-org/my-product content list --status failed
+tpc --scope pro-org/my-product content list --status approved
+```
+
+`--prompt <prompt-id>` 适用于所有状态，包括 `published`。已发布的页面会保留生成它时所用的提示词，因此你可以借此查出“哪些提示词还没有内容？”：
+
+```bash
+# 由同一个 prompt 生成的所有已发布页面
+tpc --scope pro-org/my-product content list --prompt prompt_123
+
+# 该 prompt 下仍在审核中的草稿
+tpc --scope pro-org/my-product content list --status pending-review --prompt prompt_123
+```
+
+已发布的条目包含 `promptId` 字段 (手动创建的页面为 `null`) ，
+以及一个经白名单过滤的元数据对象，其中包含规范化后的生成内容
+类型：
+
+```json
+{
+  "metadata": {
+    "contentType": "decision-guide"
+  }
+}
+```
+
+已发布页面和审核草稿均会稳定提供 `metadata.contentType`。对于手动创建的页面，以及无法映射到可选生成类型的内容平台，该字段为
+`null`。内部生成元数据不会对外公开。
+
+## 获取单个条目 {#get-one-item}
+
+`get` 可接受草稿 ID 或已发布文档 ID；响应中会注明实际匹配的是哪一类。
+
+```bash
+tpc --scope pro-org/my-product content get adraft_123
+tpc --scope pro-org/my-product content get adoc_123
+```
+
+两种变体的 JSON 输出中都包含相同的规范化 `metadata.contentType` 字段。若该字段存在，文本输出会将其显示为
+`Content type: <value>`。
+
+## 创建内容 {#create-content}
+
+新创建的页面会以 `pending_review` 草稿的形式进入审核队列，审核通过后才会发布。
+
+```bash
+tpc --scope pro-org/my-product content create \
+  --slug blog/hello-world \
+  --title "Hello" \
+  --content "# Hello"
+```
+
+从本地 Markdown 文件创建：
+
+```bash
+tpc --scope pro-org/my-product content create \
+  --slug docs/install \
+  --title "Install" \
+  --content-file ./install.md
+```
+
+## 生成内容 {#generate-content}
+
+为一个或多个提示词启动内容生成智能体 (Pro 套餐) 。生成的草稿会进入审核队列。
+
+```bash
+tpc --scope pro-org/my-product content generate --prompt prompt_123
+tpc --scope pro-org/my-product content generate \
+  --prompt prompt_123 --prompt prompt_456 \
+  --type recommended \
+  --watch
+```
+
+`--watch` 会每 5 秒轮询一次各个草稿，直到生成完成或失败。
+
+取消仍在生成中的草稿 (或因工作进程终止而卡在生成状态的草稿) 。此操作会将草稿标记为 `cancelled`，并将其移出生成队列。此外，服务器端的清理程序也会将处于 `generating` 状态超过六小时的草稿转为 `failed`。
+
+```bash
+tpc --scope pro-org/my-product content cancel adraft_123
+tpc --scope pro-org/my-product content list --status failed
+```
+
+## 审核队列 {#review-the-queue}
+
+批准一篇或多篇草稿 (对于可发布的内容，批准后会将其加入发布队列) ：
+
+```bash
+tpc --scope pro-org/my-product content approve adraft_123
+tpc --scope pro-org/my-product content approve adraft_123 adraft_456
+```
+
+拒绝并附上原因 (原因会作为审阅者反馈保存，并显示在 `list --status rejected` 的输出中) ：
+
+```bash
+tpc --scope pro-org/my-product content reject adraft_123 --reason "Wrong sources cited"
+```
+
+修订草稿：提交编辑后的替换版本，或发送反馈让智能体重新生成 (Pro 套餐) 。两种方式都会将草稿重新放回审核队列，并清除此前的拒绝状态：
+
+```bash
+tpc --scope pro-org/my-product content revise adraft_123 --content-file ./revised.md
+tpc --scope pro-org/my-product content revise adraft_123 --feedback "Tighten the intro and cite the pricing page"
+```
+
+## 发布与回退 {#publish-and-revert}
+
+`publish` 会将已批准的草稿加入发布队列；若草稿尚未获批，则返回冲突错误：
+
+```bash
+tpc --scope pro-org/my-product content publish adraft_123
+```
+
+`revert` 会将已上线的页面撤回 (取消发布) ，并把草稿退回审核队列：
+
+```bash
+tpc --scope pro-org/my-product content revert adraft_123
+```
+
+## 更新已上线的页面 {#update-a-live-page}
+
+仅会更改你传入的标志对应的内容。不存在 `--status` 标志——发布需通过 approve/publish 流程完成。
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 --title "Updated title"
+tpc --scope pro-org/my-product content update adoc_123 --content-file ./page.md
+```
+
+传入空字符串即可清除可选字段：
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 --redirect-url ""
+```
+
+管理域名关联：
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 \
+  --attach-domain-id domain_123 \
+  --canonical-domain-id domain_123
+```
+
+## 删除内容 {#delete-content}
+
+软删除已上线的页面 (及其关联的草稿和跟踪的 URL) ，或删除未发布的草稿，包括仍处于 `generating` 状态的草稿：
+
+```bash
+tpc --scope pro-org/my-product content delete adoc_123
+tpc --scope pro-org/my-product content delete adoc_123 adraft_456
+tpc --scope pro-org/my-product content delete adraft_stuck_generating
+```
+
+`delete` 也适用于处于 `status: generating` 状态的内容。如果只想停止生成、而不彻底删除该行，请使用 `cancel`。
+
+所有命令还支持 `--format json`，方便编写脚本：
+
+```bash
+tpc --scope pro-org/my-product content list --status pending-review --format json
+```

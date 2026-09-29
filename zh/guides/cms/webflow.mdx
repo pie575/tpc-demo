@@ -1,0 +1,66 @@
+---
+title: "连接 Webflow"
+description: "使用站点 API 令牌将 TPC 草稿发布到 Webflow CMS 集合"
+---
+
+The Prompting Company 通过站点范围的 API 令牌将内容发布到 Webflow CMS 集合。
+
+## 开始之前 {#before-you-start}
+
+* 拥有该 Webflow 站点的工作区管理员权限。
+* 已为要发布的内容类型 (例如 Blog Posts) 创建好 CMS 集合。
+
+## 生成 API 令牌 {#generate-an-api-token}
+
+1. 在 Webflow Designer 中，点击左上角的 **Webflow** 徽标，然后打开 **Site Settings**。
+2. 切换到 **Apps &amp; integrations** 标签页。
+3. 向下滚动到 **API access**，然后点击 **Generate API token**。
+4. 为集合所在的站点授予 **CMS read/write** 权限范围 (scope) 。
+5. 复制令牌。
+
+## 获取集合 ID {#get-your-collection-id}
+
+1. 在 Designer 中打开 **CMS** 面板。
+2. 点击要发布到的目标集合。
+3. 点击 **⚙ Settings** 图标。
+4. 复制底部显示的 **Collection ID**。
+
+<Warning>
+  请使用 Collection ID，而不是 slug。两者看起来很像，但 ID 是一串更长的字母数字组合。
+</Warning>
+
+## 匹配集合字段的 slug {#match-your-collection-field-slugs}
+
+TPC 默认使用以下字段 slug：
+
+* `name`
+* `slug`
+* `body`
+* `summary`
+
+如果你在 Webflow 中重命名过字段，请粘贴准确的 **slug** (而不是界面上显示的标签名) 。图片字段为可选项。
+
+## 在 TPC 中连接 {#connect-in-tpc}
+
+1. 在 TPC 产品工作区中打开 **Settings → Integrations**。
+2. 选择 **Webflow**。
+3. 输入 API 令牌、集合 ID 以及所需的自定义字段 slug。
+4. 点击 **Save**，然后点击 **Test connection**。
+
+## 故障排除 {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+令牌缺少 CMS 写入权限范围，或该令牌是在其他站点上生成的。请在正确的站点上重新生成令牌，并启用 **CMS read/write** 权限。
+
+### 400 &quot;unknown field&quot; {#400-unknown-field}
+
+TPC 中配置的某个字段 slug 在该集合中不存在。请前往 Webflow Designer → CMS → Collection settings → Fields 核对字段 slug。
+
+### 草稿已发布，但 CMS 面板中未显示 {#draft-published-but-not-visible-in-the-cms-panel}
+
+请刷新 Designer。Webflow 的 Designer 会缓存集合列表，刷新后即可看到该条目。
+
+## 相关链接 {#related-links}
+
+* [Webflow API 令牌文档](https://developers.webflow.com/data/reference/authentication)

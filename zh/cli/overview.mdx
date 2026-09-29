@@ -1,0 +1,83 @@
+---
+title: "CLI 概览"
+description: "在终端中访问你的工作区、组织和模拟工作流。"
+---
+
+# CLI 概览 {#cli-overview}
+
+借助 The Prompting Company CLI，你可以在终端中访问自己的工作区、组织和模拟工作流。
+
+可执行文件名为：
+
+```text
+tpc
+```
+
+## 前提条件 {#prerequisites}
+
+* macOS、Linux 或 Windows
+* `amd64` 或 `arm64`
+
+请先阅读[安装](/zh/cli/installation)，再阅读[身份验证](/zh/cli/authentication)。
+
+## 常用命令 {#common-commands}
+
+```bash
+# 查看当前认证状态
+tpc auth whoami
+
+# 查看已安装的 CLI 版本
+tpc version
+tpc --version
+
+# 检查更新
+tpc update --check
+
+# 安装最新版本
+tpc update
+
+# 列出组织
+tpc org list
+
+# 产品级命令需传入 --scope <org-slug>/<product-slug>
+tpc sim experiment list --scope cloudflare-dev/browser-run
+tpc analytics sov --scope nvidia-com/nvidia-dgx-spark --last 30d
+
+# 列出内容
+tpc --scope prompting-co/my-product content list
+
+# 列出知识文件
+tpc --scope prompting-co/my-product knowledge file list
+
+# 查看已生成的提示词建议
+tpc --scope my-product/prompting-co prompts suggestions list
+tpc --scope my-product/prompting-co prompts suggestions generate
+
+# 添加运行提示词时所用的角色
+tpc --scope prompting-co/my-product persona create --name "RevOps lead" --description "Owns CRM hygiene"
+
+# 根据站点地图生成 llms.txt 文件（无需认证）
+tpc llmstxt init https://docs.example.com/sitemap.xml
+tpc llmstxt generate
+
+# 查看模拟命令的帮助信息
+tpc sim help
+
+# 启动竞品基准测试的引导式设置
+tpc sim ax setup --type benchmark --scope acme/my-product
+
+# 查看环境列表命令的帮助信息（无需认证）
+tpc env list -h
+
+# 列出模拟环境
+tpc env list
+
+# Model Council 配置与运行
+tpc council config get
+tpc council run
+tpc council list
+```
+
+## 下一步 {#next-step}
+
+完成安装和身份验证后，即可直接在终端中处理产品和模拟相关的工作流。请参阅 [Content](/zh/cli/commands/content)、[Knowledge](/zh/cli/commands/knowledge)、[提示词](/zh/cli/commands/prompts)、[Personas](/zh/cli/commands/persona)、[Analytics](/zh/cli/commands/analytics)、[Model Council](/zh/cli/commands/council)、[Agent Experience](/zh/cli/commands/agent-experience) 和 [模拟环境](/zh/cli/commands/simulation-environments)。

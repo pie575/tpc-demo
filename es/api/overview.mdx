@@ -1,0 +1,69 @@
+---
+title: "Descripción general de la API"
+description: "Empieza a usar la API de TPC y consulta los métodos de autenticación, los alcances y la documentación de referencia."
+---
+
+# Descripción general de la API {#api-overview}
+
+La API de The Prompting Company te permite gestionar tu contenido mediante programación a través de los mismos endpoints `/api/v1` que utiliza el dashboard, con el mismo envoltorio `ApiResult` y el mismo modelo de datos acotado a la organización.
+
+Usa la API cuando necesites sincronizar las páginas de tu sitio desde un CMS, automatizar operaciones de contenido o crear flujos de trabajo de servidor a servidor en torno a tu espacio de trabajo de TPC.
+
+## URL base {#base-url}
+
+```text
+https://app.promptingco.com
+```
+
+Para el desarrollo local se usa:
+
+```text
+http://localhost:3000
+```
+
+Todos los endpoints públicos se encuentran en `/api/v1`.
+
+## Autenticación de un vistazo {#authentication-at-a-glance}
+
+| Método           | Úsalo cuando                                             | Cómo se envía                                             |
+| ---------------- | -------------------------------------------------------- | --------------------------------------------------------- |
+| Cookie de sesión | Haces llamadas propias del dashboard desde el navegador. | El dashboard envía la cookie `better-auth.session_token`. |
+| OAuth bearer     | Usas la CLI u otro flujo de cliente OAuth.               | Envía `Authorization: Bearer <token>`.                    |
+| Clave de API     | Desarrollas integraciones de servidor a servidor.        | Envía `x-api-key: <key>`.                                 |
+
+Para las integraciones, crea una clave de API de la organización desde la configuración del dashboard y concede solo los alcances que necesite tu flujo de trabajo.
+
+## Catálogo de alcances {#scope-catalog}
+
+| Alcance             | Permite                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| `content:read`      | Leer páginas del sitio, contenido Markdown y archivos llms.txt                           |
+| `content:write`     | Crear, actualizar y eliminar páginas y contenido del sitio                               |
+| `prompts:read`      | Leer prompts, temas, sugerencias de prompts y resultados del análisis de prompts         |
+| `prompts:write`     | Crear, actualizar y archivar prompts, y generar, editar o revisar sugerencias de prompts |
+| `simulations:read`  | Leer tareas, ejecuciones, entornos y analíticas de simulaciones de agentes               |
+| `simulations:write` | Crear y lanzar ejecuciones de simulación                                                 |
+| `logs:read`         | Leer registros de tráfico de IA y eventos de auditoría por solicitud                     |
+| `analytics:read`    | Leer datos agregados de analíticas, como rankings, menciones, fuentes y SOV              |
+| `products:read`     | Leer metadatos de productos y datos de competidores                                      |
+| `products:write`    | Actualizar la configuración de productos y las listas de competidores                    |
+
+<Note>
+  Esta tabla se copia deliberadamente de `apps/client/src/lib/api/scopes.ts`.
+  Si ese catálogo cambia, actualiza esta página en el mismo PR para que la documentación y
+  el dashboard sigan sincronizados.
+</Note>
+
+## Próximos pasos {#where-to-go-next}
+
+<Card title="Inicio rápido" icon="rocket" href="/es/api/quickstart" horizontal>
+  Crea una clave con alcance limitado, envía tu primera solicitud y analiza el envoltorio de la respuesta.
+</Card>
+
+<Card title="Autenticación" icon="shield-check" href="/es/api/authentication" horizontal>
+  Elige entre cookies de sesión, tokens OAuth bearer y claves de API.
+</Card>
+
+<Card title="Referencia" icon="book-open" href="/es/api/reference" horizontal>
+  Explora los esquemas de los endpoints, generados a partir del documento OpenAPI en producción.
+</Card>

@@ -1,0 +1,65 @@
+---
+title: "Crear contenido"
+description: "Genera entradas de blog a partir de tus prompts rastreados para que la IA conozca tu negocio"
+---
+
+Si la IA no te conoce, no te recomendará. Tienes que darle a conocer tu negocio creando **contenido** con el que pueda entrenarse y que pueda mostrar a los usuarios a través de búsquedas web.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/KP53RgfKV54" title="Reproductor de video de YouTube" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen />
+
+La forma más eficaz de crear contenido es responder a las preguntas concretas que los usuarios ya se están haciendo. En lugar de adivinar temas, este flujo de trabajo te permite generar al instante entradas de blog a partir de tus prompts rastreados, de modo que cada publicación cubra un hueco concreto en tu visibilidad.
+
+## Crear contenido a partir de prompts {#create-content-from-prompts}
+
+* Ve a la pestaña **Prompts** en la barra lateral
+* Haz clic en los tres puntos junto al prompt para el que quieres crear contenido
+* Elige **Create blog**
+* Accederás a la sección **Review drafts**, donde se encuentran todos los blogs que has generado y que están pendientes de revisión
+* Acepta o rechaza el blog
+  * Si lo aceptas, tu blog se publicará en el **dominio personalizado** que hayas conectado (p. ej., ai.yourdomain.com/article-slug)
+  * Si lo rechazas, deja tus comentarios para que nuestra IA aprenda
+
+## Configurar un dominio personalizado {#set-up-custom-domain}
+
+Todo el contenido que publiques se aloja en un **dominio personalizado** que tú mismo conectas. Antes de publicar, añade tu dominio en Settings para que tu contenido aparezca en una URL como **ai.yourdomain.com** y la IA pueda encontrarlo mediante búsquedas web.
+
+### Agregar un registro DNS {#add-a-dns-record}
+
+#### The Prompting Company {#the-prompting-company}
+
+* Ve a Settings &gt; **Custom domains**
+* Haz clic en **Add domain**
+* Introduce el dominio personalizado en el que quieres alojar tu contenido (p. ej., **ai.yourdomain.com**)
+* Se te mostrará el registro CNAME que debes añadir en tu proveedor de DNS
+
+#### Tu proveedor de DNS (p. ej., Cloudflare, GoDaddy, Namecheap, etc.) {#your-dns-provider-eg-cloudflare-godaddy-namecheap-etc}
+
+* Ve a DNS &gt; **Manage DNS**
+
+* Añade un registro con los siguientes valores:
+
+  | Tipo  | Nombre                                         | Valor          |
+  | ----- | ---------------------------------------------- | -------------- |
+  | CNAME | ai.yourdomain.com (sustitúyelo por tu dominio) | web.tpcdns.com |
+
+* Desactiva **Proxy**
+
+* Elige el valor de **TTL** más bajo
+
+### Enviar a indexación en Google y Bing {#submit-indexing-to-google-bing}
+
+Asegúrate de que Google y Bing puedan indexar tu dominio personalizado enviándolo para su indexación. Sustituye ai.yourdomain.com por tu dominio en las siguientes URL.
+
+**Google:**
+
+* Ve a **Google Search Console**
+* Haz clic en **Add property**
+* Elige **Domain** (la opción de la izquierda) e introduce tu dominio (p. ej., ai.yourdomain.com)
+* Sigue las instrucciones para añadir los registros DNS
+* Ve a la pestaña **Sitemaps** y envía [https://ai.yourdomain.com/sitemap.xml](https://ai.yourdomain.com/sitemap.xml)
+
+**Bing:**
+
+* Ve a **Bing Webmaster Tools**
+* Elige **Import from Google Search Console**
+* Ve a la pestaña **Sitemaps** y envía [https://ai.yourdomain.com/sitemap.xml](https://ai.yourdomain.com/sitemap.xml)

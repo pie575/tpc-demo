@@ -1,0 +1,88 @@
+---
+title: "概要"
+description: "サンドボックス環境でコーディングエージェントがあなたのプロダクトをどう体験するかを評価し、最適化します"
+---
+
+Agent experience では、Claude Code、Codex、OpenCode といった実際のコーディングエージェントを分離されたサンドボックス内で実行してあなたのプロダクトを試させ、定義した目標に基づいて各試行を採点できます。その結果をもとに、ドキュメント、API、オンボーディングの具体的な改善につなげられます。
+
+AI エージェントが SDK のインストールや認証、ドキュメントどおりの操作でつまずくと、ほかの選択肢を推奨してしまいます。この機能を使えば、どこでつまずきが生じているのか、何を改善すべきかを正確に把握できます。
+
+## 仕組み {#how-it-works}
+
+1. **タスクを定義する** — エージェントがプロダクトを使って達成すべきこと (例：「SDK をインストールして最初のイベントを送信する」) と、成功の基準となる目標を設定します
+2. **環境を定義する** — タスクに取り組むエージェントハーネスとモデル、および実行に使うサンドボックスを指定します
+3. **実験を実行する** — すべてのタスクをすべての環境で、それぞれ新しいサンドボックス内で並列に実行します
+4. **結果を確認する** — 実行ごとのスコア、完全なトランスクリプト、抽出されたシグナル、根本原因と推奨される修正方法を含む失敗クラスターを確認します
+
+## 各要素の連携の仕組み {#how-the-pieces-fit-together}
+
+```text
+Experiment
+├── Tasks         (実行内容 + 成功の判定方法)
+├── Environments  (タスクに取り組むエージェント/モデル)
+└── Iterations    (番号付きの実行バッチ)
+    └── Runs      (タスク × 環境、実行ごとにサンドボックス 1 つ)
+        ├── スコア、合否、トランスクリプト、コスト
+        └── シグナル値 → イテレーションごとに集計
+```
+
+各コンセプトには、サイドバーの **Core concepts** に専用のページがあり、[tpc CLI](/ja/cli/overview) にもそれぞれ対応するコマンドグループがあります。
+
+| コンセプト                                                | コマンドグループ             | よく使うコマンド                                                       |
+| ---------------------------------------------------- | -------------------- | -------------------------------------------------------------- |
+| [タスク](/ja/guides/coding-agent-optimization/tasks)       | `tpc sim task`       | `create --file task.json`, `list`, `get`, `update`, `run`      |
+| [環境](/ja/guides/coding-agent-optimization/environments) | `tpc sim env`        | `create`, `list`, `update`, `task attach/detach`, `secret set` |
+| [実行とイテレーション](/ja/guides/coding-agent-optimization/runs) | `tpc sim run`        | `list`, `get`, `logs`, `actions`                               |
+| [実験](/ja/guides/coding-agent-optimization/experiments)  | `tpc sim experiment` | `create`, `run --watch`, `results`                             |
+| [シグナル](/ja/guides/coding-agent-optimization/signals)    | `tpc sim experiment` | `validate-signal-config`, `signals`                            |
+
+## 各実行で得られるもの {#what-you-get-from-each-run}
+
+* 目標に基づく合否判定と 0～100 のスコア
+* エージェントの完全なトランスクリプト (すべてのメッセージ、ツール呼び出し、思考ステップを含む)
+* 実行後のサンドボックスのアーカイブ (エージェントが何を構築したかを細部まで確認できます)
+* トークン使用量、コスト、所要時間
+* シグナル値：YAML で定義し、実行結果から自動的に抽出されるカスタム指標
+
+## CLI から試す {#try-it-from-the-cli}
+
+[tpc CLI](/ja/cli/overview) では、タスクとそれに取り組むエージェントを小さなディレクトリにまとめ、1 つのコマンドで全体を実行できます：
+
+```bash
+# 初回セットアップ（1回のみ）
+curl -fsSL https://cli.promptingco.com/install.sh | bash
+tpc auth login
+```
+
+```text
+my-task/
+├── task.json        # タスク内容と成功の採点方法
+├── instruction.md   # エージェントに渡すプロンプト
+└── environment.json # タスクを実行するエージェント/モデル（任意）
+```
+
+```bash
+# 必要ならタスクと環境を作成してから実行。ゼロからでもコマンド1つで完了
+tpc sim run ./my-task --scope pro-org/my-product
+```
+
+`tpc sim run ./my-task --scope pro-org/my-product` はべき等です。一致するタスクと環境がすでに存在すれば再利用し、ファイルが変更されていれば更新し、新規であれば作成します。そのため、何度実行しても重複が生じることはありません。`tpc sim spec` を実行すると `task.json` の完全な仕様を表示でき、`tpc sim task export <task-id>` を実行すると既存のタスクをこのようなディレクトリ構成に書き出せます。
+
+同じタスクで複数のエージェントを比較するには、それらを[実験](/ja/guides/coding-agent-optimization/experiments)にまとめます。
+
+```bash
+tpc sim experiment create --name "Quickstart friction" --task-ids task_abc --env-ids env_1,env_2 --scope pro-org/my-product
+tpc sim experiment run exp_789 --watch --scope pro-org/my-product      # 実行を開始し、完了まで進捗を表示
+tpc sim experiment results exp_789 --scope pro-org/my-product
+```
+
+すべてのコマンドで `--format json` を指定でき、スクリプトから利用できます。以下のガイドでは、各抽象化ごとの CLI ワークフローを説明します。
+
+## まずはここから {#where-to-start}
+
+* [タスク](/ja/guides/coding-agent-optimization/tasks) — エージェントに実行させる内容と、成功の評価方法を定義する
+* [環境](/ja/guides/coding-agent-optimization/environments) — エージェントとサンドボックスを設定する
+* [実行とイテレーション](/ja/guides/coding-agent-optimization/runs) — 1 回の試行で何が行われ、何が記録されるか
+* [実験](/ja/guides/coding-agent-optimization/experiments) — イテレーションを実行し、結果を読み解く
+* [シグナル](/ja/guides/coding-agent-optimization/signals) — 実行結果からカスタム指標を抽出する
+* [制限と制約](/ja/guides/coding-agent-optimization/limits) — タスクの書き方を左右する実行モデルと厳格な上限

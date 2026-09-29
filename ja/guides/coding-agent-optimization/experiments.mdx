@@ -1,0 +1,60 @@
+---
+title: "実験"
+description: "複数の環境でタスクを並列実行し、結果を確認します"
+---
+
+実験とは、タスクのセット、環境のセット、および任意のシグナル設定で構成される対照比較です。実験を実行すると **イテレーション** が生成されます。イテレーションでは、タスクと環境のすべての組み合わせ (タスク × 環境) ごとに 1 回ずつ並列で実行されます。
+
+## 実験の設定 {#setting-up-an-experiment}
+
+1. 実験を作成し、名前を付けます
+2. 評価するタスクをアタッチします
+3. 比較する環境をアタッチします
+4. 必要に応じて、カスタムメトリクスを抽出するための[シグナル設定](/ja/guides/coding-agent-optimization/signals)をアップロードします
+5. イテレーションを実行します
+
+実験はダッシュボードのプロダクト内にある **Simulation** セクションで管理します。[API](/ja/api/overview) や CLI から作成・実行することもできます。
+
+```bash
+tpc sim experiment create --name "Onboarding friction" \
+  --task-ids task_abc,task_def \
+  --env-ids env_123,env_456 \
+  --signal-config signals.yaml
+
+# または、段階的に作成することもできます
+tpc sim experiment create --name "Onboarding friction"
+tpc sim experiment task add exp_789 task_abc
+tpc sim experiment env add exp_789 env_123
+```
+
+イテレーションをトリガーすると、タスクと環境の組み合わせごとに1つの実行が作成されます。各実行の中で行われる処理と記録される内容については、[実行とイテレーション](/ja/guides/coding-agent-optimization/runs)を参照してください。
+
+## イテレーションの結果 {#iteration-results}
+
+イテレーション内のすべての実行が完了すると、イテレーション単位で結果が生成されます。
+
+* **シグナル集計** — 各シグナルを実行全体で集約し、比率、平均値、中央値、分布として環境別・タスク別にまとめたもの
+* **失敗クラスター** — 失敗した実行全体で見つかった、繰り返し発生するつまずきのパターン。それぞれに根本原因 (プロダクト、ドキュメント、インフラのどこに原因があるか) と推奨される修正方法が示されます
+* **サマリー** — タスク単位のスコアと環境間の比較
+
+イテレーションはイミュータブル (変更不可) です。実験を再実行しても前回のイテレーションは上書きされず、新しい番号のイテレーションが作成されます。そのため、改善の効果を継続的に測定できます。
+
+## CLI から実験を実行する {#running-experiments-from-the-cli}
+
+```bash
+# 新しいイテレーションを開始し、完了までを1つのコマンドで追跡する
+# (タスクと環境の組み合わせごとに1回実行し、5秒ごとにポーリング)
+tpc sim experiment run exp_789 --watch
+
+# イテレーションの結果 (概要、タスクスコア、失敗クラスター、改善提案) を確認する
+tpc sim experiment results exp_789
+
+# 以前のイテレーションと比較するか、特定の失敗クラスターを掘り下げる
+tpc sim experiment results exp_789 --iteration 2
+tpc sim experiment results exp_789 --error-category "Auth failures"
+
+# シグナル値 (集計値と実行ごとの値)
+tpc sim experiment signals exp_789
+```
+
+これらのコマンドはいずれも `--format json` を指定すると、結果をスクリプトや CI に渡せます。個々の実行を掘り下げて確認する方法 (`tpc sim run get/logs/actions`) については、[実行とイテレーション](/ja/guides/coding-agent-optimization/runs#inspecting-runs-from-the-cli)を参照してください。

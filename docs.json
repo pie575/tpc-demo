@@ -1,21 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "The Prompting Company",
-  "colors": {
-    "primary": "#007AFF",
-    "light": "#5AC8FA",
-    "dark": "#0051D5"
-  },
-  "favicon": "/favicon.svg",
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
   "api": {
-    "playground": {
-      "display": "interactive"
-    },
     "examples": {
       "defaults": "required",
       "languages": [
@@ -25,29 +10,18 @@
       ],
       "prefill": true
     },
+    "playground": {
+      "display": "interactive"
+    },
     "url": "full"
   },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:support@promptingco.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.promptingco.com"
-    }
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/promptingco",
-      "github": "https://github.com/promptingcompany",
-      "linkedin": "https://linkedin.com/company/prompting-company"
-    }
+  "colors": {
+    "dark": "#0051D5",
+    "light": "#5AC8FA",
+    "primary": "#007AFF"
   },
   "contextual": {
+    "display": "header",
     "options": [
       "copy",
       "view",
@@ -57,12 +31,33 @@
       "mcp",
       "cursor",
       "vscode"
-    ],
-    "display": "header"
+    ]
   },
-  "styling": {
-    "latex": false,
-    "codeblocks": "system"
+  "favicon": "/favicon.svg",
+  "footer": {
+    "socials": {
+      "github": "https://github.com/promptingcompany",
+      "linkedin": "https://linkedin.com/company/prompting-company",
+      "x": "https://x.com/promptingco"
+    }
+  },
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "name": "The Prompting Company",
+  "navbar": {
+    "links": [
+      {
+        "href": "mailto:support@promptingco.com",
+        "label": "Support"
+      }
+    ],
+    "primary": {
+      "href": "https://app.promptingco.com",
+      "label": "Dashboard",
+      "type": "button"
+    }
   },
   "navigation": {
     "languages": [
@@ -71,19 +66,19 @@
           "anchors": [
             {
               "anchor": "Platform",
-              "icon": "globe",
-              "href": "https://app.promptingco.com"
+              "href": "https://app.promptingco.com",
+              "icon": "globe"
             },
             {
               "anchor": "GitHub",
-              "icon": "github",
-              "href": "https://github.com/promptingcompany"
+              "href": "https://github.com/promptingcompany",
+              "icon": "github"
             }
           ]
         },
+        "language": "en",
         "tabs": [
           {
-            "tab": "Guides",
             "groups": [
               {
                 "group": "Get started",
@@ -145,10 +140,10 @@
                   "guides/coding-agent-optimization/limits"
                 ]
               }
-            ]
+            ],
+            "tab": "Guides"
           },
           {
-            "tab": "CLI",
             "groups": [
               {
                 "group": "Get started",
@@ -185,10 +180,10 @@
                   "cli/troubleshooting"
                 ]
               }
-            ]
+            ],
+            "tab": "CLI"
           },
           {
-            "tab": "API",
             "groups": [
               {
                 "group": "Get started",
@@ -219,14 +214,14 @@
               {
                 "group": "API Reference",
                 "openapi": {
-                  "source": "/api-reference/openapi.json",
-                  "directory": "api/reference"
+                  "directory": "api/reference",
+                  "source": "/api-reference/openapi.json"
                 }
               }
-            ]
+            ],
+            "tab": "API"
           },
           {
-            "tab": "SDK",
             "groups": [
               {
                 "group": "Get started",
@@ -243,557 +238,28 @@
                   "ts-sdk/advanced-usage"
                 ]
               }
-            ]
+            ],
+            "tab": "SDK"
           }
-        ],
-        "language": "en"
+        ]
       },
       {
-        "global": {
-          "anchors": [
-            {
-              "anchor": "Platform",
-              "icon": "globe",
-              "href": "https://app.promptingco.com"
-            },
-            {
-              "anchor": "GitHub",
-              "icon": "github",
-              "href": "https://github.com/promptingcompany"
-            }
-          ]
-        },
-        "tabs": [
-          {
-            "tab": "Guides",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "guides/quickstart-guide",
-                  "guides/MCP-Server"
-                ]
-              },
-              {
-                "group": "Dashboard overview",
-                "pages": [
-                  "guides/knowledge-base",
-                  "guides/add-prompts",
-                  "guides/create-content",
-                  "guides/metrics"
-                ]
-              },
-              {
-                "group": "Content publishing",
-                "pages": [
-                  "guides/cms/overview",
-                  "guides/cms/wordpress",
-                  "guides/cms/sanity",
-                  "guides/cms/webflow",
-                  "guides/cms/ghost",
-                  "guides/cms/framer",
-                  "guides/cms/prismic",
-                  "guides/cms/custom"
-                ]
-              },
-              {
-                "group": "Analytics",
-                "pages": [
-                  "guides/analytics/cf-integration",
-                  {
-                    "group": "Third-party log exporters",
-                    "pages": [
-                      "guides/analytics/log-exporters/cloudflare-logpush",
-                      "guides/analytics/log-exporters/raw-events"
-                    ]
-                  },
-                  "guides/analytics/cf-traffic-export"
-                ]
-              },
-              {
-                "group": "Agent experience",
-                "pages": [
-                  "guides/coding-agent-optimization/overview",
-                  {
-                    "group": "Core concepts",
-                    "pages": [
-                      "guides/coding-agent-optimization/tasks",
-                      "guides/coding-agent-optimization/environments",
-                      "guides/coding-agent-optimization/runs",
-                      "guides/coding-agent-optimization/experiments",
-                      "guides/coding-agent-optimization/signals"
-                    ]
-                  },
-                  "guides/coding-agent-optimization/limits"
-                ]
-              }
-            ]
-          },
-          {
-            "tab": "CLI",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "cli/overview",
-                  "cli/installation",
-                  "cli/authentication",
-                  "cli/organizations"
-                ]
-              },
-              {
-                "group": "Commands",
-                "pages": [
-                  "cli/commands/content",
-                  "cli/commands/knowledge",
-                  "cli/commands/prompts",
-                  "cli/commands/persona",
-                  "cli/commands/llmstxt",
-                  "cli/commands/analytics",
-                  "cli/commands/council",
-                  "cli/commands/simulation-environments",
-                  "cli/commands/agent-experience"
-                ]
-              },
-              {
-                "group": "Recipes",
-                "pages": [
-                  "cli/recipes/competitive-position-by-topic"
-                ]
-              },
-              {
-                "group": "Reference",
-                "pages": [
-                  "cli/troubleshooting"
-                ]
-              }
-            ]
-          },
-          {
-            "tab": "API",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "api/overview",
-                  "api/quickstart",
-                  "api/authentication"
-                ]
-              },
-              {
-                "group": "Concepts",
-                "pages": [
-                  "api/scopes",
-                  "api/rate-limits",
-                  "api/idempotency",
-                  "api/errors",
-                  "api/audit-log"
-                ]
-              },
-              {
-                "group": "Content API",
-                "pages": [
-                  "api/content/overview",
-                  "api/content/site-pages",
-                  "api/content/documents"
-                ]
-              },
-              {
-                "group": "API Reference",
-                "openapi": {
-                  "source": "/api-reference/openapi.json",
-                  "directory": "api/reference"
-                }
-              }
-            ]
-          },
-          {
-            "tab": "SDK",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "ts-sdk/index"
-                ]
-              },
-              {
-                "group": "TypeScript",
-                "pages": [
-                  "ts-sdk/introduction",
-                  "ts-sdk/installation",
-                  "ts-sdk/quickstart",
-                  "ts-sdk/advanced-usage"
-                ]
-              }
-            ]
-          }
-        ],
-        "language": "es"
+        "language": "es",
+        "$ref": "./es/docs.json"
       },
       {
-        "global": {
-          "anchors": [
-            {
-              "anchor": "Platform",
-              "icon": "globe",
-              "href": "https://app.promptingco.com"
-            },
-            {
-              "anchor": "GitHub",
-              "icon": "github",
-              "href": "https://github.com/promptingcompany"
-            }
-          ]
-        },
-        "tabs": [
-          {
-            "tab": "Guides",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "guides/quickstart-guide",
-                  "guides/MCP-Server"
-                ]
-              },
-              {
-                "group": "Dashboard overview",
-                "pages": [
-                  "guides/knowledge-base",
-                  "guides/add-prompts",
-                  "guides/create-content",
-                  "guides/metrics"
-                ]
-              },
-              {
-                "group": "Content publishing",
-                "pages": [
-                  "guides/cms/overview",
-                  "guides/cms/wordpress",
-                  "guides/cms/sanity",
-                  "guides/cms/webflow",
-                  "guides/cms/ghost",
-                  "guides/cms/framer",
-                  "guides/cms/prismic",
-                  "guides/cms/custom"
-                ]
-              },
-              {
-                "group": "Analytics",
-                "pages": [
-                  "guides/analytics/cf-integration",
-                  {
-                    "group": "Third-party log exporters",
-                    "pages": [
-                      "guides/analytics/log-exporters/cloudflare-logpush",
-                      "guides/analytics/log-exporters/raw-events"
-                    ]
-                  },
-                  "guides/analytics/cf-traffic-export"
-                ]
-              },
-              {
-                "group": "Agent experience",
-                "pages": [
-                  "guides/coding-agent-optimization/overview",
-                  {
-                    "group": "Core concepts",
-                    "pages": [
-                      "guides/coding-agent-optimization/tasks",
-                      "guides/coding-agent-optimization/environments",
-                      "guides/coding-agent-optimization/runs",
-                      "guides/coding-agent-optimization/experiments",
-                      "guides/coding-agent-optimization/signals"
-                    ]
-                  },
-                  "guides/coding-agent-optimization/limits"
-                ]
-              }
-            ]
-          },
-          {
-            "tab": "CLI",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "cli/overview",
-                  "cli/installation",
-                  "cli/authentication",
-                  "cli/organizations"
-                ]
-              },
-              {
-                "group": "Commands",
-                "pages": [
-                  "cli/commands/content",
-                  "cli/commands/knowledge",
-                  "cli/commands/prompts",
-                  "cli/commands/persona",
-                  "cli/commands/llmstxt",
-                  "cli/commands/analytics",
-                  "cli/commands/council",
-                  "cli/commands/simulation-environments",
-                  "cli/commands/agent-experience"
-                ]
-              },
-              {
-                "group": "Recipes",
-                "pages": [
-                  "cli/recipes/competitive-position-by-topic"
-                ]
-              },
-              {
-                "group": "Reference",
-                "pages": [
-                  "cli/troubleshooting"
-                ]
-              }
-            ]
-          },
-          {
-            "tab": "API",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "api/overview",
-                  "api/quickstart",
-                  "api/authentication"
-                ]
-              },
-              {
-                "group": "Concepts",
-                "pages": [
-                  "api/scopes",
-                  "api/rate-limits",
-                  "api/idempotency",
-                  "api/errors",
-                  "api/audit-log"
-                ]
-              },
-              {
-                "group": "Content API",
-                "pages": [
-                  "api/content/overview",
-                  "api/content/site-pages",
-                  "api/content/documents"
-                ]
-              },
-              {
-                "group": "API Reference",
-                "openapi": {
-                  "source": "/api-reference/openapi.json",
-                  "directory": "api/reference"
-                }
-              }
-            ]
-          },
-          {
-            "tab": "SDK",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "ts-sdk/index"
-                ]
-              },
-              {
-                "group": "TypeScript",
-                "pages": [
-                  "ts-sdk/introduction",
-                  "ts-sdk/installation",
-                  "ts-sdk/quickstart",
-                  "ts-sdk/advanced-usage"
-                ]
-              }
-            ]
-          }
-        ],
-        "language": "ja"
+        "language": "ja",
+        "$ref": "./ja/docs.json"
       },
       {
-        "global": {
-          "anchors": [
-            {
-              "anchor": "Platform",
-              "icon": "globe",
-              "href": "https://app.promptingco.com"
-            },
-            {
-              "anchor": "GitHub",
-              "icon": "github",
-              "href": "https://github.com/promptingcompany"
-            }
-          ]
-        },
-        "tabs": [
-          {
-            "tab": "Guides",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "guides/quickstart-guide",
-                  "guides/MCP-Server"
-                ]
-              },
-              {
-                "group": "Dashboard overview",
-                "pages": [
-                  "guides/knowledge-base",
-                  "guides/add-prompts",
-                  "guides/create-content",
-                  "guides/metrics"
-                ]
-              },
-              {
-                "group": "Content publishing",
-                "pages": [
-                  "guides/cms/overview",
-                  "guides/cms/wordpress",
-                  "guides/cms/sanity",
-                  "guides/cms/webflow",
-                  "guides/cms/ghost",
-                  "guides/cms/framer",
-                  "guides/cms/prismic",
-                  "guides/cms/custom"
-                ]
-              },
-              {
-                "group": "Analytics",
-                "pages": [
-                  "guides/analytics/cf-integration",
-                  {
-                    "group": "Third-party log exporters",
-                    "pages": [
-                      "guides/analytics/log-exporters/cloudflare-logpush",
-                      "guides/analytics/log-exporters/raw-events"
-                    ]
-                  },
-                  "guides/analytics/cf-traffic-export"
-                ]
-              },
-              {
-                "group": "Agent experience",
-                "pages": [
-                  "guides/coding-agent-optimization/overview",
-                  {
-                    "group": "Core concepts",
-                    "pages": [
-                      "guides/coding-agent-optimization/tasks",
-                      "guides/coding-agent-optimization/environments",
-                      "guides/coding-agent-optimization/runs",
-                      "guides/coding-agent-optimization/experiments",
-                      "guides/coding-agent-optimization/signals"
-                    ]
-                  },
-                  "guides/coding-agent-optimization/limits"
-                ]
-              }
-            ]
-          },
-          {
-            "tab": "CLI",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "cli/overview",
-                  "cli/installation",
-                  "cli/authentication",
-                  "cli/organizations"
-                ]
-              },
-              {
-                "group": "Commands",
-                "pages": [
-                  "cli/commands/content",
-                  "cli/commands/knowledge",
-                  "cli/commands/prompts",
-                  "cli/commands/persona",
-                  "cli/commands/llmstxt",
-                  "cli/commands/analytics",
-                  "cli/commands/council",
-                  "cli/commands/simulation-environments",
-                  "cli/commands/agent-experience"
-                ]
-              },
-              {
-                "group": "Recipes",
-                "pages": [
-                  "cli/recipes/competitive-position-by-topic"
-                ]
-              },
-              {
-                "group": "Reference",
-                "pages": [
-                  "cli/troubleshooting"
-                ]
-              }
-            ]
-          },
-          {
-            "tab": "API",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "api/overview",
-                  "api/quickstart",
-                  "api/authentication"
-                ]
-              },
-              {
-                "group": "Concepts",
-                "pages": [
-                  "api/scopes",
-                  "api/rate-limits",
-                  "api/idempotency",
-                  "api/errors",
-                  "api/audit-log"
-                ]
-              },
-              {
-                "group": "Content API",
-                "pages": [
-                  "api/content/overview",
-                  "api/content/site-pages",
-                  "api/content/documents"
-                ]
-              },
-              {
-                "group": "API Reference",
-                "openapi": {
-                  "source": "/api-reference/openapi.json",
-                  "directory": "api/reference"
-                }
-              }
-            ]
-          },
-          {
-            "tab": "SDK",
-            "groups": [
-              {
-                "group": "Get started",
-                "pages": [
-                  "ts-sdk/index"
-                ]
-              },
-              {
-                "group": "TypeScript",
-                "pages": [
-                  "ts-sdk/introduction",
-                  "ts-sdk/installation",
-                  "ts-sdk/quickstart",
-                  "ts-sdk/advanced-usage"
-                ]
-              }
-            ]
-          }
-        ],
-        "language": "zh"
+        "language": "zh",
+        "$ref": "./zh/docs.json"
       }
     ]
-  }
+  },
+  "styling": {
+    "codeblocks": "system",
+    "latex": false
+  },
+  "theme": "mint"
 }

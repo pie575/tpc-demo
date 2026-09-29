@@ -1,0 +1,60 @@
+---
+title: "身份验证"
+description: "通过设备授权流程登录，或在 CI 中以非交互方式完成 TPC CLI 的身份验证。"
+---
+
+# 身份验证 {#authentication}
+
+## 登录 {#login}
+
+使用基于浏览器的设备授权流程进行身份验证：
+
+```bash
+tpc auth login
+```
+
+CLI 采用
+[API 身份验证指南](/zh/api/authentication#oauth-bearer)中所述的 OAuth bearer 认证方式。
+
+流程如下：
+
+1. `tpc` 请求设备码。
+2. 系统打开你的浏览器。
+3. 你登录 The Prompting Company。
+4. 你批准 CLI 的授权请求。
+5. CLI 将你的会话保存在本地。
+
+登录后，验证你的会话：
+
+```bash
+tpc auth whoami
+```
+
+如需退出登录：
+
+```bash
+tpc auth logout
+```
+
+## 非交互式身份验证 {#non-interactive-authentication}
+
+在 CI、脚本以及其他无法通过浏览器登录的无头环境中，CLI 会从环境变量中读取凭据。CLI 支持两种认证方式，分别对应不同的请求标头：
+
+| 变量              | 发送的标头                           | 用途                                                                |
+| --------------- | ------------------------------- | ----------------------------------------------------------------- |
+| `TPC_API_TOKEN` | `Authorization: Bearer <token>` | OAuth 持有者令牌，例如 `tpc auth login` 签发的会话令牌。                          |
+| `TPC_API_KEY`   | `x-api-key: <key>`              | 在控制台中创建的 API key。创建方法请参阅 [API 身份验证](/zh/api/authentication#api-key)。 |
+
+```bash
+# OAuth Bearer 令牌
+export TPC_API_TOKEN="your-bearer-token"
+tpc auth whoami
+
+# API 密钥
+export TPC_API_KEY="your-api-key"
+tpc auth whoami
+```
+
+如果同时设置了 `TPC_API_TOKEN` 和 `TPC_API_KEY`，CLI 会使用 `TPC_API_TOKEN`，并向 stderr 输出一条警告。
+
+如果两个变量都未设置，CLI 会回退到通过 `tpc auth login` 创建的会话。

@@ -1,0 +1,36 @@
+---
+title: "Solución de problemas"
+description: "Soluciona los problemas más comunes al instalar, iniciar sesión o actualizar la CLI de TPC."
+---
+
+# Solución de problemas {#troubleshooting}
+
+## No se encuentra el comando `tpc` {#tpc-command-not-found}
+
+* Abre una nueva shell después de la instalación.
+* Comprueba si el instalador añadió el directorio de binarios a tu `PATH`.
+* Vuelve a ejecutar el instalador y fíjate en las instrucciones para actualizar el perfil de tu shell.
+* En Windows, los cambios en `PATH` solo se aplican a las sesiones nuevas de PowerShell o cmd.
+
+## El inicio de sesión se completa en el navegador, pero la CLI no se actualiza {#login-completes-in-the-browser-but-cli-does-not-update}
+
+* Vuelve a ejecutar `tpc auth login`
+* completa el flujo de dispositivo en la misma máquina en la que se ejecuta la CLI
+* comprueba si el navegador bloqueó el callback o te redirigió a una sesión caducada
+
+## No se encuentra el experimento, aunque existe {#experiment-not-found-but-the-experiment-exists}
+
+Probablemente el experimento esté en una organización o producto distintos de los que indica `--scope` en el comando. La CLI no guarda la organización ni el producto en `~/.tpc/config.json`.
+
+Pasa `--scope <org-slug>/<product-slug>` en el comando:
+
+```bash
+tpc sim experiment get <experiment-id> --scope <org-slug>/<product-slug>
+tpc sim experiment run <experiment-id> --scope <org-slug>/<product-slug>
+```
+
+## La actualización no encuentra ninguna versión {#update-does-not-find-a-release}
+
+* ejecuta `tpc update --check`
+* confirma que estás en el canal esperado o en la versión fijada
+* si instalaste una versión preliminar, asegúrate de que existan sus metadatos

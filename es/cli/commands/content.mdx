@@ -1,0 +1,204 @@
+---
+title: "Contenido"
+description: "Crea, genera, revisa, publica y gestiona contenido desde la CLI de TPC."
+---
+
+# Contenido {#content}
+
+Gestiona todo el ciclo de vida del contenido de un producto desde la terminal: crea o genera borradores, gestiona la cola de revisión (aprobar, rechazar, solicitar cambios), publica los borradores aprobados y edita las páginas publicadas. Usa `--scope <org-slug>/<product-slug>` para seleccionar el producto. Todas las respuestas JSON incluyen el ámbito resuelto.
+
+<Note>
+  `tpc content` sustituye al grupo de comandos `tpc site page`, que se ha eliminado. La publicación requiere una revisión previa: `create` y `generate` envían los borradores a la cola de revisión, y `publish` falla con un conflicto mientras el borrador no se apruebe. La antigua vía sin revisión `site page update --status published` ya no existe.
+</Note>
+
+## El ciclo de vida {#the-lifecycle}
+
+```
+create / generate  →  review (approve / reject / revise)  →  publish
+```
+
+La cola de revisión es simplemente un filtro del listado: `tpc content list --status pending-review`.
+
+## Listar contenido {#list-content}
+
+Lista las páginas publicadas (comportamiento predeterminado):
+
+```bash
+tpc --scope pro-org/my-product content list
+```
+
+Filtra la lista de contenido publicado (búsqueda, prefijo de ruta, paginación, ordenación):
+
+```bash
+tpc --scope pro-org/my-product content list \
+  --query pricing \
+  --path-prefix blog/ \
+  --page 2 --page-size 10 \
+  --order-by createdAt --order-dir asc
+```
+
+Lista la cola de revisión y otros estados del ciclo de vida:
+
+```bash
+tpc --scope pro-org/my-product content list --status pending-review
+tpc --scope pro-org/my-product content list --status generating
+tpc --scope pro-org/my-product content list --status rejected   # incluye los comentarios de rechazo
+tpc --scope pro-org/my-product content list --status failed
+tpc --scope pro-org/my-product content list --status approved
+```
+
+`--prompt <prompt-id>` funciona con cualquier estado, incluido `published`: las páginas publicadas conservan el prompt a partir del cual se generaron, así que puedes responder a la pregunta &quot;¿qué prompts todavía no tienen contenido?&quot;:
+
+```bash
+# todas las páginas publicadas generadas a partir de un mismo prompt
+tpc --scope pro-org/my-product content list --prompt prompt_123
+
+# los borradores de ese mismo prompt que siguen pendientes de revisión
+tpc --scope pro-org/my-product content list --status pending-review --prompt prompt_123
+```
+
+Los elementos publicados incluyen un campo `promptId` (`null` en las páginas creadas manualmente)
+y un sobre de metadatos restringido a una lista de permitidos que contiene el tipo normalizado de contenido
+generado:
+
+```json
+{
+  "metadata": {
+    "contentType": "decision-guide"
+  }
+}
+```
+
+`metadata.contentType` está disponible de forma sistemática tanto para las páginas publicadas como para los borradores
+en revisión. Su valor es `null` en las páginas manuales y en las plataformas de contenido que no se corresponden con un
+tipo de generación seleccionable. Los metadatos internos de generación no se exponen.
+
+## Obtener un elemento {#get-one-item}
+
+`get` acepta un ID de borrador o un ID de documento publicado; la respuesta indica de qué tipo es el elemento devuelto.
+
+```bash
+tpc --scope pro-org/my-product content get adraft_123
+tpc --scope pro-org/my-product content get adoc_123
+```
+
+Ambas variantes incluyen el mismo campo normalizado `metadata.contentType` en la salida
+JSON. La salida de texto lo muestra como `Content type: <value>` cuando existe.
+
+## Crear contenido {#create-content}
+
+Las páginas creadas pasan a la cola de revisión como borradores con el estado `pending_review` y solo se publican una vez aprobadas.
+
+```bash
+tpc --scope pro-org/my-product content create \
+  --slug blog/hello-world \
+  --title "Hello" \
+  --content "# Hello"
+```
+
+Crea contenido a partir de un archivo Markdown local:
+
+```bash
+tpc --scope pro-org/my-product content create \
+  --slug docs/install \
+  --title "Install" \
+  --content-file ./install.md
+```
+
+## Generar contenido {#generate-content}
+
+Inicia el agente de generación de contenido para uno o varios prompts (plan Pro). Los borradores generados pasan a la cola de revisión.
+
+```bash
+tpc --scope pro-org/my-product content generate --prompt prompt_123
+tpc --scope pro-org/my-product content generate \
+  --prompt prompt_123 --prompt prompt_456 \
+  --type recommended \
+  --watch
+```
+
+`--watch` consulta el estado de cada borrador cada 5 segundos hasta que la generación finaliza o falla.
+
+Cancela un borrador que todavía se está generando (o que se quedó atascado en ese estado porque el worker dejó de funcionar). Esto lo marca como `cancelled` y lo quita de la cola de generación. Además, un proceso de limpieza en el servidor pasa a `failed` los borradores que permanecen en `generating` durante más de seis horas.
+
+```bash
+tpc --scope pro-org/my-product content cancel adraft_123
+tpc --scope pro-org/my-product content list --status failed
+```
+
+## Revisar la cola {#review-the-queue}
+
+Aprueba uno o varios borradores (al aprobarlos, el contenido publicable queda en cola para su publicación):
+
+```bash
+tpc --scope pro-org/my-product content approve adraft_123
+tpc --scope pro-org/my-product content approve adraft_123 adraft_456
+```
+
+Rechaza con un motivo (se guarda como comentario del revisor y aparece en `list --status rejected`):
+
+```bash
+tpc --scope pro-org/my-product content reject adraft_123 --reason "Wrong sources cited"
+```
+
+Revisa un borrador: envía una versión editada que lo sustituya o envía comentarios para que un agente lo vuelva a generar (plan Pro). En ambos casos, el borrador vuelve a la cola de revisión y se anula cualquier rechazo anterior:
+
+```bash
+tpc --scope pro-org/my-product content revise adraft_123 --content-file ./revised.md
+tpc --scope pro-org/my-product content revise adraft_123 --feedback "Tighten the intro and cite the pricing page"
+```
+
+## Publicar y revertir {#publish-and-revert}
+
+`publish` pone en cola la publicación de un borrador aprobado y devuelve un error de conflicto si el borrador no está aprobado:
+
+```bash
+tpc --scope pro-org/my-product content publish adraft_123
+```
+
+`revert` retira la publicación de la página publicada y devuelve el borrador a la cola de revisión:
+
+```bash
+tpc --scope pro-org/my-product content revert adraft_123
+```
+
+## Actualizar una página publicada {#update-a-live-page}
+
+Solo se modifican las opciones que indiques. No existe la opción `--status`: la publicación se gestiona mediante approve/publish.
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 --title "Updated title"
+tpc --scope pro-org/my-product content update adoc_123 --content-file ./page.md
+```
+
+Pasa una cadena vacía para vaciar un campo opcional:
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 --redirect-url ""
+```
+
+Gestiona los dominios vinculados:
+
+```bash
+tpc --scope pro-org/my-product content update adoc_123 \
+  --attach-domain-id domain_123 \
+  --canonical-domain-id domain_123
+```
+
+## Eliminar contenido {#delete-content}
+
+Aplica una eliminación lógica a una página publicada (junto con su borrador vinculado y su URL rastreada) o elimina un borrador sin publicar, incluidos los que aún están en estado `generating`:
+
+```bash
+tpc --scope pro-org/my-product content delete adoc_123
+tpc --scope pro-org/my-product content delete adoc_123 adraft_456
+tpc --scope pro-org/my-product content delete adraft_stuck_generating
+```
+
+`delete` también funciona con `status: generating`. Usa `cancel` si quieres detener la generación sin eliminar definitivamente la fila.
+
+Todos los comandos admiten además `--format json` para usarlos en scripts:
+
+```bash
+tpc --scope pro-org/my-product content list --status pending-review --format json
+```

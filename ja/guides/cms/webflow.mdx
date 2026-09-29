@@ -1,0 +1,66 @@
+---
+title: "Webflow を接続する"
+description: "サイト API トークンを使用して、TPC の下書きを Webflow CMS コレクションに公開します"
+---
+
+The Prompting Company は、サイト単位にスコープが限定された API トークンを使用して、Webflow CMS コレクションにコンテンツを公開します。
+
+## 始める前に {#before-you-start}
+
+* Webflow サイトのワークスペース管理者権限があること。
+* 公開したいコンテンツの種類 (例: Blog Posts) に対応する CMS コレクションを作成済みであること。
+
+## API トークンを生成する {#generate-an-api-token}
+
+1. Webflow Designer で、左上の **Webflow** ロゴをクリックし、**Site Settings** を開きます。
+2. **Apps &amp; integrations** タブを開きます。
+3. **API access** までスクロールし、**Generate API token** をクリックします。
+4. 対象のコレクションがあるサイトに **CMS read/write** スコープを付与します。
+5. トークンをコピーします。
+
+## コレクション ID を取得する {#get-your-collection-id}
+
+1. Designer で **CMS** パネルを開きます。
+2. 公開先のコレクションをクリックします。
+3. **⚙ Settings** アイコンをクリックします。
+4. 下部に表示される **Collection ID** をコピーします。
+
+<Warning>
+  slug ではなく Collection ID を使用してください。両者は見た目が似ていますが、ID のほうが長い英数字の文字列です。
+</Warning>
+
+## コレクションのフィールドslugを合わせる {#match-your-collection-field-slugs}
+
+TPC では、デフォルトで次のフィールドslugを使用します。
+
+* `name`
+* `slug`
+* `body`
+* `summary`
+
+Webflow でフィールド名を変更している場合は、表示ラベルではなく、正確な **slug** を貼り付けてください。画像フィールドは省略可能です。
+
+## TPC で接続する {#connect-in-tpc}
+
+1. TPC のプロダクトワークスペースで **Settings → Integrations** を開きます。
+2. **Webflow** を選択します。
+3. API トークンとコレクション ID を入力し、必要に応じてカスタムフィールドの slug も入力します。
+4. **Save** をクリックしてから、**Test connection** をクリックします。
+
+## トラブルシューティング {#troubleshooting}
+
+### 401 Unauthorized {#401-unauthorized}
+
+トークンに CMS の書き込みスコープが付与されていないか、トークンが別のサイト用に生成されています。正しいサイトで **CMS read/write** を有効にして、トークンを再生成してください。
+
+### 400 &quot;unknown field&quot; {#400-unknown-field}
+
+TPC で指定したフィールドの slug が、コレクションに存在しません。Webflow Designer → CMS → Collection settings → Fields で、フィールドの slug を確認してください。
+
+### 下書きを公開したのに CMS パネルに表示されない {#draft-published-but-not-visible-in-the-cms-panel}
+
+Designer を再読み込みしてください。Webflow の Designer はコレクションリストをキャッシュしているため、再読み込みするとアイテムが表示されます。
+
+## 関連リンク {#related-links}
+
+* [Webflow API トークンのドキュメント](https://developers.webflow.com/data/reference/authentication)

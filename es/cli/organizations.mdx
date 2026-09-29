@@ -1,0 +1,26 @@
+---
+title: "Organizaciones"
+description: "Muestra las organizaciones y usa --scope en los comandos de la CLI de TPC."
+---
+
+# Organizaciones {#organizations}
+
+Lista las organizaciones a las que tiene acceso tu cuenta:
+
+```bash
+tpc org list
+```
+
+La CLI no guarda ninguna organización ni ningún producto activos. Pasa `--scope` en cada comando con ámbito de organización o de producto:
+
+```bash
+tpc product list --scope prompting-co
+tpc sim experiment list --scope cloudflare-dev/browser-run
+tpc analytics sov --scope nvidia-com/nvidia-dgx-spark --last 30d
+```
+
+El formato es `<org-slug>/<product-slug>`, el mismo orden que siguen las URL del dashboard (`https://app.promptingco.com/<org-slug>/p/<product-slug>/...`). Puedes pegar esa URL como valor de `--scope`. Los comandos que solo actúan a nivel de organización pueden omitir el producto: `--scope <org-slug>`.
+
+El orden antiguo `<product-slug>/<org-slug>` seguirá funcionando durante un período de transición, aunque muestra una advertencia.
+
+`--scope` es un flag persistente, así que funciona tanto antes como después del subcomando: `tpc --scope pro-org/my-product content list` y `tpc content list --scope pro-org/my-product` son equivalentes. Los comandos que desactivan el análisis de flags de Cobra (`tpc alpha …`) siguen aceptando `--scope` antes del subcomando.

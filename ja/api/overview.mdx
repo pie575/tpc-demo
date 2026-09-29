@@ -1,0 +1,69 @@
+---
+title: "API の概要"
+description: "TPC API の使い始め方、認証方法、スコープ、リファレンスドキュメントについて説明します。"
+---
+
+# API の概要 {#api-overview}
+
+The Prompting Company API を使用すると、ダッシュボードが使用しているものと同じ `/api/v1` エンドポイントを通じて、コンテンツをプログラムで管理できます。`ApiResult` エンベロープも、組織単位でスコープされたデータモデルもダッシュボードと共通です。
+
+CMS からサイトページを同期する、コンテンツ運用を自動化する、TPC ワークスペースと連携するサーバー間ワークフローを構築する、といった場合に API を活用してください。
+
+## ベースURL {#base-url}
+
+```text
+https://app.promptingco.com
+```
+
+ローカル開発では、次の URL を使用します。
+
+```text
+http://localhost:3000
+```
+
+公開エンドポイントはすべて `/api/v1` 配下にあります。
+
+## 認証方式の概要 {#authentication-at-a-glance}
+
+| 方式           | 使用する場面                              | 送信方法                                                |
+| ------------ | ----------------------------------- | --------------------------------------------------- |
+| セッション Cookie | ブラウザからファーストパーティのダッシュボード API を呼び出す場合 | ダッシュボードが `better-auth.session_token` Cookie を送信します。 |
+| OAuth bearer | CLI またはその他の OAuth クライアントフローを使用する場合  | `Authorization: Bearer <token>` を送信します。             |
+| API キー       | サーバー間連携を構築する場合                      | `x-api-key: <key>` を送信します。                          |
+
+連携を構築する場合は、ダッシュボードの設定で組織の API キーを作成し、ワークフローに必要なスコープのみを付与してください。
+
+## スコープ一覧 {#scope-catalog}
+
+| スコープ                | 許可される操作                                  |
+| ------------------- | ---------------------------------------- |
+| `content:read`      | サイトページ、Markdown コンテンツ、llms.txt ファイルの読み取り |
+| `content:write`     | サイトページとコンテンツの作成、更新、削除                    |
+| `prompts:read`      | プロンプト、トピック、プロンプト候補、プロンプト分析結果の読み取り        |
+| `prompts:write`     | プロンプトの作成、更新、アーカイブ、およびプロンプト候補の生成、編集、レビュー  |
+| `simulations:read`  | エージェントシミュレーションのタスク、実行、環境、アナリティクスの読み取り    |
+| `simulations:write` | シミュレーション実行の作成とトリガー                       |
+| `logs:read`         | AI トラフィックログとリクエスト単位の監査イベントの読み取り          |
+| `analytics:read`    | ランキング、言及、ソース、SOV などのアナリティクス集計の読み取り       |
+| `products:read`     | プロダクトのメタデータと競合データの読み取り                   |
+| `products:write`    | プロダクト設定と競合リストの更新                         |
+
+<Note>
+  この表は、意図的に `apps/client/src/lib/api/scopes.ts` の内容をそのまま転記しています。
+  このカタログが変更された場合は、ドキュメントとダッシュボードの内容を一致させるため、
+  同じ PR でこのページも更新してください。
+</Note>
+
+## 次のステップ {#where-to-go-next}
+
+<Card title="クイックスタート" icon="rocket" href="/ja/api/quickstart" horizontal>
+  スコープ付きのキーを作成して最初のリクエストを送信し、レスポンスエンベロープを解析します。
+</Card>
+
+<Card title="認証" icon="shield-check" href="/ja/api/authentication" horizontal>
+  セッション Cookie、OAuth bearer トークン、API キーから認証方式を選択します。
+</Card>
+
+<Card title="リファレンス" icon="book-open" href="/ja/api/reference" horizontal>
+  稼働中の OpenAPI ドキュメントから生成されたエンドポイントスキーマを確認できます。
+</Card>

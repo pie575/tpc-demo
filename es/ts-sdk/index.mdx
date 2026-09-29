@@ -1,0 +1,63 @@
+---
+title: "Introducción"
+description: "Accede a los datos de tu documentación agéntica en Markdown con nuestro potente SDK de TypeScript"
+---
+
+# El SDK de TypeScript {#the-typescript-sdk}
+
+El SDK oficial de TypeScript para acceder a los datos de documentación agéntica en Markdown de la plataforma The Prompting Company. Crea aplicaciones potentes que saquen partido de la documentación de tu organización, con seguridad de tipos completa y una excelente experiencia para desarrolladores.
+
+## Primeros pasos {#getting-started}
+
+Empieza a usar el SDK en apenas unos minutos.
+
+<Card title="Empieza con el SDK" icon="rocket" href="/es/ts-sdk/installation" horizontal>
+  Instala el SDK y configura tu entorno de desarrollo.
+</Card>
+
+## Características principales {#key-features}
+
+Todo lo que necesitas para integrar los datos de tu documentación.
+
+<Columns cols={2}>
+  <Card title="SDK de TypeScript" icon="code" href="/es/ts-sdk/introduction">
+    Compatibilidad total con TypeScript, con seguridad de tipos completa y autocompletado.
+  </Card>
+
+  <Card title="Instalación sencilla" icon="download" href="/es/ts-sdk/installation">
+    Instálalo con npm, yarn o pnpm y configúralo en cuestión de minutos.
+  </Card>
+
+  <Card title="Guía de inicio rápido" icon="play" href="/es/ts-sdk/quickstart">
+    Crea tu primera integración siguiendo instrucciones paso a paso.
+  </Card>
+
+  <Card title="Uso avanzado" icon="settings" href="/es/ts-sdk/advanced-usage">
+    Descubre patrones avanzados, almacenamiento en caché y técnicas de optimización.
+  </Card>
+</Columns>
+
+## Integración sencilla {#simple-integration}
+
+Accede a los datos de tu documentación con solo unas pocas líneas de código:
+
+```typescript
+import tpc from "@promptingcompany/sdk";
+
+const client = new tpc({
+  productSlug: "your-product-slug",
+  organizationSlug: "your-organization-slug",
+});
+
+const doc = await client.document.getByPath("en-us/contact");
+
+if (doc.ok) {
+  console.log(doc.data?.content);
+}
+```
+
+## Próximos pasos {#next-steps}
+
+<Card title="Ver la guía completa" icon="book-open" href="/es/ts-sdk/introduction" horizontal>
+  Descubre todas las funciones y capacidades del SDK.
+</Card>

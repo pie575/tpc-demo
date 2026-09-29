@@ -1,0 +1,77 @@
+---
+title: "提示词"
+description: "使用 TPC CLI 列出、创建和审核提示词及提示词建议。"
+---
+
+# 提示词 {#prompts}
+
+管理产品中跟踪的提示词、主题集群以及系统生成的提示词建议。传入 `--scope <product-slug>/<org-slug>` 即可选择产品。
+
+```bash
+tpc --scope my-product/pro-org prompts list
+tpc --scope my-product/pro-org prompts topics list
+tpc --scope my-product/pro-org prompts suggestions list
+```
+
+## 建议 {#suggestions}
+
+建议是系统生成的候选项。批准某条建议后，系统会创建一个受追踪的提示词，并开始向所选的回答引擎发起对话查询。
+
+```
+生成  →  列出 / 更新  →  批准或拒绝
+```
+
+### 列出建议 {#list-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions list
+tpc --scope my-product/pro-org prompts suggestions list --topic-id <topic-id>
+tpc --scope my-product/pro-org prompts suggestions list --view <view-id>
+tpc --scope my-product/pro-org prompts suggestions list --format json
+```
+
+省略 `--view` 时，将返回不限定作用域的整个 product 库。
+
+### 生成建议 {#generate-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions generate
+tpc --scope my-product/pro-org prompts suggestions generate --topic-id <topic-id>
+tpc --scope my-product/pro-org prompts suggestions generate --language es
+```
+
+生成操作会替换所选产品或主题的现有建议库。该产品必须已有可用的上下文。
+
+### 更新建议 {#update-a-suggestion}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions update <id> --message "Updated text"
+tpc --scope my-product/pro-org prompts suggestions update <id> --engine chatgpt --engine gemini
+tpc --scope my-product/pro-org prompts suggestions update <id> --persona-id <persona-id>
+```
+
+`--message`、`--engine` 和 `--persona-id` 中至少需要提供一项。批准该建议时将使用这些值。
+
+### 批准建议 {#approve-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions approve <id> --yes
+tpc --scope my-product/pro-org prompts suggestions approve <id> <id> --engine chatgpt --yes
+```
+
+批准后会立即创建受跟踪的提示词和对话查询。添加提示词可能会影响之后的 Share of Voice 结果。在产品级 Share of Voice 中，提示词的权重取决于它在多少个引擎上运行。可使用 `--yes` 确认，或在命令行提示时输入 `yes`。
+
+### 拒绝建议 {#reject-suggestions}
+
+```bash
+tpc --scope my-product/pro-org prompts suggestions reject <id>
+tpc --scope my-product/pro-org prompts suggestions reject <id> --feedback "off topic"
+```
+
+## 已跟踪的提示词 {#tracked-prompts}
+
+```bash
+tpc --scope my-product/pro-org prompts list
+tpc --scope my-product/pro-org prompts create --message "What is the best pricing tool?"
+tpc --scope my-product/pro-org prompts topics list
+```

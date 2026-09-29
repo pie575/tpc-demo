@@ -1,0 +1,108 @@
+---
+title: "Entornos"
+description: "Configura qué agentes intentan resolver tus tareas y los sandboxes en los que se ejecutan"
+---
+
+Un entorno combina una configuración de agente con los recursos de un sandbox. Responde a dos preguntas: *¿qué agente intenta resolver la tarea?* y *¿de qué máquina dispone?*
+
+Como los entornos son la variable de un experimento, lo habitual es crear uno por cada configuración que quieras comparar (por ejemplo, «Claude Code + el Sonnet más reciente» frente a «Codex + el GPT más reciente») y ejecutarlos con las mismas tareas.
+
+## Configuración del agente {#agent-configuration}
+
+| Ajuste                           | Opciones                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| **Harness**                      | `claude` (Claude Code), `codex` (Codex CLI), `opencode` (OpenCode)                    |
+| **Modelo**                       | Cualquier modelo compatible con el harness elegido; se valida al iniciar la ejecución |
+| **Temperatura / tokens máximos** | Valores de muestreo opcionales que sustituyen a los predeterminados                   |
+| **Modo de sandbox**              | `read-only`, `workspace-write` o `danger-full-access`                                 |
+
+El harness se ejecuta en modo headless dentro del sandbox, tal como un desarrollador lo ejecutaría en su propia terminal. Sus registros de sesión se capturan y se procesan para generar una transcripción unificada, sea cual sea el harness que los haya producido, de modo que se pueden comparar ejecuciones de distintos harnesses.
+
+## Recursos del sandbox {#sandbox-resources}
+
+Cada ejecución dispone de un sandbox de Linux nuevo y aislado:
+
+* **CPU**: 1–4 núcleos
+* **Memoria**: 1–8 GB
+* **Disco**: 1–10 GB
+* **GPU** (opcional): T4, L4, A10G, A100 o H100
+
+Las ejecuciones sin GPU se ejecutan en el proveedor de sandbox predeterminado; si solicitas una GPU, la ejecución se redirige automáticamente a una infraestructura con GPU. El sandbox se crea al iniciar la ejecución, se inicializa con los archivos, comandos y secretos de la tarea, y al finalizar se archiva y se destruye.
+
+## Programación {#scheduling}
+
+Los entornos pueden ejecutarse de forma periódica según una programación (cada 7 o 14 días). Las ejecuciones programadas realizan automáticamente las tareas del entorno, y son la forma más sencilla de supervisar de forma continua la experiencia de los agentes: si un cambio en la documentación afecta a la incorporación de agentes, lo verás en la siguiente ejecución programada y no tendrás que esperar al siguiente experimento manual.
+
+## Elegir qué comparar {#choosing-what-to-compare}
+
+Configuraciones de comparación habituales:
+
+* **Barrido de modelos**: el mismo harness con distintos modelos, para ver qué modelos funcionan bien con tu producto
+* **Barrido de harnesses**: la misma familia de modelos en Claude Code, Codex y OpenCode, para detectar fricciones propias de cada harness
+* **Antes/después**: entornos idénticos ejecutados en iteraciones separadas, antes y después de un cambio en la documentación o en la API
+
+## Trabajar con entornos desde la CLI {#working-with-environments-from-the-cli}
+
+La forma más sencilla de crear un entorno es declararlo en un archivo `environment.json` junto a una tarea y ejecutar el directorio; consulta [Ejecutar una tarea desde un directorio](/es/guides/coding-agent-optimization/tasks#run-a-task-from-a-directory). Con un solo comando, `tpc sim run` crea el entorno, lo vincula y pone en cola las ejecuciones.
+
+Para gestionar los entornos directamente, pasa la configuración del agente como JSON en línea o mediante un `@file` (JSON o TOML):
+
+```json
+{
+  "harness": "claude",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "sandboxResources": {
+    "cpu": 2,
+    "memory": 4,
+    "disk": 10
+  }
+}
+```
+
+```bash
+# Crea un entorno a partir del archivo de configuración y vincula tareas al crearlo
+tpc sim env create --name "Claude Code + Sonnet" \
+  --agent-config @agent-config.json \
+  --task-ids task_123,task_456
+
+# O pasa la configuración directamente en el comando
+tpc sim env create --name "Codex sweep" \
+  --agent-config '{"harness":"codex","provider":"openai","model":"gpt-5"}'
+
+# Consulta los entornos (los filtros se pueden combinar)
+tpc sim env list --search claude --enabled true
+
+# Inspecciona un entorno: configuración del agente, comandos de inicialización, nombres de archivos de inicialización y tareas vinculadas
+tpc sim env get env_123
+
+# Vincula o desvincula tareas más adelante
+tpc sim env task attach env_123 task_789
+tpc sim env task detach env_123 task_789
+
+# Actualiza la configuración: puedes combinar varios flags en una sola llamada (--schedule: 7d o 14d; none lo elimina)
+tpc sim env update env_123 --name "Shared Claude Sonnet" --schedule 7d
+tpc sim env update env_123 --enabled false
+
+# Elimina el entorno (primero desvincula todas las tareas)
+tpc sim env delete env_123
+```
+
+Para solicitar un sandbox con GPU, agrégala a `sandboxResources`; por ejemplo, `"gpu": "A100", "gpuCount": 1`.
+
+## Secretos desde la CLI {#secrets-from-the-cli}
+
+Los secretos se configuran por entorno y se inyectan como variables de entorno en tiempo de ejecución. La CLI nunca muestra sus valores.
+
+```bash
+# Define un secreto con un valor literal o, de forma segura, desde tu shell local
+tpc sim env secret set env_123 --name FEATURE_FLAG --value enabled
+tpc sim env secret set env_123 --name ACME_API_KEY --from-env ACME_API_KEY
+
+# Importa de forma masiva desde un archivo .env (o desde stdin con --env-file -)
+tpc sim env secret import env_123 --env-file .env.simulation
+
+# Consulta los metadatos y elimina lo que ya no necesites
+tpc sim env secret list env_123
+tpc sim env secret delete env_123 --name ACME_API_KEY
+```

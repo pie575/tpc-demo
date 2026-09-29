@@ -1,0 +1,83 @@
+---
+title: "Conectar un endpoint personalizado"
+description: "Publica borradores de TPC en tu propio servidor mediante un endpoint POST de JSON con autenticación bearer"
+---
+
+Usa la integración de endpoint personalizado cuando tu CMS no sea compatible de forma nativa. The Prompting Company envía JSON a tu endpoint mediante solicitudes POST con un token bearer.
+
+## Requisitos del endpoint {#endpoint-requirements}
+
+Tu servidor debe:
+
+* Aceptar solicitudes `POST` con `Content-Type: application/json`
+* Validar el encabezado `Authorization: Bearer <token>`
+* Devolver un código de estado `2xx` cuando la operación se complete correctamente
+
+TPC registra el cuerpo de la respuesta, pero no lo analiza.
+
+## Autenticación con token bearer {#bearer-token-authentication}
+
+TPC envía el token que pegas en el formulario de integración de esta forma:
+
+```text
+Authorization: Bearer <token>
+```
+
+Valida esto en tu endpoint antes de procesar la solicitud. Rechaza con `401` cualquier solicitud que no incluya un token bearer válido.
+
+## Plantilla del cuerpo {#body-template}
+
+Usa marcadores de posición para asignar los campos de TPC al formato que espera tu endpoint. Marcadores de posición disponibles:
+
+* `{{title}}`
+* `{{content}}`
+* `{{excerpt}}`
+* `{{platform}}`
+* `{{status}}`
+* `{{thumbnailUrl}}`
+* `{{heroImageUrl}}`
+
+Ejemplo de plantilla del cuerpo:
+
+```json
+{
+  "title": "{{title}}",
+  "html": "{{content}}",
+  "cover": "{{heroImageUrl}}"
+}
+```
+
+TPC sustituye los marcadores de posición antes de enviar la solicitud. Los marcadores de posición sin definir se sustituyen por una cadena vacía.
+
+## Encabezados personalizados opcionales {#optional-custom-headers}
+
+Si tu endpoint requiere encabezados adicionales (clave de API, ID de tenant), pégalos como objeto JSON en el formulario de integración:
+
+```json
+{ "X-Tenant-Id": "abc123" }
+```
+
+## Conectar en TPC {#connect-in-tpc}
+
+1. Abre **Settings → Integrations** en el espacio de trabajo de tu producto en TPC.
+2. Selecciona **Custom endpoint**.
+3. Introduce:
+   * **Endpoint URL**: la URL completa a la que TPC debe enviar las solicitudes POST
+   * **Bearer token**: el token que validará tu servidor
+   * **Body template**: JSON con marcadores de posición
+   * **Custom headers**: objeto JSON opcional
+4. Haz clic en **Save** y, después, en **Test connection**.
+
+## Solución de problemas {#troubleshooting}
+
+### Se agota el tiempo de espera de la prueba de conexión {#test-connection-times-out}
+
+TPC espera hasta 30 segundos. Comprueba que el endpoint sea accesible públicamente y responda en ese plazo.
+
+### 401 o 403 {#401-or-403}
+
+Tu endpoint rechazó el token bearer. Comprueba que el token almacenado en tu servidor coincida con el que pegaste en TPC.
+
+### Estado distinto de 2xx, pero el contenido se guardó {#non-2xx-status-but-content-saved}
+
+Devuelve un estado `2xx` solo cuando la escritura sea persistente. Cualquier respuesta distinta de 2xx se considera un fallo y aparece como error en el registro de publicación.

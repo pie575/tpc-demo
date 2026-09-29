@@ -1,0 +1,181 @@
+{
+  "global": {
+    "anchors": [
+      {
+        "anchor": "Plataforma",
+        "href": "https://app.promptingco.com",
+        "icon": "globe"
+      },
+      {
+        "anchor": "GitHub",
+        "href": "https://github.com/promptingcompany",
+        "icon": "github"
+      }
+    ]
+  },
+  "tabs": [
+    {
+      "groups": [
+        {
+          "group": "Primeros pasos",
+          "pages": [
+            "es/guides/quickstart-guide",
+            "es/guides/MCP-Server"
+          ]
+        },
+        {
+          "group": "Vista general del panel",
+          "pages": [
+            "es/guides/knowledge-base",
+            "es/guides/add-prompts",
+            "es/guides/create-content",
+            "es/guides/metrics"
+          ]
+        },
+        {
+          "group": "Publicación de contenido",
+          "pages": [
+            "es/guides/cms/overview",
+            "es/guides/cms/wordpress",
+            "es/guides/cms/sanity",
+            "es/guides/cms/webflow",
+            "es/guides/cms/ghost",
+            "es/guides/cms/framer",
+            "es/guides/cms/prismic",
+            "es/guides/cms/custom"
+          ]
+        },
+        {
+          "group": "Análisis",
+          "pages": [
+            "es/guides/analytics/cf-integration",
+            {
+              "group": "Exportadores de registros de terceros",
+              "pages": [
+                "es/guides/analytics/log-exporters/cloudflare-logpush",
+                "es/guides/analytics/log-exporters/raw-events"
+              ]
+            },
+            "es/guides/analytics/cf-traffic-export"
+          ]
+        },
+        {
+          "group": "Experiencia del agente",
+          "pages": [
+            "es/guides/coding-agent-optimization/overview",
+            {
+              "group": "Conceptos fundamentales",
+              "pages": [
+                "es/guides/coding-agent-optimization/tasks",
+                "es/guides/coding-agent-optimization/environments",
+                "es/guides/coding-agent-optimization/runs",
+                "es/guides/coding-agent-optimization/experiments",
+                "es/guides/coding-agent-optimization/signals"
+              ]
+            },
+            "es/guides/coding-agent-optimization/limits"
+          ]
+        }
+      ],
+      "tab": "Guías"
+    },
+    {
+      "groups": [
+        {
+          "group": "Primeros pasos",
+          "pages": [
+            "es/cli/overview",
+            "es/cli/installation",
+            "es/cli/authentication",
+            "es/cli/organizations"
+          ]
+        },
+        {
+          "group": "Comandos",
+          "pages": [
+            "es/cli/commands/content",
+            "es/cli/commands/knowledge",
+            "es/cli/commands/prompts",
+            "es/cli/commands/persona",
+            "es/cli/commands/llmstxt",
+            "es/cli/commands/analytics",
+            "es/cli/commands/council",
+            "es/cli/commands/simulation-environments",
+            "es/cli/commands/agent-experience"
+          ]
+        },
+        {
+          "group": "Recetas",
+          "pages": [
+            "es/cli/recipes/competitive-position-by-topic"
+          ]
+        },
+        {
+          "group": "Referencia",
+          "pages": [
+            "es/cli/troubleshooting"
+          ]
+        }
+      ],
+      "tab": "CLI"
+    },
+    {
+      "groups": [
+        {
+          "group": "Primeros pasos",
+          "pages": [
+            "es/api/overview",
+            "es/api/quickstart",
+            "es/api/authentication"
+          ]
+        },
+        {
+          "group": "Conceptos",
+          "pages": [
+            "es/api/scopes",
+            "es/api/rate-limits",
+            "es/api/idempotency",
+            "es/api/errors",
+            "es/api/audit-log"
+          ]
+        },
+        {
+          "group": "API de contenido",
+          "pages": [
+            "es/api/content/overview",
+            "es/api/content/site-pages",
+            "es/api/content/documents"
+          ]
+        },
+        {
+          "group": "Referencia de la API",
+          "openapi": {
+            "directory": "es/api/reference",
+            "source": "/es/api-reference/openapi.json"
+          }
+        }
+      ],
+      "tab": "API"
+    },
+    {
+      "groups": [
+        {
+          "group": "Primeros pasos",
+          "pages": [
+            "es/ts-sdk/index"
+          ]
+        },
+        {
+          "group": "TypeScript",
+          "pages": [
+            "es/ts-sdk/introduction",
+            "es/ts-sdk/installation",
+            "es/ts-sdk/quickstart",
+            "es/ts-sdk/advanced-usage"
+          ]
+        }
+      ],
+      "tab": "SDK"
+    }
+  ]
+}

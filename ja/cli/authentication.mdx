@@ -1,0 +1,60 @@
+---
+title: "認証"
+description: "デバイスフローでログインするか、CI 向けに TPC CLI を非対話型で認証します。"
+---
+
+# 認証 {#authentication}
+
+## ログイン {#login}
+
+ブラウザベースのデバイスフローで認証します。
+
+```bash
+tpc auth login
+```
+
+CLI は、
+[API 認証ガイド](/ja/api/authentication#oauth-bearer)で説明されている OAuth bearer 方式で認証を行います。
+
+認証の流れは次のとおりです。
+
+1. `tpc` がデバイスコードを要求します。
+2. ブラウザが開きます。
+3. The Prompting Company にサインインします。
+4. CLI へのアクセスを承認します。
+5. CLI がセッションをローカルに保存します。
+
+ログイン後、次のコマンドでセッションを確認します。
+
+```bash
+tpc auth whoami
+```
+
+必要に応じてログアウトします。
+
+```bash
+tpc auth logout
+```
+
+## 非対話型の認証 {#non-interactive-authentication}
+
+CI、スクリプト、その他ブラウザでログインできないヘッドレス環境では、CLI は環境変数から認証情報を読み取ります。サポートされている方式は 2 つあり、それぞれ異なるリクエストヘッダーに対応します。
+
+| 変数              | 送信されるヘッダー                       | 用途                                                                             |
+| --------------- | ------------------------------- | ------------------------------------------------------------------------------ |
+| `TPC_API_TOKEN` | `Authorization: Bearer <token>` | OAuth bearer トークン (例: `tpc auth login` で発行されるセッショントークン) 。                      |
+| `TPC_API_KEY`   | `x-api-key: <key>`              | ダッシュボードで作成した API キー。作成方法については [API 認証](/ja/api/authentication#api-key) を参照してください。 |
+
+```bash
+# OAuth bearer トークン
+export TPC_API_TOKEN="your-bearer-token"
+tpc auth whoami
+
+# API キー
+export TPC_API_KEY="your-api-key"
+tpc auth whoami
+```
+
+`TPC_API_TOKEN` と `TPC_API_KEY` の両方が設定されている場合、CLI は `TPC_API_TOKEN` を使用し、stderr に警告を出力します。
+
+どちらの変数も設定されていない場合、CLI は `tpc auth login` で作成されたセッションにフォールバックします。
